@@ -1,22 +1,33 @@
 {
   "counts": {
-    "chunks": 3177,
-    "documents": 49,
-    "evidence": 371,
+    "chunks": 11005,
+    "documents": 205,
+    "evidence": 11495,
     "gold_requirements": 0,
-    "matches": 4143,
-    "projects": 32,
-    "rag_questions": 44,
-    "sft_test": 2261,
-    "sft_train": 4754,
-    "silver_requirements": 3949,
-    "unknown_matches": 4143
+    "matches": 28651,
+    "projects": 120,
+    "rag_questions": 105,
+    "sft_test": 6245,
+    "sft_train": 18779,
+    "silver_requirements": 20724,
+    "unknown_matches": 28651
   },
   "error_count": 0,
   "errors": [],
   "ok": true,
-  "warning_count": 1,
+  "warning_count": 12,
   "warnings": [
-    "project_code missing/unknown project_id=a8135a43-e29d-5a97-b19d-59b2924bc114"
+    "project_code missing/unknown project_id=a8135a43-e29d-5a97-b19d-59b2924bc114",
+    "project_code missing/unknown project_id=70939f6e-f43b-549d-9b4e-0e7a9b78721c",
+    "project_code missing/unknown project_id=27d8ad4f-784c-57aa-bc5a-4e65fcb91364",
+    "project_code missing/unknown project_id=3554f1d5-f2c2-5b42-940b-4e18a22d6c24",
+    "project_code missing/unknown project_id=dbca378e-8cf9-5eec-bf99-6c5e724bf92c",
+    "project_code missing/unknown project_id=ad393a8f-49a4-575f-93c5-b88f43355725",
+    "project_code missing/unknown project_id=c800e5b7-9f3d-58f8-8768-5dd59720a838",
+    "project_code missing/unknown project_id=3d376cc4-7708-594c-ac89-12ea74fa9d94",
+    "project_code missing/unknown project_id=bca184d8-c2e6-5581-955c-fc4a7a7486f4",
+    "project_code missing/unknown project_id=c421d2cd-89e2-52f9-b5d6-5a2962cfd061",
+    "project_code missing/unknown project_id=aa0362e4-5976-5ec6-b8d3-a36b1b942d21",
+    "project_code missing/unknown project_id=bf3b3c6e-21d2-5a55-9c33-5bd14f5e44a1"
   ]
 }

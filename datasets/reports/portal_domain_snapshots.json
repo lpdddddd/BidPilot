@@ -1,0 +1,57 @@
+{
+  "domains": [
+    "www.ccgp-beijing.gov.cn",
+    "www.ccgp-jiangsu.gov.cn",
+    "www.ccgp-zhejiang.gov.cn",
+    "www.ccgp.gov.cn",
+    "www.ggzy.gov.cn",
+    "www.gzggzy.cn",
+    "www.zycg.gov.cn",
+    "ygp.gdzwfw.gov.cn"
+  ],
+  "portals": [
+    {
+      "saved": true,
+      "status": 200,
+      "url": "https://www.ccgp.gov.cn/"
+    },
+    {
+      "saved": true,
+      "status": 200,
+      "url": "https://www.ggzy.gov.cn/"
+    },
+    {
+      "duplicate": true,
+      "saved": false,
+      "status": 200,
+      "url": "https://www.zycg.gov.cn/"
+    },
+    {
+      "saved": true,
+      "status": 200,
+      "url": "https://www.gzggzy.cn/"
+    },
+    {
+      "duplicate": true,
+      "saved": false,
+      "status": 200,
+      "url": "https://ygp.gdzwfw.gov.cn/"
+    },
+    {
+      "saved": true,
+      "status": 200,
+      "url": "http://www.ccgp-beijing.gov.cn/"
+    },
+    {
+      "saved": true,
+      "status": 200,
+      "url": "http://www.ccgp-jiangsu.gov.cn/"
+    },
+    {
+      "duplicate": true,
+      "saved": false,
+      "status": 200,
+      "url": "http://www.ccgp-zhejiang.gov.cn/"
+    }
+  ]
+}

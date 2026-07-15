@@ -30,6 +30,113 @@ def bootstrap(dry_run: bool = False, verbose: bool = False) -> None:
     print(bootstrap_from_demo(dry_run=dry_run))
 
 
+@app.command("backfill")
+def backfill(
+    max_list_pages: int = typer.Option(30, help="CCGP list pages per category"),
+    dry_run: bool = False,
+    verbose: bool = False,
+) -> None:
+    """Backfill existing projects by scanning lists for same project_code notices."""
+    _setup(verbose)
+    from bidpilot_data.collectors.project_enrichment import backfill_projects_by_code
+
+    print(backfill_projects_by_code(dry_run=dry_run, max_list_pages=max_list_pages))
+
+
+@app.command("pair-incomplete")
+def pair_incomplete(
+    max_list_pages: int = typer.Option(45, help="List scan depth for pairing"),
+    dry_run: bool = False,
+    verbose: bool = False,
+) -> None:
+    """Pair award-only / tender-file-only projects by list title rematch."""
+    _setup(verbose)
+    from bidpilot_data.collectors.project_enrichment import pair_incomplete_projects
+
+    print(pair_incomplete_projects(max_list_pages=max_list_pages, dry_run=dry_run))
+
+
+@app.command("harvest-completed")
+def harvest_completed(
+    max_list_pages: int = typer.Option(60, help="List pages for 2023-2025 award harvest"),
+    dry_run: bool = False,
+    verbose: bool = False,
+) -> None:
+    """Harvest completed GD IT awards (2023-2025) and pair tender documents."""
+    _setup(verbose)
+    from bidpilot_data.collectors.project_enrichment import harvest_completed_awards
+
+    print(harvest_completed_awards(max_list_pages=max_list_pages, dry_run=dry_run))
+
+
+@app.command("rematerialize-orphans")
+def rematerialize_orphans(
+    max_list_pages: int = typer.Option(18, help="List pages for title→URL rematch"),
+    dry_run: bool = False,
+    verbose: bool = False,
+) -> None:
+    """Re-link raw files that were dropped from manifests after overwrite races."""
+    _setup(verbose)
+    from bidpilot_data.collectors.project_enrichment import rematerialize_orphaned_raw_documents
+
+    print(rematerialize_orphaned_raw_documents(max_list_pages=max_list_pages, dry_run=dry_run))
+
+
+@app.command("download-missing-attachments")
+def download_missing_attachments_cmd(dry_run: bool = False, verbose: bool = False) -> None:
+    """Download any official attachments referenced by local notice HTML but missing locally."""
+    _setup(verbose)
+    from bidpilot_data.collectors.project_enrichment import download_missing_notice_attachments
+
+    print(download_missing_notice_attachments(dry_run=dry_run))
+
+
+@app.command("expand-real")
+def expand_real(
+    target_projects: int = typer.Option(100, help="Target real projects"),
+    max_list_pages: int = typer.Option(30, help="CCGP list pages per category"),
+    backfill_pages: int = typer.Option(40, help="Backfill scan depth"),
+    dry_run: bool = False,
+    verbose: bool = False,
+) -> None:
+    """Expand real GD IT projects, snapshot domains, backfill by project_code/name."""
+    _setup(verbose)
+    from bidpilot_data.collectors.project_discovery import discover_and_collect, rebuild_projects_from_documents
+    from bidpilot_data.collectors.project_enrichment import (
+        backfill_projects_by_code,
+        collect_homepage_domain_snapshots,
+    )
+
+    keywords = [
+        "信息化",
+        "软件",
+        "运维",
+        "数据",
+        "网络安全",
+        "信息系统",
+        "机房",
+        "数据中心",
+        "数字化",
+        "平台",
+        "系统集成",
+    ]
+    stats = discover_and_collect(
+        province="广东",
+        keywords=keywords,
+        start_date="2023-01-01",
+        end_date="2026-12-31",
+        target_projects=target_projects,
+        max_list_pages=max_list_pages,
+        dry_run=dry_run,
+        require_keyword_in_title=False,
+    )
+    if not dry_run:
+        stats["domain_snapshots"] = collect_homepage_domain_snapshots()
+        stats["backfill"] = backfill_projects_by_code(max_list_pages=backfill_pages)
+        stats["rebuilt"] = rebuild_projects_from_documents()
+    print(stats)
+
+
 @app.command("discover")
 def discover(
     province: str = typer.Option("广东", help="Province focus"),
@@ -257,6 +364,40 @@ def run_demo(dry_run: bool = False, verbose: bool = False) -> None:
         print(steps)
         if not dry_run and steps.get("validate") and not steps["validate"].get("ok"):
             raise typer.Exit(code=1)
+
+
+@app.command("run-quality-refresh")
+def run_quality_refresh(
+    rebuild_rag_limit: int = 80,
+    verbose: bool = False,
+) -> None:
+    """Rebuild matches/RAG/agent/SFT/report after quality-filter changes (no new crawl)."""
+    _setup(verbose)
+    from bidpilot_data.collectors.project_discovery import rebuild_projects_from_documents
+    from bidpilot_data.labeling.disclosed_matches import build_disclosed_matches
+    from bidpilot_data.rag_eval import build_rag_eval
+    from bidpilot_data.agent_data import build_agent_tasks
+    from bidpilot_data.sft import build_sft_dataset
+    from bidpilot_data.review import export_review_csv
+    from bidpilot_data.validation import validate_all
+    from bidpilot_data.reporting import build_reports
+
+    from bidpilot_data.review.priority_export import export_priority_review
+
+    steps = {
+        "rebuild_projects": rebuild_projects_from_documents(),
+        "matches": build_disclosed_matches(),
+        "rag": build_rag_eval(limit=rebuild_rag_limit),
+        "agent": build_agent_tasks(limit=48),
+        "sft": build_sft_dataset(),
+        "review_export": export_review_csv(),
+        "priority_review": export_priority_review(projects_n=10, reqs_per_project=70),
+        "validate": validate_all(),
+        "report": build_reports(),
+    }
+    print(steps)
+    if not steps["validate"].get("ok"):
+        raise typer.Exit(code=1)
 
 
 @app.command("run-real-mini")

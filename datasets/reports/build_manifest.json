@@ -11,21 +11,21 @@
     "validation_report": "datasets/reports/validation_report.json"
   },
   "bundle_levels": {
-    "incomplete": 24,
+    "incomplete": 77,
     "level_a": 0,
-    "level_b": 3,
-    "level_c": 5
+    "level_b": 12,
+    "level_c": 31
   },
   "gaps": {
     "finely_annotated": 30,
     "heldout": 0,
     "level_a": 20,
-    "level_b": 37,
-    "projects_collected": 118,
-    "rag_eval": 456,
+    "level_b": 28,
+    "projects_collected": 30,
+    "rag_eval": 395,
     "requirements_gold": 1500,
-    "sft": 3062,
-    "with_tender_document": 92
+    "sft": 0,
+    "with_tender_document": 57
   },
-  "generated_at": "2026-07-15T07:59:22.366303+00:00"
+  "generated_at": "2026-07-15T15:02:07.280910+00:00"
 }

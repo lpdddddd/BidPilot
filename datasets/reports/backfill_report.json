@@ -1,0 +1,17 @@
+{
+  "attachments_added": 1,
+  "bundle_levels": {
+    "incomplete": 89,
+    "level_a": 0,
+    "level_b": 6,
+    "level_c": 24
+  },
+  "dry_run": false,
+  "generated_at": "2026-07-15T14:38:25.165413+00:00",
+  "known_codes": 107,
+  "notices_added": 1,
+  "projects_after": 119,
+  "scanned_pages": 280,
+  "title_hits": 66,
+  "unique_matched_urls": 2
+}

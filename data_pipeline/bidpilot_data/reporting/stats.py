@@ -62,6 +62,17 @@ def build_reports() -> dict[str, Any]:
     quality_reqs = Counter(r.get("quality_level") for r in silver + gold)
     quality_sft = Counter(r.get("quality_level") for r in sft_train + sft_val + sft_test)
     review_status = Counter(r.get("review_status") for r in silver + gold)
+    threshold = float(cfg.get("labeling", {}).get("low_confidence_threshold", 0.55))
+    pending_status_count = sum(
+        1
+        for r in silver + gold
+        if r.get("review_status") in {None, "pending", "unreviewed"} and r.get("quality_level") != "gold"
+    )
+    low_confidence_count = sum(
+        1 for r in silver + gold if float(r.get("confidence") or 0) < threshold and r.get("quality_level") != "gold"
+    )
+    # review_queue = explicitly exported pending review sheet (may be subset of pending)
+    review_queue_count = len(pending)
 
     targets = cfg.get("projects", {})
     gaps = {
@@ -116,9 +127,16 @@ def build_reports() -> dict[str, Any]:
         "requirements": {
             "silver": len(silver),
             "gold": len(gold),
-            "pending_review": len(pending),
             "quality": dict(quality_reqs),
             "review_status": dict(review_status),
+            "pending": pending_status_count,
+            "low_confidence": low_confidence_count,
+            "review_queue": review_queue_count,
+            "definitions": {
+                "pending": "quality!=gold and review_status in {pending,unreviewed}",
+                "low_confidence": f"auto-labeled confidence < {threshold}",
+                "review_queue": "rows in review/pending/requirements_pending.jsonl exported for human review",
+            },
         },
         "disclosed_suppliers": len(suppliers),
         "requirement_matches": {
@@ -144,11 +162,16 @@ def build_reports() -> dict[str, Any]:
         "discovery_failures": len(discovery_failures),
         "failure_reasons": dict(fail_reasons),
         "human_review_todo": {
-            "requirements_pending": len(pending),
+            "requirements_pending_status": pending_status_count,
+            "requirements_low_confidence": low_confidence_count,
+            "requirements_review_queue": review_queue_count,
             "rag_pending": sum(1 for q in ragqs if q.get("review_status") == "pending"),
             "matches_unknown": sum(1 for m in matches if m.get("status") == "unknown"),
             "sft_pending": sum(1 for r in sft_train + sft_val + sft_test if r.get("review_status") == "pending"),
         },
+        "sft_effective": (read_json(root / "reports" / "sft_build_stats.json").get("effective_trainable")
+                          if (root / "reports" / "sft_build_stats.json").exists()
+                          else None),
         "parse_status_counts": {},
         "targets": cfg,
         "gaps": gaps,
@@ -240,11 +263,17 @@ def _render_markdown(stats: dict[str, Any], discovery_batch: dict[str, Any]) -> 
         "",
         "## Labels & Matches",
         "",
-        f"- Requirements silver/gold/pending: {stats['requirements']}",
+        f"- Requirements: silver={stats['requirements']['silver']}, gold={stats['requirements']['gold']}",
+        f"- pending (review_status): **{stats['requirements']['pending']}**",
+        f"- low_confidence: **{stats['requirements']['low_confidence']}**",
+        f"- review_queue (exported CSV source): **{stats['requirements']['review_queue']}**",
+        f"- Definitions: `{stats['requirements']['definitions']}`",
         f"- Disclosed suppliers: **{stats['disclosed_suppliers']}**",
         f"- Matches: {stats['requirement_matches']}",
         f"- RAG questions: **{stats['rag_questions']}**",
-        f"- SFT: {stats['sft']}",
+        f"- Agent tasks: **{stats['agent_tasks']}**",
+        f"- SFT split counts: {stats['sft']}",
+        f"- Effective trainable SFT: **{stats.get('sft_effective')}**",
         "",
         "## Target Gaps (not filled with fiction)",
         "",
@@ -258,6 +287,12 @@ def _render_markdown(stats: dict[str, Any], discovery_batch: dict[str, Any]) -> 
         f"`{stats['human_review_todo']}`",
         "",
         f"Validation ok: **{stats.get('validation_ok')}**",
+        "",
+        "## Notes",
+        "",
+        "- incomplete projects stay in raw/manifests; they are excluded from formal SFT train.",
+        "- level_c used for clause extraction only; level_a/b for RAG/cross-doc tasks.",
+        "- Do not start formal LoRA until effective trainable SFT quality is reviewed.",
         "",
     ]
     return "\n".join(lines) + "\n"

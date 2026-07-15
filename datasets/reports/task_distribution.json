@@ -1,0 +1,58 @@
+{
+  "bundle_level_distribution": {
+    "level_b": 5719,
+    "level_c": 21590
+  },
+  "by_task": {
+    "citation_qa": 105,
+    "project_info_extract": 39,
+    "qualification_extract": 889,
+    "requirement_classify": 15194,
+    "risk_detect": 10964,
+    "scoring_extract": 103,
+    "tool_call": 15
+  },
+  "by_task_quality": {
+    "citation_qa": {
+      "gold": 0,
+      "pending": 0,
+      "silver": 105
+    },
+    "project_info_extract": {
+      "gold": 0,
+      "pending": 0,
+      "silver": 39
+    },
+    "qualification_extract": {
+      "gold": 0,
+      "pending": 0,
+      "silver": 889
+    },
+    "requirement_classify": {
+      "gold": 0,
+      "pending": 0,
+      "silver": 15194
+    },
+    "risk_detect": {
+      "gold": 0,
+      "pending": 0,
+      "silver": 10964
+    },
+    "scoring_extract": {
+      "gold": 0,
+      "pending": 0,
+      "silver": 103
+    },
+    "tool_call": {
+      "gold": 0,
+      "pending": 0,
+      "silver": 15
+    }
+  },
+  "effective_trainable": 27299,
+  "generated_at": "2026-07-15T15:02:02.703450+00:00",
+  "source_domain_distribution": {
+    "download.ccgp.gov.cn": 26435,
+    "www.ccgp.gov.cn": 874
+  }
+}

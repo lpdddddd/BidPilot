@@ -71,6 +71,10 @@ class DocumentRecord(StrictModel):
     parse_status: ParseStatus = ParseStatus.pending
     document_type: DocumentType = DocumentType.other
     source_url: str | None = None
+    # Optional denormalized fields written by project rebuild for pairing/resume.
+    project_code: str | None = None
+    project_name: str | None = None
+    issuing_authority: str | None = None
 
 
 class TableCell(StrictModel):

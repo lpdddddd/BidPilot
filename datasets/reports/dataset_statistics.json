@@ -1,64 +1,70 @@
 {
-  "agent_tasks": 0,
+  "agent_tasks": 48,
   "bundle_levels": {
-    "incomplete": 24,
+    "incomplete": 77,
     "level_a": 0,
-    "level_b": 3,
-    "level_c": 5
+    "level_b": 12,
+    "level_c": 31
   },
-  "chunks": 3177,
-  "disclosed_suppliers": 17,
-  "discovered_projects": 131,
-  "discovery_failures": 3,
+  "chunks": 11005,
+  "disclosed_suppliers": 62,
+  "discovered_projects": 14,
+  "discovery_failures": 582,
   "documents": {
-    "award_notices": 8,
+    "award_notices": 26,
     "by_extension": {
-      ".doc": 3,
-      ".docx": 4,
-      ".html": 32,
+      ".doc": 12,
+      ".docx": 12,
+      ".html": 131,
       ".jpg": 1,
-      ".pdf": 8,
-      ".zip": 1
+      ".pdf": 42,
+      ".wps": 2,
+      ".xls": 2,
+      ".zip": 3
     },
     "by_type": {
-      "award_notice": 8,
-      "other": 10,
-      "other_notice": 3,
-      "tender_document": 11,
-      "tender_notice": 17
+      "award_notice": 26,
+      "other": 48,
+      "other_notice": 4,
+      "tender_document": 67,
+      "tender_notice": 60
     },
     "contract_notices": 0,
-    "docx": 7,
+    "docx": 24,
     "evaluation_results": 0,
-    "html": 32,
-    "pdf": 8,
-    "tender_documents": 11,
-    "total": 49
+    "html": 131,
+    "pdf": 42,
+    "tender_documents": 67,
+    "total": 205
   },
   "download_failures": 0,
-  "downloaded_projects": 32,
+  "downloaded_projects": 120,
   "failure_reasons": {
-    "[Errno -2] Name or service not known": 1,
-    "access restricted status=403 url=https://gdgpo.czt.gd.gov.cn/": 1,
-    "access_restricted_403": 1
+    "The read operation timed out": 4,
+    "[Errno -2] Name or service not known": 9,
+    "access restricted status=403 url=https://gdgpo.czt.gd.gov.cn/": 9,
+    "access_restricted_403": 9,
+    "http_404_or_empty": 551
   },
   "gaps": {
     "finely_annotated": 30,
     "heldout": 0,
     "level_a": 20,
-    "level_b": 37,
-    "projects_collected": 118,
-    "rag_eval": 456,
+    "level_b": 28,
+    "projects_collected": 30,
+    "rag_eval": 395,
     "requirements_gold": 1500,
-    "sft": 3062,
-    "with_tender_document": 92
+    "sft": 0,
+    "with_tender_document": 57
   },
-  "generated_at": "2026-07-15T07:59:22.366303+00:00",
+  "generated_at": "2026-07-15T15:02:07.280910+00:00",
   "human_review_todo": {
-    "matches_unknown": 4143,
-    "rag_pending": 44,
-    "requirements_pending": 2026,
-    "sft_pending": 9438
+    "matches_unknown": 28651,
+    "rag_pending": 105,
+    "requirements_low_confidence": 10416,
+    "requirements_pending_status": 20724,
+    "requirements_review_queue": 10417,
+    "sft_pending": 27309
   },
   "notes": [
     "No synthetic companies/projects/answers are generated.",
@@ -66,47 +72,62 @@
     "Gold labels require human review with page-level evidence."
   ],
   "official_source_distribution": {
-    "download.ccgp.gov.cn": 0,
-    "www.ccgp.gov.cn": 32
+    "download.ccgp.gov.cn": 43,
+    "www.ccgp-beijing.gov.cn": 1,
+    "www.ccgp-jiangsu.gov.cn": 1,
+    "www.ccgp-zhejiang.gov.cn": 1,
+    "www.ccgp.gov.cn": 68,
+    "www.ggzy.gov.cn": 1,
+    "www.gzggzy.cn": 3,
+    "www.zycg.gov.cn": 1,
+    "ygp.gdzwfw.gov.cn": 1
   },
   "parse_status_counts": {
-    "failed": 4,
-    "ocr_required": 2,
-    "success": 43
+    "failed": 19,
+    "ocr_required": 10,
+    "success": 176
   },
-  "rag_questions": 44,
+  "rag_questions": 105,
   "real_data_only": true,
   "requirement_matches": {
     "missing": 0,
     "partially_satisfied": 0,
     "satisfied": 0,
-    "total": 4143,
-    "unknown": 4143,
+    "total": 28651,
+    "unknown": 28651,
     "verifiable": 0
   },
   "requirements": {
+    "definitions": {
+      "low_confidence": "auto-labeled confidence < 0.55",
+      "pending": "quality!=gold and review_status in {pending,unreviewed}",
+      "review_queue": "rows in review/pending/requirements_pending.jsonl exported for human review"
+    },
     "gold": 0,
-    "pending_review": 2026,
+    "low_confidence": 10416,
+    "pending": 20724,
     "quality": {
-      "silver": 3949
+      "silver": 20724
     },
+    "review_queue": 10417,
     "review_status": {
-      "pending": 3949
+      "pending": 20724
     },
-    "silver": 3949
+    "silver": 20724
   },
   "sft": {
     "quality": {
-      "silver": 9438
+      "silver": 27309
     },
-    "test": 2261,
-    "test_projects": 13,
-    "train": 4754,
-    "train_projects": 18,
-    "validation": 2423,
-    "validation_projects": 2
+    "test": 6245,
+    "test_projects": 14,
+    "train": 18779,
+    "train_projects": 26,
+    "validation": 2285,
+    "validation_projects": 3
   },
-  "sources": 49,
+  "sft_effective": 27299,
+  "sources": 205,
   "synthetic_forbidden": true,
   "targets": {
     "agent_tasks": {

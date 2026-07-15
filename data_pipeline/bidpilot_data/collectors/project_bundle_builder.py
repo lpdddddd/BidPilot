@@ -138,5 +138,47 @@ def build_project_bundles(items: list[dict[str, Any]]) -> list[ProjectBundle]:
 
 
 def filename_suggests_tender_document(name: str) -> bool:
-    n = name.lower()
-    return any(k in name for k in ("招标文件", "采购文件", "磋商文件", "谈判文件")) or n.endswith(".pdf")
+    """True only when the attachment name clearly indicates a procurement file package."""
+    if not name:
+        return False
+    if any(k in name for k in ("中标通知", "成交通知", "结果公告", "合同文本", "中标结果", "声明函", "登记表")):
+        return False
+    return any(
+        k in name
+        for k in (
+            "招标文件",
+            "采购文件",
+            "磋商文件",
+            "谈判文件",
+            "询价文件",
+            "竞争文件",
+            "竞价文件",
+            "招标公文",
+            "采购需求文件",
+            "发售稿",
+            "招标公告.docx",
+            "招标公告.pdf",
+            "采购公告",
+            "磋商公告",
+        )
+    )
+
+
+def attachment_type_for_notice(notice_type: DocumentType, filename: str) -> DocumentType:
+    """Classify attachment using notice context + filename (no fake tender_document labels)."""
+    if filename_suggests_tender_document(filename):
+        return DocumentType.tender_document
+    if notice_type in {DocumentType.contract_notice, DocumentType.contract} and "合同" in (filename or ""):
+        return DocumentType.contract_notice
+    if notice_type in {
+        DocumentType.tender_notice,
+        DocumentType.announcement,
+        DocumentType.other_notice,
+    }:
+        lower = (filename or "").lower()
+        if lower.endswith((".pdf", ".doc", ".docx", ".zip", ".rar")) and not any(
+            k in filename for k in ("中标", "成交", "合同", "结果")
+        ):
+            # Public attachment under a tender/procurement notice is treated as tender package.
+            return DocumentType.tender_document
+    return DocumentType.other

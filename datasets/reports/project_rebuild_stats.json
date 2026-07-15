@@ -1,0 +1,16 @@
+{
+  "bundle_levels": {
+    "incomplete": 77,
+    "level_a": 0,
+    "level_b": 12,
+    "level_c": 31
+  },
+  "document_types": {
+    "award_notice": 26,
+    "other": 43,
+    "other_notice": 4,
+    "tender_document": 68,
+    "tender_notice": 60
+  },
+  "projects": 120
+}

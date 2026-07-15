@@ -15,7 +15,7 @@ from bidpilot_data.collectors.source_registry import load_source_registry
 from bidpilot_data.logging import get_logger
 from bidpilot_data.schemas import DocumentRecord, DocumentType, ParseStatus, SourceRecord, SourceStatus
 from bidpilot_data.settings import get_settings
-from bidpilot_data.utils import ensure_dir, sha256_bytes, stable_uuid, write_jsonl
+from bidpilot_data.utils import ensure_dir, read_jsonl, sha256_bytes, stable_uuid, write_jsonl
 
 log = get_logger(__name__)
 
@@ -220,6 +220,30 @@ class AttachmentDownloader:
 
 
 def write_manifests(sources: list[dict[str, Any]], documents: list[dict[str, Any]]) -> None:
+    """Write sources/documents manifests, merging by sha256 so concurrent/checkpoint writes cannot drop rows."""
     settings = get_settings()
-    write_jsonl(ensure_dir(settings.datasets_root / "manifests") / "sources.jsonl", sources)
-    write_jsonl(settings.datasets_root / "manifests" / "documents.jsonl", documents)
+    man = ensure_dir(settings.datasets_root / "manifests")
+
+    def _merge(path: Path, rows: list[dict[str, Any]], key_fields: tuple[str, ...]) -> list[dict[str, Any]]:
+        existing = read_jsonl(path) if path.exists() else []
+        by_key: dict[str, dict[str, Any]] = {}
+        order: list[str] = []
+
+        def _key(row: dict[str, Any]) -> str:
+            for f in key_fields:
+                v = row.get(f)
+                if v:
+                    return f"{f}:{v}"
+            return f"row:{id(row)}"
+
+        for row in existing + rows:
+            k = _key(row)
+            if k not in by_key:
+                order.append(k)
+            by_key[k] = row
+        return [by_key[k] for k in order]
+
+    sources_m = _merge(man / "sources.jsonl", sources, ("sha256", "source_url", "source_id"))
+    docs_m = _merge(man / "documents.jsonl", documents, ("sha256", "document_id", "source_url"))
+    write_jsonl(man / "sources.jsonl", sources_m)
+    write_jsonl(man / "documents.jsonl", docs_m)

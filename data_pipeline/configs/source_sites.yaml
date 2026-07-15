@@ -90,6 +90,36 @@ sites:
     province_focus: 广东
     notes: "Epoint APIs may require tokens; save pending URLs when blocked."
 
+  - site_id: ccgp_beijing
+    name: 北京市政府采购网
+    base_url: http://www.ccgp-beijing.gov.cn/
+    domains:
+      - www.ccgp-beijing.gov.cn
+    source_type: provincial_procurement
+    priority: 3
+    province_focus: 北京
+    notes: "Regional CCGP portal; used for multi-domain provenance and IT notice HTML when public."
+
+  - site_id: ccgp_jiangsu
+    name: 江苏省政府采购网
+    base_url: http://www.ccgp-jiangsu.gov.cn/
+    domains:
+      - www.ccgp-jiangsu.gov.cn
+    source_type: provincial_procurement
+    priority: 3
+    province_focus: 江苏
+    notes: "Regional CCGP portal; do not bypass login sections."
+
+  - site_id: ccgp_zhejiang
+    name: 浙江省政府采购网
+    base_url: http://www.ccgp-zhejiang.gov.cn/
+    domains:
+      - www.ccgp-zhejiang.gov.cn
+    source_type: provincial_procurement
+    priority: 3
+    province_focus: 浙江
+    notes: "Regional CCGP portal homepage for domain coverage."
+
 discovery:
   preferred_province: 广东
   expand_provinces:

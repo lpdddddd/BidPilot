@@ -1,287 +1,44 @@
 {
   "bundle_levels": {
-    "incomplete": 26,
+    "incomplete": 88,
     "level_a": 0,
-    "level_b": 1,
-    "level_c": 2
+    "level_b": 6,
+    "level_c": 23
   },
-  "generated_at": "2026-07-15T07:58:19.833305+00:00",
+  "generated_at": "2026-07-15T14:23:29.342826+00:00",
   "keywords": [
     "信息化",
     "软件",
     "运维",
-    "数据治理",
+    "数据",
     "网络安全",
     "信息系统",
     "机房",
-    "数据中心"
-  ],
-  "projects": [
-    {
-      "bundle_level": "level_b",
-      "documents": 3,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/zygg/cjgg/202607/t20260714_26928240.htm",
-      "project_code": "zjzcg-2026-15",
-      "project_id": "35f9c46c-5285-5333-96a9-f56b8d279289",
-      "project_name": "中华人民共和国湛江出入境边防检查站公寓楼修缮运维工程"
-    },
-    {
-      "bundle_level": "level_c",
-      "documents": 3,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/zygg/jzxcs/202607/t20260713_26924217.htm",
-      "project_code": "YXGL26GZ18135",
-      "project_id": "02e91035-7eab-5797-a889-607967b10d88",
-      "project_name": "广东省广州市南沙区消防救援大队2026年新建消防救援站办公自动化系统建设及岗亭配套设施采购项目"
-    },
-    {
-      "bundle_level": "level_c",
-      "documents": 2,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/zygg/qtgg/202607/t20260713_26922651.htm",
-      "project_code": "0724-2611SZ144110",
-      "project_id": "a86bec0e-7bc3-5656-a94d-d2b9e53ffb19",
-      "project_name": "广东省深圳市龙岗区消防救援大队2026年弱电、营区监控系统运行维护服务采购项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/gkzb/202607/t20260715_26937308.htm",
-      "project_code": "CLZ0126FS00ZC87",
-      "project_id": "79739b32-1dc0-5194-8ef9-1668f9d1b2e7",
-      "project_name": "2026年佛山秋色活动"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/gkzb/202607/t20260715_26937744.htm",
-      "project_code": "441900009-2026-00424",
-      "project_id": "d25f7354-adf3-5b4c-8050-0752f64b3a4e",
-      "project_name": "东莞市公安局松山湖分局派出所饭堂食材配送服务采购项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/gkzb/202607/t20260715_26938066.htm",
-      "project_code": "441900020-2026-00550",
-      "project_id": "fa7602af-f792-5513-b52a-6491b063c689",
-      "project_name": "东莞市樟木头镇政务“一网统飞”系统服务项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/zygg/cjgg/202607/t20260710_26910944.htm",
-      "project_code": "ZKZB-2026-C148",
-      "project_id": "aeb36a91-982d-5e13-b73f-a4d66c0eb06a",
-      "project_name": "东莞市消防救援支队2026年低空治理能力平台系统开发服务项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/zygg/qtgg/202607/t20260713_26922644.htm",
-      "project_code": "20260603",
-      "project_id": "a8a42050-ff30-538f-8d88-5e052018d273",
-      "project_name": "中华人民共和国广州出入境边防检查总站轮训大队教学楼礼堂视频音响系统改造采购项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/zygg/cjgg/202607/t20260713_26922982.htm",
-      "project_code": "ZQBJ2026005",
-      "project_id": "b498eeb4-3f51-536a-8c74-d8595cfa0e96",
-      "project_name": "中华人民共和国肇庆出入境边防检查站OCR证照阅读机采购项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/zygg/gkzb/202607/t20260713_26921163.htm",
-      "project_code": "BMCC-ZC26-0977",
-      "project_id": "1735b0d1-0f89-53de-bc26-c3e138e49c3d",
-      "project_name": "中国信息通信研究院国家顶级节点（广州）机房租赁服务项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/zygg/gkzb/202607/t20260714_26933928.htm",
-      "project_code": "中大招(货)[2026]050号",
-      "project_id": "9d3c2112-d8de-5505-b6fd-5accc23af170",
-      "project_name": "中山大学深圳校区信息化项目信息安全系统采购项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/gkzb/202607/t20260715_26937983.htm",
-      "project_code": "441900016-2026-00251",
-      "project_id": "6cd761b0-5fb5-53ec-b88e-45fb0959c32d",
-      "project_name": "关于东莞市谢岗医院多功能移动体检车的采购项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/zygg/jzxcs/202607/t20260710_26914273.htm",
-      "project_code": "0692-2631Z1024105",
-      "project_id": "658eb1b3-83c2-52f3-a6c9-161d469c622b",
-      "project_name": "广东农工商职业技术学院两个校区新生宿舍墙面全面翻新项目（粤垦及增城校区）"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/gpsr/zhxx/df/202511/t20251114_25695352.htm",
-      "project_code": "UNKNOWN",
-      "project_id": "0c3ae316-c283-5d56-a120-899ca9562d5a",
-      "project_name": "广东将低空经济服务纳入政府购买服务范围"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/gkzb/202607/t20260715_26936416.htm",
-      "project_code": "FS2026(NH01)XZ0012",
-      "project_id": "51957312-0845-5e2c-a52f-79355539fa47",
-      "project_name": "广东省人民医院南海医院全院医疗设备全生命周期管理及维保服务项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/gkzb/202607/t20260715_26936209.htm",
-      "project_code": "GPCGD261115FG020F",
-      "project_id": "129226cf-e7e5-5607-9b92-cec8bc4cfcd2",
-      "project_name": "广东省生态环境遥感监测体系建设（合成孔径雷达和热红外生态环境遥感技术建设）"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/jzxcs/202607/t20260715_26936699.htm",
-      "project_code": "ZH2026-ZB061",
-      "project_id": "07589d9b-19dd-52b1-9e1b-d365cd4e2c78",
-      "project_name": "广东省韶关市新丰县(广州后花园)医养综合基地基础设施项目-人居环境整治提升工程(利坑村)"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/qtgg/202607/t20260714_26932604.htm",
-      "project_code": "CZ2026-0323",
-      "project_id": "8dabc273-a8f8-59bd-88bf-3d33e5acfbee",
-      "project_name": "广州市公安局交管支队2026-2027年度计算机设备配件及数字终端运维服务项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/jzxcs/202607/t20260715_26937516.htm",
-      "project_code": "HCGL-2612-GFJD-0612",
-      "project_id": "1f0f12ed-c53b-5a03-a868-a985a2eb9a1a",
-      "project_name": "广州市国防教育训练基地民兵训练驻场服务项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/zygg/jzxcs/202607/t20260713_26921227.htm",
-      "project_code": "FCC2026-0026",
-      "project_id": "3f725478-7afe-51a1-9358-9c2afda3618c",
-      "project_name": "广州市白云区消防救援大队信息化网络运营维护服务项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/zygg/zbgg/202607/t20260714_26929149.htm",
-      "project_code": "GDGCZB-2026-B0006",
-      "project_id": "1cc50d29-52ab-57a4-8f5b-2f1cf10e6e51",
-      "project_name": "广州民航职业技术学院民航航务、机场运行保障实训平台建设项目监理服务项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/jzxcs/202607/t20260715_26938102.htm",
-      "project_code": "JC202605FC020",
-      "project_id": "8ef749ec-9754-520a-8556-ad13669bd79c",
-      "project_name": "广州民营科技园改造项目耕作层剥离再利用方案编制服务项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/zbgg/202607/t20260715_26938150.htm",
-      "project_code": "CZ2026-0835",
-      "project_id": "6989ba30-cbaa-5c14-908c-60b582ceae58",
-      "project_name": "广州职业技术大学2026-2027年信息化运维项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/fblbgg/202607/t20260714_26934313.htm",
-      "project_code": "BACG2026000121",
-      "project_id": "230e44b0-d15c-5bb3-9ff5-466aebbc0b8a",
-      "project_name": "深圳市宝安区人民医院整体改造工程（二期）配套医疗设备购置、信息化建设及首次开办配置项目信息化工程部分—智慧后勤项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/fblbgg/202607/t20260714_26927675.htm",
-      "project_code": "SZDL2026001138",
-      "project_id": "2cacbd43-024a-5043-9ae2-391da867619c",
-      "project_name": "深圳市第二职业技术学校智慧教室建设项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/zbgg/202607/t20260715_26938277.htm",
-      "project_code": "ZJZCDL2026-ZC-GZ078",
-      "project_id": "c5798679-ab0c-5acc-af53-8f6386e668bd",
-      "project_name": "湛江市公安局机动训练支队2026年食堂食材配送服务"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/zygg/zbgg/202607/t20260713_26923066.htm",
-      "project_code": "立信CZ2026020号",
-      "project_id": "1e3b4f4d-3e67-593b-926e-a1c24c953f01",
-      "project_name": "潮州市大语言模型气象业务应用服务项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/qtgg/202607/t20260715_26936258.htm",
-      "project_code": "2026YX-02CG-3",
-      "project_id": "a1b958d1-6d17-5b37-8d44-8c83b490f5be",
-      "project_name": "肇庆市信用信息共享平台运营运维（2025-2026年）项目"
-    },
-    {
-      "bundle_level": "incomplete",
-      "documents": 1,
-      "official_project_url": "https://www.ccgp.gov.cn/cggg/dfgg/gkzb/202607/t20260715_26936369.htm",
-      "project_code": "GDZM-CG20260630",
-      "project_id": "63326248-b17f-5d3a-8b9c-5af6f32688b0",
-      "project_name": "茂名市第一职业技术学校2026-2027学年度学生饭堂食材配送服务项目"
-    }
+    "数字化",
+    "平台",
+    "系统"
   ],
   "province": "广东",
   "stats": {
-    "attachments_downloaded": 8,
+    "attachments_downloaded": 2,
     "attachments_failed": 0,
+    "award_projects": 25,
+    "bundle_levels": {
+      "incomplete": 88,
+      "level_a": 0,
+      "level_b": 6,
+      "level_c": 23
+    },
+    "categories": [
+      "zbgg",
+      "cjgg"
+    ],
     "dry_run": false,
-    "list_hits": 131,
-    "notices_fetched": 131,
-    "notices_kept": 29,
-    "projects_built": 29,
-    "restricted_probes": [
-      {
-        "ok": true,
-        "status": 200,
-        "url": "https://search.ccgp.gov.cn/bxsearch"
-      },
-      {
-        "error": "access restricted status=403 url=https://gdgpo.czt.gd.gov.cn/",
-        "ok": false,
-        "status": null,
-        "url": "https://gdgpo.czt.gd.gov.cn/"
-      },
-      {
-        "error": "[Errno -2] Name or service not known",
-        "ok": false,
-        "status": null,
-        "url": "https://deal.ggzy.gov.cn/"
-      },
-      {
-        "ok": true,
-        "status": 200,
-        "url": "https://ygp.gdzwfw.gov.cn/ggzy-portal/center/#/jygg"
-      }
-    ]
+    "list_hits": 14,
+    "notices_fetched": 6,
+    "notices_kept": 2,
+    "projects_built": 117,
+    "require_keyword_in_title": true,
+    "tender_file_projects": 41
   }
 }

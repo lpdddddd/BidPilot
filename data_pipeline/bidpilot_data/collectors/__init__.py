@@ -4,6 +4,7 @@ from bidpilot_data.collectors.project_discovery import (
     discover_and_collect,
     rebuild_projects_from_documents,
 )
+from bidpilot_data.collectors.project_enrichment import backfill_projects_by_code, discover_completed_it_projects
 
 __all__ = [
     "collect_from_manifest",
@@ -12,4 +13,6 @@ __all__ = [
     "discover_and_collect",
     "collect_from_seed_manifest",
     "rebuild_projects_from_documents",
+    "backfill_projects_by_code",
+    "discover_completed_it_projects",
 ]

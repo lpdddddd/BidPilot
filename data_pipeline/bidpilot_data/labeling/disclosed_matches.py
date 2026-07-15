@@ -99,12 +99,30 @@ def build_disclosed_matches(*, dry_run: bool = False) -> dict[str, Any]:
             # Never infer satisfaction from award alone.
             doc = sup["document"]
             quote = f"公开文件披露供应商：{sup['name']}"
+            # Bind a real chunk when supplier name appears in parsed text
+            evid_chunk = None
+            for c in chunks.values():
+                if c.get("document_id") == doc["document_id"] and sup["name"] in (c.get("text") or ""):
+                    evid_chunk = c
+                    break
+            if evid_chunk is None:
+                for c in chunks.values():
+                    if c.get("project_id") == pid and sup["name"] in (c.get("text") or ""):
+                        evid_chunk = c
+                        break
+            page_number = evid_chunk.get("page_start") if evid_chunk else 1
+            if evid_chunk and sup["name"] in (evid_chunk.get("text") or ""):
+                # Prefer a short surrounding quote from chunk
+                text = evid_chunk["text"]
+                idx = text.find(sup["name"])
+                quote = text[max(0, idx - 20) : idx + len(sup["name"]) + 40].strip() or quote
             ev = make_evidence(
                 project_id=pid,
                 document_id=doc["document_id"],
                 source_url=doc.get("source_url") or project.get("official_project_url") or "https://www.ccgp.gov.cn/",
                 quote=quote,
-                page_number=1,
+                page_number=page_number,
+                chunk_id=evid_chunk.get("chunk_id") if evid_chunk else None,
             )
             evidence_out.append(ev.model_dump(mode="json"))
             match = RequirementMatchAnnotation(
@@ -116,6 +134,7 @@ def build_disclosed_matches(*, dry_run: bool = False) -> dict[str, Any]:
                 reason="仅依据中标/成交公告披露供应商名称，不能推断满足全部资格要求",
                 evidence_ids=[ev.evidence_id],
                 evidence_document_id=doc["document_id"],
+                evidence_chunk_id=evid_chunk.get("chunk_id") if evid_chunk else None,
                 confidence=0.2,
                 quality_level=QualityLevel.silver,
                 review_status=ReviewStatus.pending,
