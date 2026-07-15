@@ -1,5 +1,6 @@
 {
-  "agent_tasks": 48,
+  "agent_multi_step_trajectories": 204,
+  "agent_tasks": 238,
   "bundle_levels": {
     "incomplete": 77,
     "level_a": 0,
@@ -37,6 +38,47 @@
     "tender_documents": 67,
     "total": 205
   },
+  "domain_diversity": {
+    "note": "reachable_portal_domains are homepage snapshots and must not be counted as training coverage",
+    "project_source_domains": [
+      "download.ccgp.gov.cn",
+      "www.ccgp-beijing.gov.cn",
+      "www.ccgp-jiangsu.gov.cn",
+      "www.ccgp-zhejiang.gov.cn",
+      "www.ccgp.gov.cn",
+      "www.ggzy.gov.cn",
+      "www.gzggzy.cn",
+      "www.zycg.gov.cn",
+      "ygp.gdzwfw.gov.cn"
+    ],
+    "raw_document_domains": [
+      "download.ccgp.gov.cn",
+      "www.ccgp-beijing.gov.cn",
+      "www.ccgp-jiangsu.gov.cn",
+      "www.ccgp-zhejiang.gov.cn",
+      "www.ccgp.gov.cn",
+      "www.ggzy.gov.cn",
+      "www.gzggzy.cn",
+      "www.zycg.gov.cn",
+      "ygp.gdzwfw.gov.cn"
+    ],
+    "reachable_portal_domains": [],
+    "reviewed_gold_source_domains": [],
+    "sft_source_domain_gap": {
+      "gap": 3,
+      "met": false,
+      "note": "Portal homepage snapshots do not count toward SFT source diversity",
+      "sft_source_domains_count": 2,
+      "sft_source_domains_min": 5
+    },
+    "sft_source_domains": [
+      "download.ccgp.gov.cn",
+      "www.ccgp.gov.cn"
+    ],
+    "tender_document_domains": [
+      "download.ccgp.gov.cn"
+    ]
+  },
   "download_failures": 0,
   "downloaded_projects": 120,
   "failure_reasons": {
@@ -52,33 +94,37 @@
     "level_a": 20,
     "level_b": 28,
     "projects_collected": 30,
-    "rag_eval": 395,
+    "rag_eval": 280,
     "requirements_gold": 1500,
-    "sft": 0,
+    "reviewed_trainable_sft": 500,
+    "sft": 8740,
+    "sft_source_domains": 3,
     "with_tender_document": 57
   },
-  "generated_at": "2026-07-15T15:02:07.280910+00:00",
+  "generated_at": "2026-07-15T15:31:46.415216+00:00",
   "human_review_todo": {
-    "matches_unknown": 28651,
-    "rag_pending": 105,
+    "matches_unknown": 0,
+    "rag_pending": 220,
     "requirements_low_confidence": 10416,
     "requirements_pending_status": 20724,
     "requirements_review_queue": 10417,
-    "sft_pending": 27309
+    "sft_pending": 3760
   },
   "notes": [
     "No synthetic companies/projects/answers are generated.",
     "Gaps must not be filled with fictional samples.",
-    "Gold labels require human review with page-level evidence."
+    "Gold labels require human review with page-level evidence.",
+    "Portal homepage snapshots are not training coverage.",
+    "reviewed_trainable_sft is the only gate for formal LoRA."
   ],
   "official_source_distribution": {
-    "download.ccgp.gov.cn": 43,
+    "download.ccgp.gov.cn": 1,
     "www.ccgp-beijing.gov.cn": 1,
     "www.ccgp-jiangsu.gov.cn": 1,
     "www.ccgp-zhejiang.gov.cn": 1,
-    "www.ccgp.gov.cn": 68,
+    "www.ccgp.gov.cn": 1,
     "www.ggzy.gov.cn": 1,
-    "www.gzggzy.cn": 3,
+    "www.gzggzy.cn": 1,
     "www.zycg.gov.cn": 1,
     "ygp.gdzwfw.gov.cn": 1
   },
@@ -87,15 +133,18 @@
     "ocr_required": 10,
     "success": 176
   },
-  "rag_questions": 105,
+  "portal_snapshot_projects": 0,
+  "rag_questions": 220,
   "real_data_only": true,
   "requirement_matches": {
-    "missing": 0,
+    "evidence_supported_matches": 654,
+    "missing": 537,
     "partially_satisfied": 0,
-    "satisfied": 0,
-    "total": 28651,
-    "unknown": 28651,
-    "verifiable": 0
+    "satisfied": 111,
+    "total": 654,
+    "uncertain": 6,
+    "unknown": 0,
+    "verifiable": 654
   },
   "requirements": {
     "definitions": {
@@ -116,17 +165,23 @@
     "silver": 20724
   },
   "sft": {
-    "quality": {
-      "silver": 27309
+    "quality_level": {
+      "silver": 3760
     },
-    "test": 6245,
-    "test_projects": 14,
-    "train": 18779,
+    "rejected_sft": 33,
+    "review_status": {
+      "pending": 3760
+    },
+    "reviewed_trainable_sft": 0,
+    "silver_candidate_sft": 3727,
+    "structurally_valid_sft": 3727,
+    "test": 549,
+    "test_projects": 10,
+    "train": 2499,
     "train_projects": 26,
-    "validation": 2285,
-    "validation_projects": 3
+    "validation": 712,
+    "validation_projects": 7
   },
-  "sft_effective": 27299,
   "sources": 205,
   "synthetic_forbidden": true,
   "targets": {
@@ -178,10 +233,11 @@
     },
     "random_seed": 42,
     "requirement_matches": {
-      "allow_unknown": true,
+      "allow_unknown": false,
       "forbid_inferred_from_award_only": true,
+      "require_public_review_evidence": true,
       "target_max": 1500,
-      "target_min": 1000
+      "target_min": 0
     },
     "requirements": {
       "gold_target_max": 2500,

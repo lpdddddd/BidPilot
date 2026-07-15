@@ -1,58 +1,186 @@
 {
+  "after_balance": {
+    "citation_qa": 218,
+    "evidence_match": 32,
+    "project_info_extract": 41,
+    "qualification_extract": 870,
+    "requirement_classify": 1318,
+    "risk_detect": 942,
+    "scoring_extract": 102,
+    "tool_call": 237
+  },
+  "before_balance": {
+    "citation_qa": 218,
+    "evidence_match": 32,
+    "project_info_extract": 41,
+    "qualification_extract": 870,
+    "requirement_classify": 14819,
+    "risk_detect": 10710,
+    "scoring_extract": 102,
+    "tool_call": 237
+  },
   "bundle_level_distribution": {
-    "level_b": 5719,
-    "level_c": 21590
+    "level_b": 770,
+    "level_c": 2990
+  },
+  "by_split_and_task": {
+    "test": {
+      "citation_qa": 42,
+      "evidence_match": 6,
+      "project_info_extract": 9,
+      "qualification_extract": 93,
+      "requirement_classify": 177,
+      "risk_detect": 151,
+      "scoring_extract": 16,
+      "tool_call": 55
+    },
+    "train": {
+      "citation_qa": 160,
+      "evidence_match": 14,
+      "project_info_extract": 25,
+      "qualification_extract": 559,
+      "requirement_classify": 891,
+      "risk_detect": 631,
+      "scoring_extract": 75,
+      "tool_call": 144
+    },
+    "validation": {
+      "citation_qa": 16,
+      "evidence_match": 12,
+      "project_info_extract": 7,
+      "qualification_extract": 218,
+      "requirement_classify": 250,
+      "risk_detect": 160,
+      "scoring_extract": 11,
+      "tool_call": 38
+    }
   },
   "by_task": {
-    "citation_qa": 105,
-    "project_info_extract": 39,
-    "qualification_extract": 889,
-    "requirement_classify": 15194,
-    "risk_detect": 10964,
-    "scoring_extract": 103,
-    "tool_call": 15
+    "citation_qa": 218,
+    "evidence_match": 32,
+    "project_info_extract": 41,
+    "qualification_extract": 870,
+    "requirement_classify": 1318,
+    "risk_detect": 942,
+    "scoring_extract": 102,
+    "tool_call": 237
   },
-  "by_task_quality": {
+  "by_task_quality_level": {
     "citation_qa": {
       "gold": 0,
-      "pending": 0,
-      "silver": 105
+      "silver": 218
+    },
+    "evidence_match": {
+      "gold": 0,
+      "silver": 32
     },
     "project_info_extract": {
       "gold": 0,
-      "pending": 0,
-      "silver": 39
+      "silver": 41
     },
     "qualification_extract": {
       "gold": 0,
-      "pending": 0,
-      "silver": 889
+      "silver": 870
     },
     "requirement_classify": {
       "gold": 0,
-      "pending": 0,
-      "silver": 15194
+      "silver": 1318
     },
     "risk_detect": {
       "gold": 0,
-      "pending": 0,
-      "silver": 10964
+      "silver": 942
     },
     "scoring_extract": {
       "gold": 0,
-      "pending": 0,
-      "silver": 103
+      "silver": 102
     },
     "tool_call": {
       "gold": 0,
-      "pending": 0,
-      "silver": 15
+      "silver": 237
     }
   },
-  "effective_trainable": 27299,
-  "generated_at": "2026-07-15T15:02:02.703450+00:00",
+  "by_task_review_status": {
+    "citation_qa": {
+      "pending": 218,
+      "rejected": 0,
+      "reviewed": 0
+    },
+    "evidence_match": {
+      "pending": 32,
+      "rejected": 0,
+      "reviewed": 0
+    },
+    "project_info_extract": {
+      "pending": 41,
+      "rejected": 0,
+      "reviewed": 0
+    },
+    "qualification_extract": {
+      "pending": 870,
+      "rejected": 0,
+      "reviewed": 0
+    },
+    "requirement_classify": {
+      "pending": 1318,
+      "rejected": 0,
+      "reviewed": 0
+    },
+    "risk_detect": {
+      "pending": 942,
+      "rejected": 0,
+      "reviewed": 0
+    },
+    "scoring_extract": {
+      "pending": 102,
+      "rejected": 0,
+      "reviewed": 0
+    },
+    "tool_call": {
+      "pending": 237,
+      "rejected": 0,
+      "reviewed": 0
+    }
+  },
+  "dropped_by_balance": {
+    "requirement_classify": 13501,
+    "risk_detect": 9768
+  },
+  "generated_at": "2026-07-15T15:31:43.077345+00:00",
+  "rejected_sft": 33,
+  "reviewed_trainable_sft": 0,
+  "silver_candidate_sft": 3727,
   "source_domain_distribution": {
-    "download.ccgp.gov.cn": 26435,
-    "www.ccgp.gov.cn": 874
+    "record_count": {
+      "download.ccgp.gov.cn": 3609,
+      "www.ccgp.gov.cn": 151
+    },
+    "reference_count": {
+      "download.ccgp.gov.cn": 3612,
+      "www.ccgp.gov.cn": 159
+    }
+  },
+  "structurally_valid_sft": 3727,
+  "task_gaps": {
+    "citation_qa": {
+      "gap": 82,
+      "have": 218,
+      "note": "insufficient real samples; no cloning allowed",
+      "target_count": 300,
+      "target_ratio": 0.08
+    },
+    "project_info_extract": {
+      "gap": 259,
+      "have": 41,
+      "note": "insufficient real samples; no cloning allowed",
+      "target_count": 300,
+      "target_ratio": 0.08
+    },
+    "scoring_extract": {
+      "gap": 198,
+      "have": 102,
+      "note": "insufficient real samples; no cloning allowed",
+      "target_count": 300,
+      "target_ratio": 0.08
+    }
   }
 }

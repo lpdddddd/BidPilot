@@ -258,6 +258,8 @@ class RequirementMatchAnnotation(StrictModel):
     evidence_ids: list[str] = Field(default_factory=list)
     evidence_document_id: str | None = None
     evidence_chunk_id: str | None = None
+    source_url: str | None = None
+    source_quote: str | None = None
     confidence: float = Field(ge=0.0, le=1.0)
     risk_level: RiskLevel | None = None
     recommended_action: str | None = None
@@ -265,10 +267,12 @@ class RequirementMatchAnnotation(StrictModel):
     review_status: ReviewStatus = ReviewStatus.pending
 
     @model_validator(mode="after")
-    def evidence_for_positive_status(self) -> RequirementMatchAnnotation:
-        if self.status in {MatchStatus.satisfied, MatchStatus.partially_satisfied, MatchStatus.missing}:
-            if not self.evidence_ids and not self.evidence_document_id and not self.evidence_chunk_id:
-                raise ValueError("non-unknown matches require official evidence references")
+    def evidence_required_for_all_statuses(self) -> RequirementMatchAnnotation:
+        if self.status == MatchStatus.unknown:
+            raise ValueError("unknown MatchStatus is forbidden; use uncertain with requirement-specific evidence")
+        has_ev = bool(self.evidence_ids) and bool(self.evidence_document_id) and bool(self.evidence_chunk_id)
+        if not has_ev or not self.source_url or not (self.source_quote or "").strip():
+            raise ValueError("RequirementMatch requires evidence_ids, evidence_document_id, evidence_chunk_id, source_url, source_quote")
         return self
 
 

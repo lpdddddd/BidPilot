@@ -24,7 +24,8 @@
       "content_tag": "content",
       "user_tag": "user",
       "assistant_tag": "assistant",
-      "system_tag": "system"
+      "system_tag": "system",
+      "tool_tag": "tool"
     }
   },
   "bidpilot_sft_validation": {
@@ -38,7 +39,8 @@
       "content_tag": "content",
       "user_tag": "user",
       "assistant_tag": "assistant",
-      "system_tag": "system"
+      "system_tag": "system",
+      "tool_tag": "tool"
     }
   },
   "bidpilot_sft_test": {
@@ -52,7 +54,8 @@
       "content_tag": "content",
       "user_tag": "user",
       "assistant_tag": "assistant",
-      "system_tag": "system"
+      "system_tag": "system",
+      "tool_tag": "tool"
     }
   },
   "bidpilot_sft_train_qwen3": {
@@ -66,7 +69,8 @@
       "content_tag": "content",
       "user_tag": "user",
       "assistant_tag": "assistant",
-      "system_tag": "system"
+      "system_tag": "system",
+      "tool_tag": "tool"
     }
   }
 }

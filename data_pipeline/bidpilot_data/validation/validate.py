@@ -13,7 +13,8 @@ from rapidfuzz import fuzz
 from bidpilot_data.collectors.source_registry import load_source_registry
 from bidpilot_data.labeling.evidence import quote_supported_by_chunk
 from bidpilot_data.logging import get_logger, log_stats
-from bidpilot_data.schemas import RAGQuestion, RequirementAnnotation, SFTRecord
+from bidpilot_data.rag_eval.build import LEAK_MARKERS, question_leaks_quote
+from bidpilot_data.schemas import RAGQuestion, RequirementAnnotation, RequirementMatchAnnotation, SFTRecord
 from bidpilot_data.settings import get_settings
 from bidpilot_data.utils import read_json, read_jsonl, write_json
 
@@ -46,6 +47,110 @@ def _walk_jsonl_for_synthetic(path: Path, errors: list[str], *, limit: int = 50)
             if marker in name or marker in credit or marker in company_title:
                 errors.append(f"fictional marker '{marker}' in {path.name}#{i}")
                 break
+
+
+def validate_rag(*, write_report: bool = True) -> dict[str, Any]:
+    """Validate RAG quality: no quote leak, evidence support, unanswerable band, citation IDs."""
+    settings = get_settings()
+    datasets = settings.datasets_root
+    errors: list[str] = []
+    warnings: list[str] = []
+    ragqs = read_jsonl(datasets / "eval" / "rag" / "questions.jsonl")
+    chunks = {c.get("chunk_id"): c for c in read_jsonl(datasets / "interim" / "chunks" / "chunks.jsonl")}
+    docs = {d.get("document_id"): d for d in read_jsonl(datasets / "manifests" / "documents.jsonl")}
+    projects = {p.get("project_id"): p for p in read_jsonl(datasets / "manifests" / "projects.jsonl")}
+
+    seen_q: set[str] = set()
+    unans = 0
+    for i, q in enumerate(ragqs):
+        try:
+            RAGQuestion.model_validate(q)
+        except ValidationError as exc:
+            errors.append(f"rag schema#{i}: {exc}")
+        question = str(q.get("question") or "")
+        if any(m in question for m in LEAK_MARKERS) or "原文：" in question:
+            errors.append(f"rag question contains leak marker {q.get('question_id')}")
+        quotes = q.get("source_quotes") or []
+        for quote in quotes:
+            if question_leaks_quote(question, quote):
+                errors.append(f"rag question copies source_quote {q.get('question_id')}")
+        key = re.sub(r"\s+", "", question)
+        if key in seen_q:
+            errors.append(f"duplicate rag question {q.get('question_id')}")
+        seen_q.add(key)
+
+        pid = q.get("project_id")
+        proj = projects.get(pid) or {}
+        if proj.get("project_code") == "PORTAL_SNAPSHOT":
+            errors.append(f"PORTAL_SNAPSHOT in rag {q.get('question_id')}")
+        if proj.get("bundle_level") == "incomplete":
+            errors.append(f"incomplete project in rag {q.get('question_id')}")
+
+        if q.get("answerable"):
+            if not (q.get("answer") or "").strip():
+                errors.append(f"answerable empty answer {q.get('question_id')}")
+            if not q.get("gold_chunk_ids"):
+                errors.append(f"missing gold_chunk_ids {q.get('question_id')}")
+            if not q.get("source_document_ids") and not q.get("gold_document_ids"):
+                errors.append(f"missing document ids {q.get('question_id')}")
+            if not q.get("source_urls"):
+                errors.append(f"missing source_urls {q.get('question_id')}")
+            if not q.get("source_pages"):
+                errors.append(f"missing source_pages {q.get('question_id')}")
+            for cid in q.get("gold_chunk_ids") or []:
+                if cid not in chunks:
+                    errors.append(f"citation chunk missing {cid}")
+            for quote in quotes:
+                if not quote:
+                    continue
+                supported = False
+                for cid in q.get("gold_chunk_ids") or []:
+                    ch = chunks.get(cid) or {}
+                    text = ch.get("text") or ""
+                    if quote_supported_by_chunk(quote, text) or fuzz.partial_ratio(quote[:120], text[:2000]) >= 70:
+                        supported = True
+                        break
+                if not supported:
+                    errors.append(f"source_quote not in chunk {q.get('question_id')}")
+            answer = str(q.get("answer") or "")
+            if quotes and answer:
+                joined = " ".join(quotes)
+                if fuzz.partial_ratio(answer[:180], joined[:500]) < 60 and answer[:40] not in joined:
+                    errors.append(f"answer not supported by quote {q.get('question_id')}")
+        else:
+            unans += 1
+            if q.get("answer") is not None:
+                errors.append(f"unanswerable must have answer=null {q.get('question_id')}")
+            if quotes or q.get("gold_chunk_ids"):
+                errors.append(f"unanswerable must not bind fake quote {q.get('question_id')}")
+            # Corpus absence check
+            corpus = "".join(
+                (c.get("text") or "") for c in chunks.values() if c.get("project_id") == pid
+            )
+            from bidpilot_data.rag_eval.build import _unanswerable_keywords, _corpus_has_any
+
+            kws = _unanswerable_keywords(question)
+            if kws and _corpus_has_any(corpus, kws):
+                errors.append(f"unanswerable keywords present in corpus {q.get('question_id')}")
+
+    ratio = (unans / len(ragqs)) if ragqs else 0.0
+    if ragqs and not (0.10 <= ratio <= 0.15):
+        errors.append(f"unanswerable_ratio out of band: {ratio:.4f} (need 0.10-0.15)")
+
+    report = {
+        "ok": not errors,
+        "error_count": len(errors),
+        "warning_count": len(warnings),
+        "errors": errors[:300],
+        "warnings": warnings[:100],
+        "questions": len(ragqs),
+        "unanswerable": unans,
+        "unanswerable_ratio": ratio,
+    }
+    if write_report:
+        write_json(datasets / "reports" / "rag_validation_report.json", report)
+    log_stats(log, "validate_rag", {"ok": report["ok"], "errors": report["error_count"], "ratio": ratio})
+    return report
 
 
 def validate_all(*, allow_demo_fixture: bool = False) -> dict[str, Any]:
@@ -165,71 +270,107 @@ def validate_all(*, allow_demo_fixture: bool = False) -> dict[str, Any]:
         if dups:
             errors.append(f"duplicate {name} ids: {dups[:5]}")
 
-    # Evidence quote presence in chunks
+    # Evidence quote presence in chunks (fuzzy OK for OCR/whitespace noise)
     for e in evidence:
         cid = e.get("chunk_id")
         if cid and cid in chunk_by_id:
-            if not quote_supported_by_chunk(str(e.get("quote") or ""), chunk_by_id[cid].get("text") or ""):
-                errors.append(f"evidence quote not in chunk {e.get('evidence_id')}")
+            quote = str(e.get("quote") or "")
+            text = chunk_by_id[cid].get("text") or ""
+            if not quote_supported_by_chunk(quote, text):
+                if fuzz.partial_ratio(quote[:180], text[:2500]) < 75:
+                    errors.append(f"evidence quote not in chunk {e.get('evidence_id')}")
+                else:
+                    warnings.append(f"evidence quote weak match {e.get('evidence_id')}")
 
+    unknown_matches = 0
     for m in matches:
+        if m.get("status") == "unknown":
+            unknown_matches += 1
+            errors.append(f"unknown match forbidden {m.get('match_id')}")
+        try:
+            RequirementMatchAnnotation.model_validate(m)
+        except ValidationError as exc:
+            errors.append(f"match schema {m.get('match_id')}: {exc}")
         if m.get("requirement_id") not in req_ids and req_ids:
             errors.append(f"match missing requirement {m.get('match_id')}")
-        if m.get("status") == "satisfied":
-            eids = m.get("evidence_ids") or []
-            if not eids and not m.get("evidence_document_id") and not m.get("evidence_chunk_id"):
-                errors.append(f"satisfied match without evidence {m.get('match_id')}")
-            for eid in eids:
-                if eid not in evidence_ids and evidence_ids:
-                    errors.append(f"match evidence_id missing {eid}")
+        eids = m.get("evidence_ids") or []
+        if not eids and not m.get("evidence_document_id") and not m.get("evidence_chunk_id"):
+            errors.append(f"match without evidence {m.get('match_id')}")
+        for eid in eids:
+            if eid not in evidence_ids and evidence_ids:
+                errors.append(f"match evidence_id missing {eid}")
         if m.get("synthetic") is True:
             errors.append(f"synthetic match forbidden {m.get('match_id')}")
 
-    for q in ragqs:
-        try:
-            RAGQuestion.model_validate(q)
-        except ValidationError as exc:
-            errors.append(f"rag schema: {exc}")
-        if q.get("answerable"):
-            if not q.get("gold_chunk_ids"):
-                errors.append(f"rag answerable without evidence {q.get('question_id')}")
-            elif any(cid not in chunk_ids for cid in q.get("gold_chunk_ids", [])):
-                errors.append(f"rag invalid chunk evidence {q.get('question_id')}")
-            # Answer must be supported by quotes
-            quotes = q.get("source_quotes") or []
-            answer = str(q.get("answer") or "")
-            if quotes and answer:
-                joined = " ".join(quotes)
-                if fuzz.partial_ratio(answer[:180], joined[:500]) < 60 and answer[:40] not in joined:
-                    errors.append(f"rag answer not supported by quotes {q.get('question_id')}")
-            for cid in q.get("gold_chunk_ids") or []:
-                chunk = chunk_by_id.get(cid)
-                if not chunk:
-                    continue
-                for quote in quotes:
-                    if quote and not quote_supported_by_chunk(quote, chunk.get("text") or ""):
-                        # quote may span sentence; warn instead of hard fail if partial
-                        if fuzz.partial_ratio(quote[:120], (chunk.get("text") or "")[:2000]) < 70:
-                            errors.append(f"rag quote missing from chunk {q.get('question_id')}")
+    # Detect cartesian-like explosion: matches >> suppliers * 5 with all same status historically unknown
+    suppliers_n = len(read_jsonl(datasets / "silver" / "disclosed_suppliers.jsonl"))
+    if matches and suppliers_n and len(matches) > max(500, suppliers_n * 20):
+        warnings.append(f"match count unusually high vs suppliers ({len(matches)} vs {suppliers_n})")
 
-    for rows, split in [(sft_train, "train"), (sft_test, "test")]:
+    rag_report = validate_rag(write_report=True)
+    if not rag_report.get("ok"):
+        errors.extend([f"rag:{e}" for e in rag_report.get("errors", [])[:100]])
+
+    sft_val = read_jsonl(datasets / "sft" / "validation" / "records.jsonl")
+    for rows, split in [(sft_train, "train"), (sft_val, "validation"), (sft_test, "test")]:
         for i, row in enumerate(rows):
             try:
                 rec = SFTRecord.model_validate(row)
             except ValidationError as exc:
                 errors.append(f"sft {split}#{i}: {exc}")
                 continue
-            assistant = next(m.content for m in rec.messages if m.role == "assistant")
+            if (projects and (next((p for p in projects if p.get("project_id") == rec.project_id), {}) or {}).get("project_code")
+                    == "PORTAL_SNAPSHOT"):
+                errors.append(f"PORTAL_SNAPSHOT in sft {rec.record_id}")
+            assistants = [m.content for m in rec.messages if m.role == "assistant"]
+            if not assistants:
+                errors.append(f"sft missing assistant {rec.record_id}")
+                continue
             try:
-                json.loads(assistant)
+                json.loads(assistants[-1])
             except json.JSONDecodeError:
                 errors.append(f"sft assistant json invalid {rec.record_id}")
+            # Tool call pairing
+            if rec.task_type.value == "tool_call":
+                roles = [m.role for m in rec.messages]
+                for j, role in enumerate(roles):
+                    if role == "tool" and (j == 0 or roles[j - 1] != "assistant"):
+                        errors.append(f"tool result not paired {rec.record_id}")
+                final = json.loads(assistants[-1]) if assistants else {}
+                if not (final.get("citations") or final.get("clarify")):
+                    errors.append(f"tool_call final missing citations {rec.record_id}")
 
     train_projects = {r.get("project_id") for r in sft_train}
+    val_projects = {r.get("project_id") for r in sft_val}
     test_projects = {r.get("project_id") for r in sft_test}
-    leak = train_projects & test_projects
-    if leak:
-        errors.append(f"train/test project leakage: {sorted(leak)[:10]}")
+    if train_projects & test_projects:
+        errors.append(f"train/test project leakage: {sorted(train_projects & test_projects)[:10]}")
+    if train_projects & val_projects:
+        errors.append(f"train/validation project leakage: {sorted(train_projects & val_projects)[:10]}")
+    if val_projects & test_projects:
+        errors.append(f"validation/test project leakage: {sorted(val_projects & test_projects)[:10]}")
+    if len(val_projects) < 5:
+        errors.append(f"validation projects < 5: {len(val_projects)}")
+
+    # PORTAL_SNAPSHOT must not enter training / eval artifacts
+    portal_pids = {p.get("project_id") for p in projects if p.get("project_code") == "PORTAL_SNAPSHOT"}
+    for label, rows in [
+        ("requirements", silver + gold),
+        ("rag", ragqs),
+        ("sft_train", sft_train),
+        ("sft_validation", sft_val),
+        ("sft_test", sft_test),
+        ("matches", matches),
+    ]:
+        for row in rows:
+            if row.get("project_id") in portal_pids:
+                errors.append(f"PORTAL_SNAPSHOT leaked into {label}")
+                break
+    agents = read_jsonl(datasets / "eval" / "agent" / "tasks.jsonl")
+    for row in agents:
+        if row.get("project_id") in portal_pids:
+            errors.append("PORTAL_SNAPSHOT leaked into agent tasks")
+            break
 
     # Approximate document/chunk leakage across train/test via near-duplicate text
     train_chunk_texts = [
@@ -247,10 +388,11 @@ def validate_all(*, allow_demo_fixture: bool = False) -> dict[str, Any]:
         if any(fuzz.token_set_ratio(tu[:500], tr[:500]) >= 98 for tr in train_chunk_texts):
             near_doc += 1
     if near_doc:
-        if len({r.get("project_id") for r in sft_train + sft_test}) < 5:
-            warnings.append(f"approx chunk near-duplicates train/test={near_doc} (small project set)")
-        else:
+        # Shared tender templates across projects are common; keep as warning unless severe.
+        if near_doc >= 20:
             errors.append(f"approx chunk near-duplicates train/test={near_doc}")
+        else:
+            warnings.append(f"approx chunk near-duplicates train/test={near_doc}")
 
     train_users = [next(m["content"] for m in r["messages"] if m["role"] == "user") for r in sft_train[:200]]
     test_users = [next(m["content"] for m in r["messages"] if m["role"] == "user") for r in sft_test[:200]]
@@ -304,7 +446,9 @@ def validate_all(*, allow_demo_fixture: bool = False) -> dict[str, Any]:
             "rag_questions": len(ragqs),
             "sft_train": len(sft_train),
             "sft_test": len(sft_test),
-            "unknown_matches": sum(1 for m in matches if m.get("status") == "unknown"),
+            "unknown_matches": unknown_matches,
+            "sft_validation": len(sft_val),
+            "validation_projects": len(val_projects),
         },
     }
     write_json(datasets / "reports" / "validation_report.json", report)

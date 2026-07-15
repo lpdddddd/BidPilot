@@ -1,0 +1,23 @@
+{
+  "answerable": 187,
+  "by_type": {
+    "commercial": 24,
+    "evidence": 13,
+    "multi_section": 11,
+    "project_basic": 20,
+    "qualification": 46,
+    "rejection": 9,
+    "scoring": 26,
+    "technical": 25,
+    "time_location": 13,
+    "unanswerable": 33
+  },
+  "dry_run": false,
+  "leaky_questions": 0,
+  "max_project_share": 0.11818181818181818,
+  "ok_unanswerable_band": true,
+  "questions": 220,
+  "target": 300,
+  "unanswerable": 33,
+  "unanswerable_ratio": 0.15
+}

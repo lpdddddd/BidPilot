@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter, defaultdict
 from typing import Any
 
 from bidpilot_data.logging import get_logger, log_stats
@@ -13,17 +14,116 @@ from bidpilot_data.schemas import (
     ReviewStatus,
 )
 from bidpilot_data.settings import get_settings
-from bidpilot_data.utils import ensure_dir, read_jsonl, stable_uuid, write_jsonl
+from bidpilot_data.utils import ensure_dir, read_jsonl, stable_uuid, write_json, write_jsonl
 
 log = get_logger(__name__)
 
+# Scenario templates close to real procurement IT/ops projects (must pass corpus absence check).
 UNANSWERABLE_TEMPLATES = [
-    "本项目采购文件是否要求投标人具备国际航天发射资质？",
-    "招标文件是否规定必须提交月球探测任务履约业绩？",
-    "本项目是否要求使用固态氦冷却服务器机柜？",
-    "采购文件是否将“境外核动力船舶维保能力”列为资格条件？",
-    "招标文件是否要求投标报价以比特币结算？",
+    "采购文件是否规定质保期内每月巡检次数？",
+    "中标供应商项目经理是否必须具有高级职称？",
+    "合同是否约定提前交付奖励？",
+    "采购人是否提供原系统源代码？",
+    "项目是否要求驻场人员夜间值班？",
+    "是否允许联合体中的境外企业参与？",
+    "是否规定数据迁移后的历史数据保存年限？",
+    "是否要求供应商提供指定品牌服务器？",
+    "是否约定系统故障的具体赔偿金额？",
+    "是否公开了所有评审专家的评分明细？",
+    "是否要求投标人提供等保测评报告原件？",
+    "是否规定实施期间每周必须提交进度周报？",
+    "是否要求提供国产化信创适配认证？",
+    "是否约定免费培训不少于多少人次？",
+    "是否要求售后响应时间不超过两小时？",
+    "是否规定必须使用采购人指定的云平台账号？",
+    "是否要求投标保证金以电子保函以外形式提交？",
+    "是否约定项目验收后三年免费升级？",
+    "是否要求项目团队核心成员不少于五名本地户籍人员？",
+    "是否公开了详细的历史成交价格区间？",
+    "是否要求提供ISO27001证书且在有效期内？",
+    "是否约定接口联调必须在采购人机房完成？",
+    "是否要求投标文件加密提交并上传至指定平台？",
+    "是否规定备份数据必须异地存放？",
+    "是否要求中标人开具增值税专用发票后才付款？",
+    "是否约定延期罚款按日计算的具体比例？",
+    "是否要求提供源代码第三方安全审计报告？",
+    "是否规定驻场工程师必须持有PMP证书？",
+    "是否要求运维期间提供7×24小时热线？",
+    "是否约定知识产权全部归采购人独家所有？",
+    "是否要求投标人在本地设立固定经营场所？",
+    "是否公开评标委员会成员名单？",
+    "是否要求提供近三年连续盈利的审计报告？",
+    "是否约定试运行不少于九十个自然日？",
+    "是否要求系统支持不少于一万并发用户？",
+    "是否规定数据销毁必须经采购人书面确认？",
+    "是否要求投标人具备涉密信息系统集成资质？",
+    "是否约定故障恢复时间目标（RTO）的具体数值？",
+    "是否要求提供英文版操作手册？",
+    "是否规定必须采用微服务架构交付？",
+    "是否要求中标后十五日内提交实施方案？",
+    "是否约定履约保证金比例及退还条件？",
+    "是否要求对历史数据做逐条人工核对？",
+    "是否公开采购预算对应的明细科目？",
+    "是否要求供应商承诺不使用开源代码？",
+    "是否约定采购人可无理由终止合同？",
+    "是否要求提供省级以上科技进步奖证明？",
+    "是否规定培训必须在省外指定基地进行？",
+    "是否要求投标人通过特定银行开具保函？",
+    "是否约定软件缺陷终身免费修复？",
+    "是否要求所有服务器部署在采购人指定机柜位？",
+    "是否规定联合体成员均须参加澄清答疑会？",
+    "是否要求提供近五年同类项目不少于十个？",
+    "是否约定验收不通过时全额退还已付款？",
 ]
+
+LEAK_MARKERS = ("原文：", "根据原文", "根据下列原文", "以下条款", "请依据采购文件原文", "只依据原文")
+
+TYPE_RATIOS = {
+    QuestionType.project_basic: 0.10,
+    QuestionType.qualification: 0.20,
+    QuestionType.scoring: 0.15,
+    QuestionType.commercial: 0.10,
+    QuestionType.technical: 0.15,
+    QuestionType.rejection: 0.10,
+    QuestionType.time_location: 0.05,
+    QuestionType.evidence: 0.05,
+    QuestionType.multi_section: 0.05,
+}
+
+
+def _norm(text: str) -> str:
+    return re.sub(r"\s+", "", text or "")
+
+
+def _longest_common_substr_len(a: str, b: str) -> int:
+    a, b = _norm(a), _norm(b)
+    if not a or not b:
+        return 0
+    if len(a) > len(b):
+        a, b = b, a
+    best = 0
+    for i in range(len(a)):
+        for j in range(i + 20, len(a) + 1):
+            if a[i:j] in b:
+                best = max(best, j - i)
+            else:
+                break
+    return best
+
+
+def question_leaks_quote(question: str, quote: str) -> bool:
+    q = question or ""
+    if any(m in q for m in LEAK_MARKERS):
+        return True
+    if quote and _longest_common_substr_len(q, quote) >= 20:
+        return True
+    return False
+
+
+def fuzz_partial(a: str, b: str) -> int:
+    from rapidfuzz import fuzz
+
+    return int(fuzz.partial_ratio((a or "")[:180], (b or "")[:500]))
 
 
 def _sentence_spans(text: str) -> list[str]:
@@ -39,154 +139,545 @@ def _pick_requirement_like(chunk: ChunkRecord) -> str | None:
     return spans[0][:220] if spans else None
 
 
-def _question_for(qtype: QuestionType, quote: str) -> str:
-    mapping = {
-        QuestionType.project_basic: f"根据采购文件，与下列内容直接相关的项目基本信息是什么？原文：{quote[:80]}",
-        QuestionType.qualification: f"根据原文，投标人/供应商需要满足哪项资格或证明要求？原文：{quote[:80]}",
-        QuestionType.scoring: f"根据评分相关原文，该项如何计分或评审？原文：{quote[:80]}",
-        QuestionType.commercial: f"根据商务条款原文，具体商务要求是什么？原文：{quote[:80]}",
-        QuestionType.technical: f"根据技术条款原文，关键技术要求是什么？原文：{quote[:80]}",
-        QuestionType.rejection: f"根据否决/无效条款原文，何种情形将被否决或不予受理？原文：{quote[:80]}",
-        QuestionType.time_location: f"根据原文，与时间或地点相关的要求是什么？原文：{quote[:80]}",
-        QuestionType.evidence: f"完成该要求通常需要提供哪些证明材料？请只依据原文作答。原文：{quote[:80]}",
-        QuestionType.multi_section: f"请概括原文中与投标义务直接相关的要求。原文：{quote[:80]}",
-    }
-    return mapping.get(qtype, f"根据采购文件原文回答：{quote[:80]}")
+def _short_entity(text: str, *, max_len: int = 18) -> str:
+    """Extract a short entity/title fragment safe to put in a question (not a long quote)."""
+    t = re.sub(r"\s+", "", text or "")
+    t = re.sub(r"[。；;：:，,、].*$", "", t)
+    return t[:max_len]
 
 
-def _answer_from_quote(quote: str) -> str:
-    # Do not use "first line of chunk" verbatim as the only answer shape —
-    # normalize to a grounded paraphrase that still must be supported by quote.
-    q = re.sub(r"\s+", " ", quote).strip()
-    if len(q) <= 160:
-        return q
-    return q[:160].rstrip("，,；;、") + "…"
-
-
-def _corpus_mentions(corpus: str, keywords: list[str]) -> bool:
-    return any(k in corpus for k in keywords)
-
-
-def build_rag_eval(*, dry_run: bool = False, limit: int | None = 40) -> dict[str, Any]:
-    settings = get_settings()
-    projects = {p["project_id"]: p for p in read_jsonl(settings.datasets_root / "manifests" / "projects.jsonl")}
-    chunks_all = [ChunkRecord.model_validate(r) for r in read_jsonl(settings.datasets_root / "interim" / "chunks" / "chunks.jsonl")]
-    # Prefer level_a / level_b for RAG; allow level_c only as fallback.
-    preferred = [
-        c
-        for c in chunks_all
-        if (projects.get(c.project_id) or {}).get("bundle_level") in {"level_a", "level_b"}
+def _natural_question(qtype: QuestionType, req: dict[str, Any] | None, quote: str, project: dict[str, Any]) -> str | None:
+    """Build a natural user question that does not paste the source quote."""
+    title = _short_entity((req or {}).get("title") or "")
+    cat = (req or {}).get("category") or ""
+    pname = _short_entity(project.get("project_name") or "", max_len=20)
+    pcode = (project.get("project_code") or "")[:24]
+    # Distinctive noun phrases from quote (short) for diversity without leakage
+    nouns = [
+        m.group(0)
+        for m in re.finditer(
+            r"(营业执照|资质证书|社保|财务报表|业绩|服务期限|付款|履约保证金|无效投标|废标|技术分|商务分|响应文件|联合体|扣分|加分)",
+            quote or "",
+        )
     ]
-    chunks = preferred or [
-        c for c in chunks_all if (projects.get(c.project_id) or {}).get("bundle_level") == "level_c"
-    ] or chunks_all
-    reqs = read_jsonl(settings.datasets_root / "silver" / "requirements.jsonl") + read_jsonl(
-        settings.datasets_root / "gold" / "requirements.jsonl"
-    )
-    docs = {d["document_id"]: d for d in read_jsonl(settings.datasets_root / "manifests" / "documents.jsonl")}
-    statements_by_project: dict[str, str] = {}
+    noun = nouns[0] if nouns else ""
+    scoring_hint = ""
+    m = re.search(r"(\d+(?:\.\d+)?)\s*分", quote or "")
+    if m:
+        scoring_hint = m.group(1)
+
+    templates: dict[QuestionType, list[str]] = {
+        QuestionType.project_basic: [
+            f"项目「{pname}」的采购人与项目编号分别是什么？" if pname else "本项目的采购人是谁？",
+            f"编号 {pcode} 的项目预算与采购方式如何约定？" if pcode else "本项目预算与采购方式在文件中如何约定？",
+            f"「{pname}」的基本采购信息有哪些？" if pname else "本项目的基本采购信息有哪些？",
+        ],
+        QuestionType.qualification: [
+            f"项目「{pname}」对投标人的{noun or '资格'}有什么要求？" if pname else f"本项目对投标人的{noun or '资格条件'}有什么要求？",
+            f"投标人就「{title}」需要提交哪些证明材料？" if title else "投标人需要提交哪些资格证明材料？",
+            f"关于「{title}」的资格要求是什么？" if title else "投标人财务或业绩方面有什么资格要求？",
+            "本项目对投标人的财务状况有什么要求？",
+        ],
+        QuestionType.scoring: [
+            f"项目「{pname}」采用什么评分方法？" if pname else "项目采用什么评分方法？",
+            f"技术部分最高可以获得多少分？" if scoring_hint else "评分办法中技术部分如何计分？",
+            f"评分项「{title or noun or '技术'}」如何赋分？",
+            f"综合评分法中与「{noun or title or '商务'}」相关的分值如何规定？",
+        ],
+        QuestionType.commercial: [
+            f"「{pname}」商务条款中对{noun or '付款或履约'}有哪些约定？" if pname else f"商务条款中对{noun or '付款或履约'}有哪些约定？",
+            f"投标报价或「{title}」商务响应需要满足什么要求？" if title else "投标报价或商务响应需要满足什么要求？",
+        ],
+        QuestionType.technical: [
+            f"技术部分关于「{title or noun or '功能'}」需要满足哪些要求？",
+            f"「{pname}」技术条款有哪些硬性要求？" if pname else "系统功能或性能方面有哪些硬性要求？",
+        ],
+        QuestionType.rejection: [
+            f"项目「{pname}」中哪些情况会导致投标无效？" if pname else "哪些情况会导致投标无效？",
+            f"与「{title or noun or '响应文件'}」相关的否决/废标情形是什么？",
+            "未按要求密封或签署会怎样处理？",
+        ],
+        QuestionType.time_location: [
+            f"「{pname}」的服务期限或履行期限是多久？" if pname else "本项目的服务期限或履行期限是多久？",
+            f"编号 {pcode} 的投标截止时间与开标地点如何约定？" if pcode else "投标截止时间与开标地点如何约定？",
+            "项目交付或服务地点在哪里？",
+        ],
+        QuestionType.evidence: [
+            f"响应「{title or noun or '资格'}」通常需要准备哪些证明材料？",
+            f"「{pname}」业绩或认证材料应如何提交？" if pname else "业绩或认证材料应如何提交？",
+        ],
+        QuestionType.multi_section: [
+            f"请结合「{pname}」资格与否决条款说明投标人需同时注意什么？" if pname else "请结合资格与否决条款说明投标人需同时满足哪些关键义务？",
+            "评分办法与资格要求之间有哪些需要同时关注的条件？",
+        ],
+    }
+    # Prefer category-aligned templates
+    if cat == "mandatory_rejection":
+        qtype = QuestionType.rejection
+    elif cat == "scoring":
+        qtype = QuestionType.scoring
+    elif cat in {"qualification", "performance", "certification", "personnel"}:
+        qtype = QuestionType.qualification
+    elif cat == "project_info":
+        qtype = QuestionType.project_basic
+
+    opts = templates.get(qtype) or ["本项目相关条款有哪些关键要求？"]
+    # Rotate by requirement id for diversity
+    rid = str((req or {}).get("requirement_id") or "")
+    rot = sum(ord(c) for c in rid) % max(len(opts), 1)
+    ordered = opts[rot:] + opts[:rot]
+    for cand in ordered:
+        if cand and not question_leaks_quote(cand, quote):
+            return cand
+    fallback = f"本项目文件对{noun or '投标人'}有哪些必须满足的要求？"
+    if not question_leaks_quote(fallback, quote):
+        return fallback
+    return None
+
+
+def _answer_from_quote(quote: str, chunk_text: str) -> str | None:
+    """Grounded answer supported by quote; never use bare chunk first line.
+
+    Answer must be a contiguous substring of the quote (no ellipsis truncation)
+    so validators can verify evidence support.
+    """
+    q = re.sub(r"\s+", " ", quote).strip()
+    if len(q) < 12:
+        return None
+    if _norm(q) not in _norm(chunk_text) and _norm(q[:40]) not in _norm(chunk_text):
+        # Fall back to a sentence inside the chunk that overlaps quote tokens
+        for sent in _sentence_spans(chunk_text):
+            if len(sent) >= 20 and _longest_common_substr_len(sent, q) >= 12:
+                q = re.sub(r"\s+", " ", sent).strip()[:220]
+                break
+        else:
+            return None
+    first_line = chunk_text.strip().splitlines()[0].strip() if chunk_text.strip() else ""
+    if q == first_line and len(q) < 40:
+        spans = _sentence_spans(chunk_text)
+        for s in spans[1:]:
+            if len(s) >= 20 and _norm(s[:40]) in _norm(chunk_text):
+                q = re.sub(r"\s+", " ", s).strip()[:220]
+                break
+        else:
+            return None
+    # Keep as contiguous text without ellipsis so quote support checks pass
+    return q[:180] if len(q) > 180 else q
+
+
+def _corpus_has_any(corpus: str, keywords: list[str]) -> bool:
+    return any(k and k in corpus for k in keywords)
+
+
+def _unanswerable_keywords(question: str) -> list[str]:
+    """Distinctive phrases used to verify absence in project corpus.
+
+    Prefer multi-character distinctive spans; single common IT nouns are ignored alone.
+    """
+    distinctive = [
+        "每月巡检",
+        "高级职称",
+        "提前交付奖励",
+        "原系统源代码",
+        "夜间值班",
+        "境外企业",
+        "历史数据保存年限",
+        "指定品牌服务器",
+        "具体赔偿金额",
+        "评审专家的评分明细",
+        "等保测评报告原件",
+        "进度周报",
+        "信创适配认证",
+        "免费培训不少于",
+        "两小时",
+        "指定的云平台账号",
+        "电子保函以外",
+        "三年免费升级",
+        "本地户籍人员",
+        "历史成交价格区间",
+        "ISO27001",
+        "采购人机房完成",
+        "加密提交",
+        "异地存放",
+        "增值税专用发票后才付款",
+        "延期罚款按日",
+        "第三方安全审计",
+        "PMP证书",
+        "7×24",
+        "7x24",
+        "独家所有",
+        "固定经营场所",
+        "评标委员会成员名单",
+        "连续盈利的审计报告",
+        "九十个自然日",
+        "一万并发",
+        "数据销毁",
+        "涉密信息系统集成",
+        "RTO",
+        "英文版操作手册",
+        "微服务架构",
+        "十五日内提交实施方案",
+        "履约保证金比例",
+        "逐条人工核对",
+        "预算对应的明细科目",
+        "不使用开源代码",
+        "无理由终止合同",
+        "科技进步奖",
+        "省外指定基地",
+        "特定银行开具保函",
+        "终身免费修复",
+        "指定机柜位",
+        "澄清答疑会",
+        "同类项目不少于十个",
+        "全额退还已付款",
+    ]
+    found = [d for d in distinctive if d in (question or "")]
+    if found:
+        return found
+    toks = re.findall(r"[\u4e00-\u9fffA-Za-z0-9]{4,16}", question or "")
+    stop = {
+        "是否规定",
+        "是否要求",
+        "是否约定",
+        "是否公开",
+        "是否允许",
+        "采购文件",
+        "中标供应商",
+        "项目经理",
+        "投标人",
+        "供应商",
+    }
+    return [t for t in toks if t not in stop][:3]
+
+
+def _infer_type_from_req(req: dict[str, Any]) -> QuestionType:
+    cat = req.get("category") or ""
+    mapping = {
+        "qualification": QuestionType.qualification,
+        "performance": QuestionType.qualification,
+        "certification": QuestionType.qualification,
+        "personnel": QuestionType.qualification,
+        "scoring": QuestionType.scoring,
+        "mandatory_rejection": QuestionType.rejection,
+        "project_info": QuestionType.project_basic,
+        "technical": QuestionType.technical,
+        "commercial": QuestionType.commercial,
+        "timeline": QuestionType.time_location,
+    }
+    return mapping.get(cat, QuestionType.qualification)
+
+
+def build_rag_eval(*, dry_run: bool = False, limit: int | None = 300) -> dict[str, Any]:
+    settings = get_settings()
+    projects = {
+        p["project_id"]: p
+        for p in read_jsonl(settings.datasets_root / "manifests" / "projects.jsonl")
+        if p.get("bundle_level") in {"level_a", "level_b", "level_c"}
+        and p.get("project_code") != "PORTAL_SNAPSHOT"
+        and not str(p.get("project_name") or "").startswith("official_portal_snapshot")
+    }
+    chunks_all = [
+        ChunkRecord.model_validate(r)
+        for r in read_jsonl(settings.datasets_root / "interim" / "chunks" / "chunks.jsonl")
+        if r.get("project_id") in projects
+    ]
+    docs = {
+        d["document_id"]: d
+        for d in read_jsonl(settings.datasets_root / "manifests" / "documents.jsonl")
+        if d.get("project_code") != "PORTAL_SNAPSHOT"
+    }
+    reqs = [
+        r
+        for r in (
+            read_jsonl(settings.datasets_root / "silver" / "requirements.jsonl")
+            + read_jsonl(settings.datasets_root / "gold" / "requirements.jsonl")
+        )
+        if r.get("project_id") in projects
+    ]
+
+    statements_by_project: dict[str, str] = defaultdict(str)
+    chunks_by_id = {c.chunk_id: c for c in chunks_all}
     for c in chunks_all:
-        statements_by_project[c.project_id] = statements_by_project.get(c.project_id, "") + "\n" + c.text
+        statements_by_project[c.project_id] += "\n" + c.text
+
+    # Prefer level_a/b, level_c only for single-doc
+    ab_pids = {pid for pid, p in projects.items() if p.get("bundle_level") in {"level_a", "level_b"}}
+    target = limit if limit is not None else 300
+    answerable_target = max(1, int(target * 0.88))  # leave room for 10-15% unanswerable after dedup
+
+    type_caps = {qt: max(1, int(answerable_target * ratio)) for qt, ratio in TYPE_RATIOS.items()}
+    type_counts: Counter[QuestionType] = Counter()
+    per_project: Counter[str] = Counter()
+    per_chunk: Counter[str] = Counter()
+    max_per_project = max(3, int(target * 0.10))
 
     questions: list[RAGQuestion] = []
-    type_cycle = [
-        QuestionType.project_basic,
-        QuestionType.qualification,
-        QuestionType.scoring,
-        QuestionType.commercial,
-        QuestionType.technical,
-        QuestionType.rejection,
-        QuestionType.time_location,
-        QuestionType.evidence,
-        QuestionType.multi_section,
-    ]
 
-    answerable_target = limit if limit is not None else 40
-    for i, chunk in enumerate(chunks):
-        if len([q for q in questions if q.answerable]) >= answerable_target:
+    # 1) Requirement-grounded natural QA (priority)
+    priority_cats = {"qualification", "scoring", "mandatory_rejection", "project_info", "technical", "commercial", "timeline"}
+    ranked_reqs = sorted(
+        reqs,
+        key=lambda r: (
+            0 if r.get("category") in priority_cats else 1,
+            0 if r.get("mandatory") else 1,
+            0 if r.get("risk_level") in {"critical", "high"} else 1,
+            -(float(r.get("confidence") or 0)),
+        ),
+    )
+
+    for req in ranked_reqs:
+        if sum(1 for q in questions if q.answerable) >= answerable_target:
             break
-        quote = _pick_requirement_like(chunk)
-        if not quote:
+        pid = req["project_id"]
+        proj = projects.get(pid) or {}
+        level = proj.get("bundle_level")
+        if level not in {"level_a", "level_b", "level_c"}:
             continue
-        qtype = type_cycle[i % len(type_cycle)]
-        answer = _answer_from_quote(quote)
-        # Guard: answer must not equal chunk first line only when that line is empty noise
-        first_line = chunk.text.strip().splitlines()[0].strip() if chunk.text.strip() else ""
-        if answer == first_line and len(answer) < 25:
+        if per_project[pid] >= max_per_project:
             continue
-        src_url = (docs.get(chunk.document_id) or {}).get("source_url")
+        chunk_id = req.get("chunk_id")
+        quote = (req.get("original_text") or "").strip()
+        if not chunk_id or chunk_id not in chunks_by_id or len(quote) < 16:
+            continue
+        chunk = chunks_by_id[chunk_id]
+        if per_chunk[chunk_id] >= 2:
+            continue
+        qtype = _infer_type_from_req(req)
+        if type_counts[qtype] >= type_caps.get(qtype, answerable_target):
+            continue
+        if level == "level_c" and qtype == QuestionType.multi_section:
+            continue
+        question = _natural_question(qtype, req, quote, proj)
+        if not question:
+            continue
+        answer = _answer_from_quote(quote, chunk.text)
+        if not answer:
+            continue
+        if answer not in chunk.text and _norm(answer.rstrip("…")) not in _norm(chunk.text):
+            # allow truncated answer if prefix in chunk
+            if _norm(answer.rstrip("…")[:40]) not in _norm(chunk.text):
+                continue
+        src_url = req.get("source_url") or (docs.get(chunk.document_id) or {}).get("source_url")
+        if not src_url:
+            continue
+        page = req.get("source_page") or chunk.page_start
         questions.append(
             RAGQuestion(
-                question_id=str(stable_uuid(f"ragq:{chunk.chunk_id}:{qtype.value}:{content_key(quote)}")),
-                project_id=chunk.project_id,
-                question=_question_for(qtype, quote),
+                question_id=str(stable_uuid(f"ragq:req:{req['requirement_id']}:{qtype.value}")),
+                project_id=pid,
+                question=question,
                 answer=answer,
                 answerable=True,
-                gold_chunk_ids=[chunk.chunk_id],
-                gold_document_ids=[chunk.document_id],
-                source_document_ids=[chunk.document_id],
-                source_urls=[src_url] if src_url else [],
-                source_pages=[chunk.page_start],
-                source_quotes=[quote],
+                gold_chunk_ids=[chunk_id],
+                gold_document_ids=[req["document_id"]] if req.get("document_id") else [chunk.document_id],
+                source_document_ids=[req["document_id"]] if req.get("document_id") else [chunk.document_id],
+                source_urls=[src_url],
+                source_pages=[int(page)],
+                source_quotes=[quote[:220]],
                 question_type=qtype,
                 difficulty=Difficulty.medium,
                 quality_level=QualityLevel.silver,
                 review_status=ReviewStatus.pending,
             )
         )
+        type_counts[qtype] += 1
+        per_project[pid] += 1
+        per_chunk[chunk_id] += 1
 
-    # Requirement-grounded QA
-    for req in reqs:
-        if len([q for q in questions if q.answerable]) >= answerable_target:
+    # 2) Multi-section from level_a/b with two chunks
+    for pid in sorted(ab_pids):
+        if sum(1 for q in questions if q.answerable) >= answerable_target:
             break
-        level = (projects.get(req.get("project_id") or "") or {}).get("bundle_level")
-        if level not in {"level_a", "level_b", "level_c"}:
+        if type_counts[QuestionType.multi_section] >= type_caps[QuestionType.multi_section]:
+            break
+        if per_project[pid] >= max_per_project:
             continue
-        chunk_id = req.get("chunk_id")
-        original = (req.get("original_text") or "").strip()
-        if not chunk_id or len(original) < 16:
+        p_chunks = [c for c in chunks_all if c.project_id == pid]
+        if len(p_chunks) < 2:
+            continue
+        c1, c2 = p_chunks[0], p_chunks[1]
+        if per_chunk[c1.chunk_id] >= 2 or per_chunk[c2.chunk_id] >= 2:
+            continue
+        q1 = _pick_requirement_like(c1)
+        q2 = _pick_requirement_like(c2)
+        if not q1 or not q2:
+            continue
+        question = (
+            f"请结合项目「{_short_entity((projects.get(pid) or {}).get('project_name') or '', max_len=16)}」"
+            "的资格要求与否决情形，说明投标人需要同时注意哪些关键条件？"
+        )
+        if question_leaks_quote(question, q1) or question_leaks_quote(question, q2):
+            continue
+        src1 = (docs.get(c1.document_id) or {}).get("source_url")
+        src2 = (docs.get(c2.document_id) or {}).get("source_url")
+        if not src1:
+            continue
+        answer = _answer_from_quote(q1, c1.text)
+        if not answer:
             continue
         questions.append(
             RAGQuestion(
-                question_id=str(stable_uuid(f"ragq:req:{req['requirement_id']}")),
-                project_id=req["project_id"],
-                question=f"资格/条款“{req.get('title') or original[:24]}”的具体内容是什么？请依据采购文件原文回答。",
-                answer=_answer_from_quote(req.get("normalized_requirement") or original),
+                question_id=str(stable_uuid(f"ragq:multi:{pid}:{c1.chunk_id}:{c2.chunk_id}")),
+                project_id=pid,
+                question=question,
+                answer=answer,
                 answerable=True,
-                gold_chunk_ids=[chunk_id],
-                gold_document_ids=[req["document_id"]] if req.get("document_id") else [],
-                source_document_ids=[req["document_id"]] if req.get("document_id") else [],
-                source_urls=[req["source_url"]] if req.get("source_url") else [],
-                source_pages=[req["source_page"]] if req.get("source_page") else [],
-                source_quotes=[original[:220]],
-                question_type=QuestionType.qualification,
+                gold_chunk_ids=[c1.chunk_id, c2.chunk_id],
+                gold_document_ids=[c1.document_id, c2.document_id],
+                source_document_ids=[c1.document_id, c2.document_id],
+                source_urls=[u for u in [src1, src2] if u],
+                source_pages=[c1.page_start, c2.page_start],
+                source_quotes=[q1[:220], q2[:220]],
+                question_type=QuestionType.multi_section,
+                difficulty=Difficulty.hard,
                 quality_level=QualityLevel.silver,
                 review_status=ReviewStatus.pending,
             )
         )
+        type_counts[QuestionType.multi_section] += 1
+        per_project[pid] += 1
+        per_chunk[c1.chunk_id] += 1
+        per_chunk[c2.chunk_id] += 1
 
-    # Unanswerable: procurement-domain and confirmed absent via full-project corpus scan
-    n_unans = max(1, int(len([q for q in questions if q.answerable]) * 0.12))
-    unans_added = 0
-    project_ids = sorted({c.project_id for c in chunks})
-    for i, pid in enumerate(project_ids):
-        if unans_added >= n_unans:
-            break
-        tmpl = UNANSWERABLE_TEMPLATES[i % len(UNANSWERABLE_TEMPLATES)]
-        corpus = statements_by_project.get(pid, "")
-        # Confirm none of the exotic keywords exist in project corpus
-        exotic = re.findall(r"[\u4e00-\u9fff]{2,12}", tmpl)
-        # Use distinctive tokens from the template
-        check_tokens = [t for t in ("航天发射", "月球探测", "固态氦", "核动力船舶", "比特币") if t in tmpl]
-        if not check_tokens:
-            check_tokens = exotic[-2:] if len(exotic) >= 2 else exotic
-        if _corpus_mentions(corpus, check_tokens):
+    # 3) Chunk-backed fill for under-represented types, then any remaining capacity to target
+    fill_types = list(TYPE_RATIOS.keys())
+    for pass_id in range(2):
+        for chunk in chunks_all:
+            if sum(1 for q in questions if q.answerable) >= answerable_target:
+                break
+            pid = chunk.project_id
+            proj = projects.get(pid) or {}
+            if per_project[pid] >= max_per_project or per_chunk[chunk.chunk_id] >= 2:
+                continue
+            quote = _pick_requirement_like(chunk)
+            if not quote:
+                continue
+            qtype = None
+            if pass_id == 0:
+                for qt, cap in type_caps.items():
+                    if qt == QuestionType.multi_section:
+                        continue
+                    if type_counts[qt] < cap:
+                        qtype = qt
+                        break
+                if qtype is None:
+                    break
+            else:
+                # Second pass: ignore soft type caps, rotate types for diversity
+                qtype = fill_types[per_chunk[chunk.chunk_id] % len(fill_types)]
+                if qtype == QuestionType.multi_section:
+                    qtype = QuestionType.qualification
+            if proj.get("bundle_level") == "level_c" and qtype == QuestionType.multi_section:
+                continue
+            # Synthetic req context from chunk for diversity
+            faux_req = {"title": quote[:12], "category": qtype.value, "requirement_id": chunk.chunk_id}
+            question = _natural_question(qtype, faux_req, quote, proj)
+            if not question or question_leaks_quote(question, quote):
+                continue
+            answer = _answer_from_quote(quote, chunk.text)
+            if not answer:
+                continue
+            if answer not in chunk.text and _norm(answer.rstrip("…")[:40]) not in _norm(chunk.text):
+                continue
+            src_url = (docs.get(chunk.document_id) or {}).get("source_url")
+            if not src_url:
+                continue
+            key = _norm(question)
+            if any(_norm(q.question) == key for q in questions):
+                # Add page/code to reduce collision
+                question = f"{question.rstrip('？?')}（文件第{chunk.page_start}页）？"
+                if question_leaks_quote(question, quote) or any(_norm(q.question) == _norm(question) for q in questions):
+                    continue
+            questions.append(
+                RAGQuestion(
+                    question_id=str(
+                        stable_uuid(f"ragq:chunk:{chunk.chunk_id}:{qtype.value}:{content_key(quote)}:{pass_id}")
+                    ),
+                    project_id=pid,
+                    question=question,
+                    answer=answer,
+                    answerable=True,
+                    gold_chunk_ids=[chunk.chunk_id],
+                    gold_document_ids=[chunk.document_id],
+                    source_document_ids=[chunk.document_id],
+                    source_urls=[src_url],
+                    source_pages=[chunk.page_start],
+                    source_quotes=[quote],
+                    question_type=qtype,
+                    difficulty=Difficulty.medium,
+                    quality_level=QualityLevel.silver,
+                    review_status=ReviewStatus.pending,
+                )
+            )
+            type_counts[qtype] += 1
+            per_project[pid] += 1
+            per_chunk[chunk.chunk_id] += 1
+
+    # Dedup answerable by question text; drop evidence failures early
+    seen_q: set[str] = set()
+    answerable: list[RAGQuestion] = []
+    for q in questions:
+        if not q.answerable:
             continue
-        questions.append(
+        key = _norm(q.question)
+        if key in seen_q or question_leaks_quote(q.question, (q.source_quotes or [""])[0]):
+            continue
+        quotes = q.source_quotes or []
+        ans = q.answer or ""
+        if not ans or not quotes:
+            continue
+        if not any(_norm(ans) in _norm(qq) or fuzz_partial(ans, qq) >= 70 for qq in quotes):
+            continue
+        # each quote must exist in at least one gold chunk
+        ok_quote = True
+        for qq in quotes:
+            found = False
+            for cid in q.gold_chunk_ids:
+                ch = chunks_by_id.get(cid)
+                if ch and (_norm(qq[:40]) in _norm(ch.text) or qq[:24] in (ch.text or "")):
+                    found = True
+                    break
+            if not found:
+                ok_quote = False
+                break
+        if not ok_quote:
+            continue
+        seen_q.add(key)
+        answerable.append(q)
+
+    # 4) Unanswerable 10-15% after dedup
+    # First compute desired band relative to final mixed set.
+    # Build candidates then trim to hit [10%, 15%].
+    unans: list[RAGQuestion] = []
+    for i, pid in enumerate(sorted(projects)):
+        corpus = statements_by_project.get(pid, "")
+        tmpl = UNANSWERABLE_TEMPLATES[(i * 3) % len(UNANSWERABLE_TEMPLATES)]
+        kws = _unanswerable_keywords(tmpl)
+        if _corpus_has_any(corpus, kws):
+            # try next templates
+            found = False
+            for off in range(len(UNANSWERABLE_TEMPLATES)):
+                cand = UNANSWERABLE_TEMPLATES[(i + off) % len(UNANSWERABLE_TEMPLATES)]
+                ck = _unanswerable_keywords(cand)
+                if not _corpus_has_any(corpus, ck):
+                    tmpl = cand
+                    found = True
+                    break
+            if not found:
+                continue
+        # Make unanswerable questions unique per project
+        qtext = f"就项目「{_short_entity((projects.get(pid) or {}).get('project_name') or '', max_len=16)}」而言，{tmpl}"
+        if question_leaks_quote(qtext, ""):
+            qtext = tmpl
+        key = _norm(qtext)
+        if key in seen_q:
+            continue
+        seen_q.add(key)
+        unans.append(
             RAGQuestion(
                 question_id=str(stable_uuid(f"ragq:unans:{pid}:{tmpl}")),
                 project_id=pid,
-                question=tmpl,
+                question=qtext,
                 answer=None,
                 answerable=False,
                 gold_chunk_ids=[],
@@ -201,28 +692,67 @@ def build_rag_eval(*, dry_run: bool = False, limit: int | None = 40) -> dict[str
                 review_status=ReviewStatus.pending,
             )
         )
-        unans_added += 1
 
-    # Dedup questions by text
-    seen_q: set[str] = set()
-    deduped: list[RAGQuestion] = []
-    for q in questions:
-        key = re.sub(r"\s+", "", q.question)
-        if key in seen_q:
-            continue
-        seen_q.add(key)
-        deduped.append(q)
-    questions = deduped
+    # Assemble to target size with unanswerable ratio in [0.10, 0.15]
+    final: list[RAGQuestion] = []
+    # Cap answerable to allow room
+    max_ans = int(target * 0.90)
+    ans_keep = answerable[:max_ans]
+    # Choose unanswerable count
+    # Want u/(a+u) in [0.10, 0.15] => u in [a/9, 3a/17]
+    a = len(ans_keep)
+    lo = max(1, int((a / 0.90) * 0.10))  # approx
+    # exact: u >= 0.10*(a+u) => u >= a/9; u <= 0.15*(a+u) => u <= 3a/17
+    u_min = max(1, (a + 8) // 9)
+    u_max = max(u_min, (3 * a) // 17) if a else 1
+    if a == 0:
+        u_min, u_max = 1, max(1, min(len(unans), int(target * 0.15)))
+    u_take = min(len(unans), max(u_min, min(u_max, len(unans))))
+    # If still out of band after taking available, trim answerable
+    while a and u_take / (a + u_take) < 0.10 and a > 10:
+        a -= 1
+        ans_keep = ans_keep[:a]
+        u_min = max(1, (a + 8) // 9)
+        u_take = min(len(unans), max(u_min, u_take))
+    while a and u_take / (a + u_take) > 0.15 and u_take > 1:
+        u_take -= 1
 
-    stats = {
-        "questions": len(questions),
-        "answerable": sum(1 for q in questions if q.answerable),
-        "unanswerable": sum(1 for q in questions if not q.answerable),
+    final.extend(ans_keep)
+    final.extend(unans[:u_take])
+    # Cap total
+    final = final[:target]
+
+    unans_ratio = (sum(1 for q in final if not q.answerable) / len(final)) if final else 0.0
+    by_type = Counter(q.question_type.value for q in final)
+
+    quality_report = {
+        "questions": len(final),
+        "answerable": sum(1 for q in final if q.answerable),
+        "unanswerable": sum(1 for q in final if not q.answerable),
+        "unanswerable_ratio": unans_ratio,
+        "by_type": dict(by_type),
+        "max_project_share": (
+            max(Counter(q.project_id for q in final).values(), default=0) / max(len(final), 1)
+        ),
+        "leaky_questions": 0,
         "dry_run": dry_run,
+        "target": target,
+        "ok_unanswerable_band": 0.10 <= unans_ratio <= 0.15 if final else False,
     }
+    # Leak audit
+    leak_n = 0
+    for q in final:
+        if q.answerable and q.source_quotes and question_leaks_quote(q.question, q.source_quotes[0]):
+            leak_n += 1
+    quality_report["leaky_questions"] = leak_n
+
+    stats = {**quality_report}
     if not dry_run:
-        write_jsonl(ensure_dir(settings.datasets_root / "eval" / "rag") / "questions.jsonl", questions)
-    log_stats(log, "rag_eval", stats)
+        write_jsonl(ensure_dir(settings.datasets_root / "eval" / "rag") / "questions.jsonl", final)
+        write_json(ensure_dir(settings.datasets_root / "reports") / "rag_quality_report.json", quality_report)
+    log_stats(log, "rag_eval", {k: stats[k] for k in ("questions", "answerable", "unanswerable", "unanswerable_ratio")})
+    if final and not (0.10 <= unans_ratio <= 0.15):
+        log.warning("unanswerable ratio out of band: %.4f", unans_ratio)
     return stats
 
 

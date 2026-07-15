@@ -65,6 +65,11 @@ datasets/fixtures/**
 !datasets/reports/backfill_report.json
 !datasets/reports/project_rebuild_stats.json
 !datasets/reports/portal_domain_snapshots.json
+!datasets/reports/dedup_report.json
+!datasets/reports/split_distribution.json
+!datasets/reports/rag_quality_report.json
+!datasets/reports/rag_validation_report.json
+!datasets/reports/agent_quality_report.json
 training/llamafactory/outputs/*
 !training/llamafactory/outputs/.gitkeep
 training/llamafactory/data/bidpilot_sft_*.json

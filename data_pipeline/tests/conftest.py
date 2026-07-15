@@ -40,11 +40,13 @@ def tmp_repo(tmp_path: Path) -> Path:
         p.mkdir(parents=True, exist_ok=True)
 
     src_cfg = Path(__file__).resolve().parents[1] / "configs"
-    for name in ("pipeline.yaml", "taxonomy.yaml", "sft_tasks.yaml"):
-        (repo / "data_pipeline" / "configs" / name).write_text(
-            (src_cfg / name).read_text(encoding="utf-8"),
-            encoding="utf-8",
-        )
+    for name in ("pipeline.yaml", "taxonomy.yaml", "sft_tasks.yaml", "sft_balance.yaml"):
+        src = src_cfg / name
+        if src.exists():
+            (repo / "data_pipeline" / "configs" / name).write_text(
+                src.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
     (repo / "training" / "llamafactory" / "data" / "dataset_info.json").write_text(
         json.dumps(
             {

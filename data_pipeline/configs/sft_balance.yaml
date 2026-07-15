@@ -1,0 +1,33 @@
+# Task balancing for SFT. Only downsample over-represented tasks.
+# Never clone or lightly rewrite samples to fill gaps.
+
+similarity:
+  # token_set_ratio threshold for near-duplicate removal (0-100)
+  near_dup_threshold: 95
+  # SimHash Hamming distance for LSH-style near duplicates
+  simhash_hamming_max: 3
+  # Enable cross-project template duplicate check on normalized user text
+  cross_project_template_check: true
+
+task_ratios:
+  requirement_classify:
+    max_ratio: 0.35
+  risk_detect:
+    max_ratio: 0.25
+  qualification_extract:
+    target_ratio: 0.12
+  scoring_extract:
+    target_ratio: 0.08
+  project_info_extract:
+    target_ratio: 0.08
+  citation_qa:
+    target_ratio: 0.08
+  tool_call:
+    target_ratio: 0.04
+  evidence_match:
+    max_ratio: 0.10
+
+splits:
+  min_validation_projects: 5
+  min_test_projects: 10
+  min_heldout_projects: 10

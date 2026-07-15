@@ -2,20 +2,22 @@
   "counts": {
     "chunks": 11005,
     "documents": 205,
-    "evidence": 11495,
+    "evidence": 11751,
     "gold_requirements": 0,
-    "matches": 28651,
+    "matches": 654,
     "projects": 120,
-    "rag_questions": 105,
-    "sft_test": 6245,
-    "sft_train": 18779,
+    "rag_questions": 220,
+    "sft_test": 549,
+    "sft_train": 2499,
+    "sft_validation": 712,
     "silver_requirements": 20724,
-    "unknown_matches": 28651
+    "unknown_matches": 0,
+    "validation_projects": 7
   },
   "error_count": 0,
   "errors": [],
   "ok": true,
-  "warning_count": 12,
+  "warning_count": 13,
   "warnings": [
     "project_code missing/unknown project_id=a8135a43-e29d-5a97-b19d-59b2924bc114",
     "project_code missing/unknown project_id=70939f6e-f43b-549d-9b4e-0e7a9b78721c",
@@ -28,6 +30,7 @@
     "project_code missing/unknown project_id=bca184d8-c2e6-5581-955c-fc4a7a7486f4",
     "project_code missing/unknown project_id=c421d2cd-89e2-52f9-b5d6-5a2962cfd061",
     "project_code missing/unknown project_id=aa0362e4-5976-5ec6-b8d3-a36b1b942d21",
-    "project_code missing/unknown project_id=bf3b3c6e-21d2-5a55-9c33-5bd14f5e44a1"
+    "project_code missing/unknown project_id=bf3b3c6e-21d2-5a55-9c33-5bd14f5e44a1",
+    "approx chunk near-duplicates train/test=3"
   ]
 }

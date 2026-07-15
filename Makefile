@@ -8,7 +8,7 @@ PIP ?= pip
 
 PIPELINE_DIR := $(ROOT_DIR)/data_pipeline
 
-.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft dataset-install dataset-test dataset-bootstrap dataset-download dataset-parse dataset-label dataset-review-export dataset-validate dataset-build-sft dataset-report dataset-demo
+.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft dataset-install dataset-test dataset-bootstrap dataset-download dataset-parse dataset-label dataset-review-export dataset-review-priority dataset-validate dataset-build-rag dataset-build-agent dataset-build-sft dataset-report dataset-demo
 
 help:
 	@echo "BidPilot development commands"
@@ -101,12 +101,25 @@ dataset-parse:
 
 dataset-label:
 	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data label requirements --mode rules --resume
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data label matches
 
 dataset-review-export:
 	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data review export
 
+dataset-review-priority:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data review export-priority
+
 dataset-validate:
 	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data validate all
+
+dataset-validate-rag:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data validate rag
+
+dataset-build-rag:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data build-rag --limit 300
+
+dataset-build-agent:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data build-agent --limit 500
 
 dataset-build-sft:
 	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data build-sft

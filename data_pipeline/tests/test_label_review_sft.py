@@ -82,12 +82,36 @@ def test_project_split_no_leakage():
 
 def test_sft_sharegpt_and_dataset_info(tmp_datasets, tmp_repo):
     write_jsonl(
+        tmp_datasets / "manifests" / "projects.jsonl",
+        [
+            {
+                "project_id": "proj-train",
+                "project_code": "T-1",
+                "project_name": "训练项目",
+                "bundle_level": "level_b",
+                "official_project_url": "https://www.ccgp.gov.cn/train",
+                "source_domain": "www.ccgp.gov.cn",
+            },
+            {
+                "project_id": "proj-test",
+                "project_code": "T-2",
+                "project_name": "测试项目",
+                "bundle_level": "level_b",
+                "official_project_url": "https://www.ccgp.gov.cn/test",
+                "source_domain": "www.ccgp.gov.cn",
+            },
+        ],
+    )
+    write_jsonl(tmp_datasets / "manifests" / "documents.jsonl", [])
+    write_jsonl(
         tmp_datasets / "silver" / "requirements.jsonl",
         [
             {
                 "annotation_id": "a1",
                 "requirement_id": "r1",
                 "project_id": "proj-train",
+                "document_id": "d1",
+                "chunk_id": "c1",
                 "category": "qualification",
                 "title": "执照",
                 "original_text": "投标人须提供有效营业执照。",
@@ -100,11 +124,14 @@ def test_sft_sharegpt_and_dataset_info(tmp_datasets, tmp_repo):
                 "quality_level": "silver",
                 "review_status": "pending",
                 "generator": "rules",
+                "source_url": "https://www.ccgp.gov.cn/train",
             },
             {
                 "annotation_id": "a2",
                 "requirement_id": "r2",
                 "project_id": "proj-test",
+                "document_id": "d2",
+                "chunk_id": "c2",
                 "category": "scoring",
                 "title": "评分",
                 "original_text": "采用综合评分法，技术分60分。",
@@ -117,6 +144,7 @@ def test_sft_sharegpt_and_dataset_info(tmp_datasets, tmp_repo):
                 "quality_level": "silver",
                 "review_status": "pending",
                 "generator": "rules",
+                "source_url": "https://www.ccgp.gov.cn/test",
             },
         ],
     )

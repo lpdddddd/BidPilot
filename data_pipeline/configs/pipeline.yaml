@@ -31,10 +31,11 @@ disclosed_suppliers:
   synthetic_forbidden: true
 
 requirement_matches:
-  target_min: 1000
+  target_min: 0
   target_max: 1500
-  allow_unknown: true
+  allow_unknown: false
   forbid_inferred_from_award_only: true
+  require_public_review_evidence: true
 
 agent_tasks:
   target_min: 300

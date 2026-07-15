@@ -188,13 +188,17 @@ def infer_industry(text: str, industry_map: dict[str, list[str]] | None = None) 
 
 
 def is_guangdong_text(text: str) -> bool:
-    if not any(m in text for m in GD_MARKERS):
+    t = text or ""
+    # Strong positives first
+    if "广东" in t or "广州" in t or "深圳" in t:
+        return True
+    # "中山医院/中山大学" are common outside Guangdong (e.g. 复旦大学附属中山医院)
+    scrubbed = t.replace("中山医院", "").replace("中山大学", "")
+    if not any(m in scrubbed for m in GD_MARKERS):
         return False
     # If another province is named and Guangdong is not explicit, reject.
-    if "广东" in text or "广州" in text or "深圳" in text:
-        return True
     for other in NON_GD_BLOCKLIST:
-        if other in text:
+        if other in t:
             return False
     return True
 

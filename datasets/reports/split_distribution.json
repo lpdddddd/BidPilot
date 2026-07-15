@@ -1,0 +1,91 @@
+{
+  "gaps": {
+    "test_projects_below_10": 0,
+    "validation_projects_below_5": 0
+  },
+  "generated_at": "2026-07-15T15:31:43.077388+00:00",
+  "test": {
+    "bundle_level": {
+      "level_b": 5,
+      "level_c": 5
+    },
+    "industry": {
+      "unknown": 549
+    },
+    "project_count": 10,
+    "quality_level": {
+      "silver": 549
+    },
+    "record_count": 549,
+    "source_domain": {
+      "download.ccgp.gov.cn": 473,
+      "www.ccgp.gov.cn": 18
+    },
+    "task_type": {
+      "citation_qa": 42,
+      "evidence_match": 6,
+      "project_info_extract": 9,
+      "qualification_extract": 93,
+      "requirement_classify": 177,
+      "risk_detect": 151,
+      "scoring_extract": 16,
+      "tool_call": 55
+    }
+  },
+  "train": {
+    "bundle_level": {
+      "level_b": 4,
+      "level_c": 22
+    },
+    "industry": {
+      "unknown": 2499
+    },
+    "project_count": 26,
+    "quality_level": {
+      "silver": 2499
+    },
+    "record_count": 2499,
+    "source_domain": {
+      "download.ccgp.gov.cn": 2244,
+      "www.ccgp.gov.cn": 103
+    },
+    "task_type": {
+      "citation_qa": 160,
+      "evidence_match": 14,
+      "project_info_extract": 25,
+      "qualification_extract": 559,
+      "requirement_classify": 891,
+      "risk_detect": 631,
+      "scoring_extract": 75,
+      "tool_call": 144
+    }
+  },
+  "validation": {
+    "bundle_level": {
+      "level_b": 3,
+      "level_c": 4
+    },
+    "industry": {
+      "unknown": 712
+    },
+    "project_count": 7,
+    "quality_level": {
+      "silver": 712
+    },
+    "record_count": 712,
+    "source_domain": {
+      "download.ccgp.gov.cn": 633,
+      "www.ccgp.gov.cn": 30
+    },
+    "task_type": {
+      "citation_qa": 16,
+      "evidence_match": 12,
+      "project_info_extract": 7,
+      "qualification_extract": 218,
+      "requirement_classify": 250,
+      "risk_detect": 160,
+      "scoring_extract": 11,
+      "tool_call": 38
+    }
+  }
+}

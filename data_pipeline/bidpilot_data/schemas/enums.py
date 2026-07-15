@@ -97,8 +97,8 @@ class MatchStatus(StrEnum):
     satisfied = "satisfied"
     partially_satisfied = "partially_satisfied"
     missing = "missing"
-    unknown = "unknown"
-    uncertain = "uncertain"  # legacy alias; prefer unknown
+    uncertain = "uncertain"
+    unknown = "unknown"  # legacy; forbidden in formal evidence-backed matches
 
 
 class ReviewDecision(StrEnum):

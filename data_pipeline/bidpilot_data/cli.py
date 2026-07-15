@@ -274,6 +274,20 @@ def review_export(output: Optional[Path] = None, verbose: bool = False) -> None:
     print(export_review_csv(output))
 
 
+@review_app.command("export-priority")
+def review_export_priority(
+    projects_n: int = typer.Option(12, help="Prefer Level B projects"),
+    reqs_per_project: int = typer.Option(70, help="50-80 per project"),
+    rag_n: int = typer.Option(280, help="RAG review rows target 200-300"),
+    verbose: bool = False,
+) -> None:
+    """Export priority human-review CSVs (requirements 500-800, RAG 200-300)."""
+    _setup(verbose)
+    from bidpilot_data.review.priority_export import export_priority_review
+
+    print(export_priority_review(projects_n=projects_n, reqs_per_project=reqs_per_project, rag_n=rag_n))
+
+
 @review_app.command("import")
 def review_import(
     file: Path = typer.Option(..., exists=True, dir_okay=False),
@@ -287,15 +301,20 @@ def review_import(
 
 
 @app.command("build-rag")
-def build_rag(dry_run: bool = False, limit: int = 40, verbose: bool = False) -> None:
+def build_rag(dry_run: bool = False, limit: int = 300, verbose: bool = False) -> None:
     _setup(verbose)
     from bidpilot_data.rag_eval import build_rag_eval
 
-    print(build_rag_eval(dry_run=dry_run, limit=limit))
+    stats = build_rag_eval(dry_run=dry_run, limit=limit)
+    print(stats)
+    if not dry_run and stats.get("questions") and not stats.get("ok_unanswerable_band", True):
+        raise typer.Exit(code=1)
+    if not dry_run and stats.get("leaky_questions", 0) > 0:
+        raise typer.Exit(code=1)
 
 
 @app.command("build-agent")
-def build_agent(dry_run: bool = False, limit: int = 36, verbose: bool = False) -> None:
+def build_agent(dry_run: bool = False, limit: int = 500, verbose: bool = False) -> None:
     _setup(verbose)
     from bidpilot_data.agent_data import build_agent_tasks
 
@@ -313,10 +332,18 @@ def build_sft(dry_run: bool = False, verbose: bool = False) -> None:
 @app.command("validate")
 def validate(target: str = typer.Argument("all"), verbose: bool = False) -> None:
     _setup(verbose)
+    if target == "rag":
+        from bidpilot_data.validation import validate_rag
+
+        report = validate_rag()
+        print(report)
+        if not report.get("ok"):
+            raise typer.Exit(code=1)
+        return
+    if target != "all":
+        raise typer.BadParameter("supported targets: all | rag")
     from bidpilot_data.validation import validate_all
 
-    if target != "all":
-        raise typer.BadParameter("only 'all' is supported currently")
     report = validate_all()
     print(report)
     if not report.get("ok"):

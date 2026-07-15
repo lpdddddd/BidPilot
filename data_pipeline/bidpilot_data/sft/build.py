@@ -8,8 +8,6 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 
-from rapidfuzz import fuzz
-
 from bidpilot_data.logging import get_logger, log_stats
 from bidpilot_data.schemas import (
     ChatMessage,
@@ -48,25 +46,59 @@ def _assistant_json(obj: dict[str, Any]) -> str:
     return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
 
 
-def _split_projects(project_ids: list[str], seed: int, train_r: float, val_r: float, heldout: int) -> DatasetSplitManifest:
+def _split_projects(
+    project_ids: list[str],
+    seed: int,
+    train_r: float,
+    val_r: float,
+    heldout: int,
+    *,
+    min_validation: int = 5,
+    min_test: int = 10,
+) -> DatasetSplitManifest:
+    """Project-level split with validation/test floors. Never sample-level random split."""
     ids = sorted(set(project_ids))
     rng = random.Random(seed)
     rng.shuffle(ids)
-    held = ids[: min(heldout, max(0, len(ids) // 3))] if heldout else []
-    remain = [i for i in ids if i not in held]
-    n = len(remain)
-    n_train = int(n * train_r)
-    n_val = int(n * val_r)
+    n = len(ids)
+    if n < min_validation + min_test + 1:
+        # Best-effort: still enforce mutual exclusion; report may flag gaps.
+        min_test = min(min_test, max(1, n // 3))
+        min_validation = min(min_validation, max(1, (n - min_test) // 3))
+    held_n = min(max(heldout, min_test), max(0, n - min_validation - 1))
+    held = ids[:held_n]
+    remain = ids[held_n:]
+    n_remain = len(remain)
+    n_val = max(min_validation, int(n_remain * val_r))
+    n_val = min(n_val, max(0, n_remain - 1))
+    n_train = max(0, n_remain - n_val)
+    # Prefer ratio if it still meets floor
+    ratio_train = int(n_remain * train_r)
+    if ratio_train >= 1 and n_remain - ratio_train >= min_validation:
+        n_train = ratio_train
+        n_val = n_remain - n_train
     train = remain[:n_train]
-    val = remain[n_train : n_train + n_val]
-    test = remain[n_train + n_val :] + held
+    val = remain[n_train:]
+    test = sorted(set(held))
+    # Ensure min test by moving from train if needed
+    while len(test) < min_test and train:
+        test.append(train.pop())
+    test = sorted(set(test))
+    while len(val) < min_validation and train:
+        val.append(train.pop())
     return DatasetSplitManifest(
         seed=seed,
         created_at=datetime.now(timezone.utc),
-        train_project_ids=train,
-        validation_project_ids=val,
-        test_project_ids=sorted(set(test)),
-        heldout_project_ids=held,
+        train_project_ids=sorted(train),
+        validation_project_ids=sorted(val),
+        test_project_ids=test,
+        heldout_project_ids=sorted(held),
+        counts={
+            "train_projects": len(train),
+            "validation_projects": len(val),
+            "test_projects": len(test),
+            "total_projects": n,
+        },
     )
 
 
@@ -156,7 +188,8 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
         if level in {None, "incomplete"}:
             return False
         if level == "level_c":
-            return task in CLAUSE_TASKS
+            # Clause tasks + same-project tool traces / citation QA (no cross-project)
+            return task in CLAUSE_TASKS or task in {SFTTaskType.tool_call, SFTTaskType.citation_qa}
         if level in {"level_a", "level_b"}:
             return True
         return False
@@ -175,17 +208,23 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
         source_urls: list[str] | None = None,
         derivation_method: DerivationMethod = DerivationMethod.extract,
         force_unknown_bucket: bool = False,
+        messages_override: list[ChatMessage] | None = None,
     ) -> None:
         nonlocal stats_filter
         stats_filter["candidate_raw"] += 1
-        level = (projects.get(project_id) or {}).get("bundle_level")
+        # Portal snapshots never enter SFT
+        proj_row = projects.get(project_id) or {}
+        if proj_row.get("project_code") == "PORTAL_SNAPSHOT":
+            stats_filter["filtered_incomplete_project"] += 1
+            return
+        level = proj_row.get("bundle_level")
         if not allowed_for_level(task, level):
             if level in {None, "incomplete"}:
                 stats_filter["filtered_incomplete_project"] += 1
             else:
                 stats_filter["filtered_level_c_cross_doc"] += 1
             return
-        if not _assistant_nonempty(assistant_obj):
+        if messages_override is None and not _assistant_nonempty(assistant_obj):
             stats_filter["filtered_empty_assistant"] += 1
             return
         q = QualityLevel(quality)
@@ -193,7 +232,9 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
         if q == QualityLevel.gold and rs != ReviewStatus.reviewed:
             q = QualityLevel.silver
             rs = ReviewStatus.pending
-        messages = [
+        if q == QualityLevel.pending:
+            q = QualityLevel.silver
+        messages = messages_override or [
             ChatMessage(role="system", content=system),
             ChatMessage(role="user", content=user),
             ChatMessage(role="assistant", content=_assistant_json(assistant_obj)),
@@ -401,56 +442,62 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
             derivation_method=DerivationMethod.grounded_qa,
         )
 
+    from bidpilot_data.agent_data.build import trajectory_messages
+
     for t in agents:
         tools = t.get("expected_tool_calls") or []
         if not tools:
             continue
-        first = tools[0]
-        args = first.get("arguments") or {}
-        if args.get("project_id") != t.get("project_id"):
+        # All tool args must bind project_id when present
+        if any((step.get("arguments") or {}).get("project_id") not in {None, t.get("project_id")} for step in tools):
             continue
         expected = t.get("expected_final_result") or {}
+        try:
+            traj = trajectory_messages(t)
+            messages = [ChatMessage.model_validate(m) for m in traj]
+        except Exception:  # noqa: BLE001
+            continue
         add(
             SFTTaskType.tool_call,
             t["project_id"],
-            tasks_cfg["tool_call"]["system"],
+            tasks_cfg.get("tool_call", {}).get("system", "你是招投标工具调用助手。"),
             t["user_request"],
-            {
-                "tool_name": first.get("tool_name"),
-                "arguments": args,
-                "expected_final_result": expected,
-            },
+            expected,
             t.get("quality_level", "silver"),
             t.get("review_status", "pending"),
             source_urls=list(expected.get("source_urls") or []),
-            source_chunk_ids=list(expected.get("evidence_chunk_ids") or []),
+            source_chunk_ids=list(expected.get("evidence_chunk_ids") or expected.get("citations") or []),
             derivation_method=DerivationMethod.tool_trace,
+            messages_override=messages,
         )
 
     raw_count = len(records)
-    # Exact dedup
-    unique: dict[str, SFTRecord] = {}
-    for rec in records:
-        fp = _msg_fp(rec.messages)
-        if fp in unique:
-            stats_filter["filtered_exact_dup"] += 1
-            continue
-        unique[fp] = rec
-    records = list(unique.values())
 
-    # Near-dedup within same task_type
-    kept: list[SFTRecord] = []
-    for rec in records:
-        user = next(m.content for m in rec.messages if m.role == "user")
-        if any(
-            k.task_type == rec.task_type
-            and fuzz.token_set_ratio(user, next(m.content for m in k.messages if m.role == "user")) >= 97
-            for k in kept[-200:]
-        ):
-            stats_filter["filtered_near_dup"] += 1
-            continue
-        kept.append(rec)
-    records = kept
+    from bidpilot_data.sft.dedup import global_near_dedup
+    from bidpilot_data.sft.balance import balance_records, load_sft_balance_config
+
+    bal_cfg = load_sft_balance_config()
+    sim_cfg = bal_cfg.get("similarity") or {}
+    split_cfg = bal_cfg.get("splits") or {}
+
+    def _user_text(rec: SFTRecord) -> str:
+        return next(m.content for m in rec.messages if m.role == "user")
+
+    records, dedup_stats = global_near_dedup(
+        records,
+        get_task=lambda r: r.task_type.value,
+        get_user=_user_text,
+        get_quality=lambda r: r.quality_level.value,
+        get_project=lambda r: r.project_id,
+        get_id=lambda r: r.record_id,
+        near_threshold=int(sim_cfg.get("near_dup_threshold", 95)),
+        simhash_hamming_max=int(sim_cfg.get("simhash_hamming_max", 3)),
+        cross_project_template_check=bool(sim_cfg.get("cross_project_template_check", True)),
+    )
+    stats_filter["filtered_exact_dup"] += dedup_stats.exact_duplicates_removed
+    stats_filter["filtered_near_dup"] += dedup_stats.near_duplicates_removed
+
+    before_balance_counts = Counter(r.task_type.value for r in records)
 
     project_ids = [r.project_id for r in records if r.project_id and r.project_id != "unknown"]
     manifest = _split_projects(
@@ -459,6 +506,8 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
         train_r=float(sft_cfg.get("train_ratio", 0.8)),
         val_r=float(sft_cfg.get("validation_ratio", 0.1)),
         heldout=int(cfg.get("splits", {}).get("heldout_project_count", 10)),
+        min_validation=int(split_cfg.get("min_validation_projects", 5)),
+        min_test=int(split_cfg.get("min_test_projects", 10)),
     )
     train_set = set(manifest.train_project_ids)
     val_set = set(manifest.validation_project_ids)
@@ -470,7 +519,40 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
     train_set -= gold_test_projects
     manifest.train_project_ids = sorted(train_set)
 
-    # incomplete projects must not enter formal SFT train (already excluded from generation)
+    # Assign provisional split labels before balancing so test gold can be protected
+    for rec in records:
+        if rec.project_id in train_set:
+            rec.split = SplitName.train
+            rec.is_test_project = False
+        elif rec.project_id in val_set:
+            rec.split = SplitName.validation
+            rec.is_test_project = False
+        else:
+            rec.split = SplitName.test
+            rec.is_test_project = True
+
+    def _conf(rec: SFTRecord) -> float:
+        # Prefer gold; silver uses assistant confidence if present
+        if rec.quality_level == QualityLevel.gold:
+            return 1.0
+        try:
+            asst = next(m.content for m in rec.messages if m.role == "assistant")
+            obj = json.loads(asst)
+            return float(obj.get("confidence") or 0.5)
+        except Exception:  # noqa: BLE001
+            return 0.5
+
+    records, balance_report = balance_records(
+        records,
+        get_task=lambda r: r.task_type.value,
+        get_quality=lambda r: r.quality_level.value,
+        get_review=lambda r: r.review_status.value,
+        get_confidence=_conf,
+        has_complete_source=lambda r: bool(r.source_urls and (r.source_chunk_ids or r.source_document_ids)),
+        is_test_split_record=lambda r: r.split == SplitName.test,
+        protect_gold_in_test=True,
+    )
+
     splits: dict[str, list[SFTRecord]] = {"train": [], "validation": [], "test": []}
     for rec in records:
         if rec.project_id in train_set:
@@ -487,47 +569,96 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
 
     if {r.project_id for r in splits["train"]} & {r.project_id for r in splits["test"]}:
         raise RuntimeError("train/test project leakage detected")
+    if {r.project_id for r in splits["train"]} & {r.project_id for r in splits["validation"]}:
+        raise RuntimeError("train/validation project leakage detected")
 
-    # Effective trainable: real source + evidence + non-empty answer + quality validation basics
-    effective = []
-    for r in records:
-        asst = next(m.content for m in r.messages if m.role == "assistant")
+    def _is_structurally_valid(r: SFTRecord) -> bool:
+        assistants = [m.content for m in r.messages if m.role == "assistant"]
+        if not assistants:
+            return False
+        # Last assistant must be non-empty JSON-ish for tool trajectories
         try:
-            obj = json.loads(asst)
+            obj = json.loads(assistants[-1])
         except json.JSONDecodeError:
-            continue
-        if not _assistant_nonempty(obj):
-            continue
+            return False
+        if r.task_type != SFTTaskType.tool_call and not _assistant_nonempty(obj):
+            return False
+        if r.task_type == SFTTaskType.tool_call:
+            if not (obj.get("answer") or obj.get("citations") or obj.get("clarify")):
+                return False
+            # tool/assistant pairing
+            roles = [m.role for m in r.messages]
+            # Every tool must follow an assistant tool-call
+            for i, role in enumerate(roles):
+                if role == "tool" and (i == 0 or roles[i - 1] != "assistant"):
+                    return False
         if not (r.source_urls or r.source_document_ids or r.source_chunk_ids):
-            continue
+            return False
         if (projects.get(r.project_id) or {}).get("bundle_level") in {None, "incomplete"}:
-            continue
-        effective.append(r)
+            return False
+        return True
+
+    structurally_valid = [r for r in records if _is_structurally_valid(r)]
+    valid_ids = {r.record_id for r in structurally_valid}
+    reviewed_trainable = [
+        r
+        for r in structurally_valid
+        if r.review_status == ReviewStatus.reviewed and r.quality_level == QualityLevel.gold
+    ]
+    silver_candidate = [
+        r for r in structurally_valid if r.quality_level == QualityLevel.silver and r.review_status != ReviewStatus.reviewed
+    ]
+    rejected_sft = [r for r in records if r.record_id not in valid_ids]
 
     by_task = Counter(r.task_type.value for r in records)
-    by_task_quality: dict[str, dict[str, int]] = {}
+    by_task_quality_level: dict[str, dict[str, int]] = {}
+    by_task_review_status: dict[str, dict[str, int]] = {}
     for r in records:
-        by_task_quality.setdefault(r.task_type.value, {"gold": 0, "silver": 0, "pending": 0})
-        by_task_quality[r.task_type.value][r.quality_level.value] = (
-            by_task_quality[r.task_type.value].get(r.quality_level.value, 0) + 1
-        )
+        by_task_quality_level.setdefault(r.task_type.value, {"gold": 0, "silver": 0})
+        ql = r.quality_level.value if r.quality_level.value in {"gold", "silver"} else "silver"
+        by_task_quality_level[r.task_type.value][ql] = by_task_quality_level[r.task_type.value].get(ql, 0) + 1
+        by_task_review_status.setdefault(r.task_type.value, {"pending": 0, "reviewed": 0, "rejected": 0})
+        rs = r.review_status.value
+        if rs not in by_task_review_status[r.task_type.value]:
+            by_task_review_status[r.task_type.value][rs] = 0
+        by_task_review_status[r.task_type.value][rs] += 1
 
-    domain_counter: Counter[str] = Counter()
+    # Consistency assertions
+    for task, n in by_task.items():
+        ql = by_task_quality_level.get(task, {})
+        assert ql.get("gold", 0) + ql.get("silver", 0) == n, f"quality_level sum mismatch for {task}"
+        rs = by_task_review_status.get(task, {})
+        assert sum(rs.values()) == n, f"review_status sum mismatch for {task}"
+    assert len(splits["train"]) + len(splits["validation"]) + len(splits["test"]) == len(records)
+    assert sum(by_task.values()) == len(records)
+
+    domain_counter: Counter[str] = Counter()  # record_count (primary domain per record)
+    domain_ref_counter: Counter[str] = Counter()  # reference_count across all urls
     level_counter: Counter[str] = Counter()
     for r in records:
         proj = projects.get(r.project_id) or {}
         level_counter[proj.get("bundle_level") or "unknown"] += 1
+        domains_for_rec: list[str] = []
         for url in r.source_urls or []:
-            domain_counter[urlparse(url).netloc.lower().split(":")[0] or "unknown"] += 1
-        if not r.source_urls and proj.get("source_domain"):
-            domain_counter[str(proj.get("source_domain"))] += 1
+            d = urlparse(url).netloc.lower().split(":")[0] or "unknown"
+            domain_ref_counter[d] += 1
+            domains_for_rec.append(d)
+        if not domains_for_rec and proj.get("source_domain"):
+            domains_for_rec = [str(proj.get("source_domain"))]
+            domain_ref_counter[domains_for_rec[0]] += 1
+        if domains_for_rec:
+            domain_counter[domains_for_rec[0]] += 1
+
+    by_split_and_task = {
+        name: dict(Counter(r.task_type.value for r in items)) for name, items in splits.items()
+    }
 
     em_total = by_task.get("evidence_match", 0)
     em_unknown = sum(
         1
         for r in records
         if r.task_type == SFTTaskType.evidence_match
-        and '"status":"unknown"' in next(m.content for m in r.messages if m.role == "assistant")
+        and '"status":"unknown"' in next((m.content for m in r.messages if m.role == "assistant"), "")
     )
 
     stats = {
@@ -538,38 +669,119 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
         "filtered_no_evidence": stats_filter["filtered_no_evidence_match"],
         "filters": stats_filter,
         "total": len(records),
-        "effective_trainable": len(effective),
+        "structurally_valid_sft": len(structurally_valid),
+        "reviewed_trainable_sft": len(reviewed_trainable),
+        "silver_candidate_sft": len(silver_candidate),
+        "rejected_sft": len(rejected_sft),
+        # Deprecated alias — do not treat as formally train-ready gold
+        "effective_trainable_deprecated_alias_of_structurally_valid": len(structurally_valid),
         "train": len(splits["train"]),
         "validation": len(splits["validation"]),
         "test": len(splits["test"]),
         "gold": sum(1 for r in records if r.quality_level == QualityLevel.gold),
         "silver": sum(1 for r in records if r.quality_level == QualityLevel.silver),
         "by_task": dict(by_task),
-        "by_task_quality": by_task_quality,
+        "by_task_quality_level": by_task_quality_level,
+        "by_task_review_status": by_task_review_status,
         "train_projects": len(train_set),
         "validation_projects": len(val_set),
         "test_projects": len(test_set),
-        "source_domain_distribution": dict(domain_counter),
+        "source_domain_distribution": {
+            "record_count": dict(domain_counter),
+            "reference_count": dict(domain_ref_counter),
+        },
         "bundle_level_distribution": dict(level_counter),
         "evidence_match_unknown_ratio": (em_unknown / em_total) if em_total else 0.0,
         "preferred_target": sft_cfg.get("preferred_target"),
         "gap_to_preferred": max(0, int(sft_cfg.get("preferred_target", 12500)) - len(records)),
+        "dedup": {
+            "exact_duplicates_removed": dedup_stats.exact_duplicates_removed,
+            "near_duplicates_removed": dedup_stats.near_duplicates_removed,
+            "cross_project_template_duplicates": dedup_stats.cross_project_template_duplicates,
+            "conflicting_gold_records": dedup_stats.conflicting_gold_records[:100],
+        },
+        "balance": balance_report,
         "dry_run": dry_run,
+        "note": "reviewed_trainable_sft must be gold+reviewed before formal LoRA",
     }
 
     task_distribution = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "before_balance": dict(before_balance_counts),
+        "after_balance": dict(by_task),
         "by_task": dict(by_task),
-        "by_task_quality": by_task_quality,
+        "by_task_quality_level": by_task_quality_level,
+        "by_task_review_status": by_task_review_status,
+        "by_split_and_task": by_split_and_task,
+        "task_gaps": balance_report.get("task_gaps") or {},
+        "dropped_by_balance": balance_report.get("dropped_by_balance") or {},
         "bundle_level_distribution": dict(level_counter),
-        "source_domain_distribution": dict(domain_counter),
-        "effective_trainable": len(effective),
+        "source_domain_distribution": {
+            "record_count": dict(domain_counter),
+            "reference_count": dict(domain_ref_counter),
+        },
+        "structurally_valid_sft": len(structurally_valid),
+        "reviewed_trainable_sft": len(reviewed_trainable),
+        "silver_candidate_sft": len(silver_candidate),
+        "rejected_sft": len(rejected_sft),
+    }
+
+    # Per-split distribution report
+    def _split_stats(name: str, items: list[SFTRecord]) -> dict[str, Any]:
+        pids = {r.project_id for r in items}
+        return {
+            "project_count": len(pids),
+            "record_count": len(items),
+            "bundle_level": dict(
+                Counter((projects.get(pid) or {}).get("bundle_level") or "unknown" for pid in pids)
+            ),
+            "task_type": dict(Counter(r.task_type.value for r in items)),
+            "source_domain": dict(
+                Counter(
+                    urlparse((r.source_urls or [""])[0]).netloc.lower().split(":")[0] or "unknown"
+                    for r in items
+                    if r.source_urls
+                )
+            ),
+            "industry": dict(
+                Counter((projects.get(r.project_id) or {}).get("industry") or "unknown" for r in items)
+            ),
+            "quality_level": dict(Counter(r.quality_level.value for r in items)),
+        }
+
+    split_distribution = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "train": _split_stats("train", splits["train"]),
+        "validation": _split_stats("validation", splits["validation"]),
+        "test": _split_stats("test", splits["test"]),
+        "gaps": {
+            "validation_projects_below_5": max(0, 5 - len(val_set)),
+            "test_projects_below_10": max(0, 10 - len(test_set)),
+        },
+    }
+
+    dedup_report = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "exact_duplicates_removed": dedup_stats.exact_duplicates_removed,
+        "near_duplicates_removed": dedup_stats.near_duplicates_removed,
+        "cross_project_template_duplicates": dedup_stats.cross_project_template_duplicates,
+        "conflicting_gold_records": dedup_stats.conflicting_gold_records[:200],
+        "method": "exact_sha1 + simhash64 LSH bands + rapidfuzz token_set_ratio",
     }
 
     if not dry_run:
         src = ensure_dir(settings.datasets_root / "sft" / "source")
         write_jsonl(src / "all.jsonl", records)
-        write_jsonl(src / "effective.jsonl", effective)
+        write_jsonl(src / "structurally_valid.jsonl", structurally_valid)
+        write_jsonl(src / "reviewed_trainable.jsonl", reviewed_trainable)
+        write_jsonl(src / "silver_candidate.jsonl", silver_candidate)
+        # Keep deprecated path pointing at structurally_valid for compatibility
+        write_jsonl(src / "effective.jsonl", structurally_valid)
+        if dedup_stats.conflicting_gold_records:
+            write_json(
+                ensure_dir(settings.datasets_root / "review" / "pending") / "conflicting_gold_sft.json",
+                dedup_stats.conflicting_gold_records,
+            )
         for name, items in splits.items():
             payload = [{"messages": [m.model_dump() for m in r.messages]} for r in items]
             out_dir = ensure_dir(settings.datasets_root / "sft" / name)
@@ -578,9 +790,22 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
         write_json(settings.datasets_root / "manifests" / "sft_split_manifest.json", manifest)
         write_json(settings.datasets_root / "reports" / "sft_build_stats.json", stats)
         write_json(settings.datasets_root / "reports" / "task_distribution.json", task_distribution)
+        write_json(settings.datasets_root / "reports" / "dedup_report.json", dedup_report)
+        write_json(settings.datasets_root / "reports" / "split_distribution.json", split_distribution)
         _update_dataset_info(settings, stats)
 
-    log_stats(log, "build_sft", {k: stats[k] for k in ("total", "effective_trainable", "train", "validation", "test")})
+    log_stats(
+        log,
+        "build_sft",
+        {
+            "total": stats["total"],
+            "structurally_valid_sft": stats["structurally_valid_sft"],
+            "reviewed_trainable_sft": stats["reviewed_trainable_sft"],
+            "train": stats["train"],
+            "validation": stats["validation"],
+            "test": stats["test"],
+        },
+    )
     return stats
 
 
@@ -595,6 +820,7 @@ def _update_dataset_info(settings: Any, stats: dict[str, Any]) -> None:
         "user_tag": "user",
         "assistant_tag": "assistant",
         "system_tag": "system",
+        "tool_tag": "tool",
     }
     for split in ("train", "validation", "test"):
         name = f"bidpilot_sft_{split}"

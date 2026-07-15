@@ -1,6 +1,7 @@
 {
   "artifacts": {
     "chunks": "datasets/interim/chunks/chunks.jsonl",
+    "dedup_report": "datasets/reports/dedup_report.json",
     "discovery_batch": "datasets/reports/discovery_batch_report.json",
     "documents": "datasets/manifests/documents.jsonl",
     "evidence": "datasets/silver/evidence.jsonl",
@@ -8,6 +9,8 @@
     "projects": "datasets/manifests/projects.jsonl",
     "sft_train": "datasets/sft/train/sharegpt.json",
     "silver_requirements": "datasets/silver/requirements.jsonl",
+    "split_distribution": "datasets/reports/split_distribution.json",
+    "task_distribution": "datasets/reports/task_distribution.json",
     "validation_report": "datasets/reports/validation_report.json"
   },
   "bundle_levels": {
@@ -16,16 +19,59 @@
     "level_b": 12,
     "level_c": 31
   },
+  "domain_diversity": {
+    "note": "reachable_portal_domains are homepage snapshots and must not be counted as training coverage",
+    "project_source_domains": [
+      "download.ccgp.gov.cn",
+      "www.ccgp-beijing.gov.cn",
+      "www.ccgp-jiangsu.gov.cn",
+      "www.ccgp-zhejiang.gov.cn",
+      "www.ccgp.gov.cn",
+      "www.ggzy.gov.cn",
+      "www.gzggzy.cn",
+      "www.zycg.gov.cn",
+      "ygp.gdzwfw.gov.cn"
+    ],
+    "raw_document_domains": [
+      "download.ccgp.gov.cn",
+      "www.ccgp-beijing.gov.cn",
+      "www.ccgp-jiangsu.gov.cn",
+      "www.ccgp-zhejiang.gov.cn",
+      "www.ccgp.gov.cn",
+      "www.ggzy.gov.cn",
+      "www.gzggzy.cn",
+      "www.zycg.gov.cn",
+      "ygp.gdzwfw.gov.cn"
+    ],
+    "reachable_portal_domains": [],
+    "reviewed_gold_source_domains": [],
+    "sft_source_domain_gap": {
+      "gap": 3,
+      "met": false,
+      "note": "Portal homepage snapshots do not count toward SFT source diversity",
+      "sft_source_domains_count": 2,
+      "sft_source_domains_min": 5
+    },
+    "sft_source_domains": [
+      "download.ccgp.gov.cn",
+      "www.ccgp.gov.cn"
+    ],
+    "tender_document_domains": [
+      "download.ccgp.gov.cn"
+    ]
+  },
   "gaps": {
     "finely_annotated": 30,
     "heldout": 0,
     "level_a": 20,
     "level_b": 28,
     "projects_collected": 30,
-    "rag_eval": 395,
+    "rag_eval": 280,
     "requirements_gold": 1500,
-    "sft": 0,
+    "reviewed_trainable_sft": 500,
+    "sft": 8740,
+    "sft_source_domains": 3,
     "with_tender_document": 57
   },
-  "generated_at": "2026-07-15T15:02:07.280910+00:00"
+  "generated_at": "2026-07-15T15:31:46.415216+00:00"
 }
