@@ -127,7 +127,8 @@ def test_name_only_supplier_creates_zero_matches(tmp_datasets):
     assert stats["matches"] == 0
 
 
-def test_evidence_supported_satisfied_and_missing(tmp_datasets):
+def test_generic_sentences_do_not_create_supplier_matches(tmp_datasets):
+    """Generic review language without a named supplier must not create RequirementMatch."""
     write_jsonl(
         tmp_datasets / "manifests" / "projects.jsonl",
         [
@@ -191,15 +192,92 @@ def test_evidence_supported_satisfied_and_missing(tmp_datasets):
     )
     write_jsonl(tmp_datasets / "silver" / "evidence.jsonl", [])
     stats = build_disclosed_matches()
-    assert stats["evidence_supported_matches"] >= 1
+    assert stats["matches"] == 0
+    assert stats.get("evidence_supported_matches", 0) == 0
+
+
+def test_named_supplier_review_conclusion_can_create_match(tmp_datasets):
+    """Explicit supplier name + review conclusion + bound material may create Match/Outcome."""
+    write_jsonl(
+        tmp_datasets / "manifests" / "projects.jsonl",
+        [
+            {
+                "project_id": "p1",
+                "project_code": "GD-2",
+                "project_name": "数据平台",
+                "bundle_level": "level_b",
+                "official_project_url": "https://www.ccgp.gov.cn/e",
+            }
+        ],
+    )
+    text = (
+        "中标供应商：广州某某科技有限公司。"
+        "广州某某科技有限公司未提供营业执照，资格审查不通过。"
+    )
+    write_jsonl(
+        tmp_datasets / "manifests" / "documents.jsonl",
+        [
+            {
+                "document_id": "d1",
+                "project_id": "p1",
+                "project_code": "GD-2",
+                "document_type": "evaluation_result",
+                "source_url": "https://www.ccgp.gov.cn/e",
+                "storage_path": "raw/documents/e.html",
+            }
+        ],
+    )
+    path = tmp_datasets / "raw" / "documents" / "e.html"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    write_jsonl(
+        tmp_datasets / "interim" / "chunks" / "chunks.jsonl",
+        [
+            {
+                "chunk_id": "c1",
+                "project_id": "p1",
+                "document_id": "d1",
+                "text": text,
+                "page_start": 1,
+                "page_end": 1,
+                "token_count": 40,
+            }
+        ],
+    )
+    write_jsonl(
+        tmp_datasets / "silver" / "requirements.jsonl",
+        [
+            {
+                "annotation_id": "a1",
+                "requirement_id": "r1",
+                "project_id": "p1",
+                "category": "qualification",
+                "title": "营业执照",
+                "original_text": "投标人须提供有效营业执照",
+                "normalized_requirement": "提供营业执照",
+                "mandatory": True,
+                "risk_level": "high",
+                "confidence": 0.9,
+                "quality_level": "silver",
+                "review_status": "pending",
+                "source_url": "https://www.ccgp.gov.cn/e",
+                "chunk_id": "c1",
+                "document_id": "d1",
+            }
+        ],
+    )
+    write_jsonl(tmp_datasets / "silver" / "evidence.jsonl", [])
+    stats = build_disclosed_matches()
+    assert stats["matches"] + stats.get("supplier_review_outcomes", 0) >= 1
     rows = [
         json.loads(line)
         for line in (tmp_datasets / "silver" / "requirement_matches.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    statuses = {r["status"] for r in rows}
-    assert "unknown" not in statuses
-    assert statuses & {"satisfied", "missing", "uncertain", "partially_satisfied"}
+    for r in rows:
+        assert r.get("supplier_id")
+        assert r["status"] != "unknown"
+        assert "广州某某科技有限公司" in (r.get("source_quote") or "")
 
 
 def test_global_near_dedup_far_apart():

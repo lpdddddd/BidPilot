@@ -1,6 +1,6 @@
 # BidPilot Dataset Build Report
 
-Generated at: `2026-07-15T15:31:46.415216+00:00`
+Generated at: `2026-07-15T16:20:42.961195+00:00`
 
 ## Policy
 
@@ -51,21 +51,21 @@ Generated at: `2026-07-15T15:31:46.415216+00:00`
 - pending (review_status): **20724**
 - low_confidence: **10416**
 - review_queue (exported CSV source): **10417**
-- Disclosed suppliers: **62**
-- Matches: {'total': 654, 'evidence_supported_matches': 654, 'unknown': 0, 'satisfied': 111, 'missing': 537, 'partially_satisfied': 0, 'uncertain': 6, 'verifiable': 654}
-- RAG questions: **220**
+- Disclosed suppliers: **21**
+- Matches: {'total': 0, 'evidence_supported_matches': 0, 'unknown': 0, 'satisfied': 0, 'missing': 0, 'partially_satisfied': 0, 'uncertain': 0, 'verifiable': 0}
+- RAG questions: **214**
 - Agent tasks: **238** (multi-step=204)
 
 ## SFT Quality Gates
 
-- structurally_valid_sft: **3727**
+- structurally_valid_sft: **3621**
 - reviewed_trainable_sft: **0** (formal LoRA gate)
-- silver_candidate_sft: **3727**
-- rejected_sft: **33**
-- split counts: train=2499, validation=712, test=549
+- silver_candidate_sft: **3621**
+- rejected_sft: **32**
+- split counts: train=2418, validation=675, test=528
 - projects: train=26, validation=7, test=10
-- quality_level: `{'silver': 3760}`
-- review_status: `{'pending': 3760}`
+- quality_level: `{'silver': 3621}`
+- review_status: `{'pending': 3621}`
 
 ## Target Gaps (not filled with fiction)
 
@@ -76,14 +76,14 @@ Generated at: `2026-07-15T15:31:46.415216+00:00`
 - finely_annotated: **30** remaining
 - heldout: **0** remaining
 - requirements_gold: **1500** remaining
-- rag_eval: **280** remaining
-- sft: **8740** remaining
+- rag_eval: **286** remaining
+- sft: **8879** remaining
 - sft_source_domains: **3** remaining
 - reviewed_trainable_sft: **500** remaining
 
 ## Human Review TODO
 
-`{'requirements_pending_status': 20724, 'requirements_low_confidence': 10416, 'requirements_review_queue': 10417, 'rag_pending': 220, 'matches_unknown': 0, 'sft_pending': 3760}`
+`{'requirements_pending_status': 20724, 'requirements_low_confidence': 10416, 'requirements_review_queue': 10417, 'rag_pending': 214, 'matches_unknown': 0, 'sft_pending': 3621}`
 
 Validation ok: **True**
 

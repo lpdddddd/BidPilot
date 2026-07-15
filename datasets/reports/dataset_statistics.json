@@ -8,7 +8,7 @@
     "level_c": 31
   },
   "chunks": 11005,
-  "disclosed_suppliers": 62,
+  "disclosed_suppliers": 21,
   "discovered_projects": 14,
   "discovery_failures": 582,
   "documents": {
@@ -94,21 +94,21 @@
     "level_a": 20,
     "level_b": 28,
     "projects_collected": 30,
-    "rag_eval": 280,
+    "rag_eval": 286,
     "requirements_gold": 1500,
     "reviewed_trainable_sft": 500,
-    "sft": 8740,
+    "sft": 8879,
     "sft_source_domains": 3,
     "with_tender_document": 57
   },
-  "generated_at": "2026-07-15T15:31:46.415216+00:00",
+  "generated_at": "2026-07-15T16:20:42.961195+00:00",
   "human_review_todo": {
     "matches_unknown": 0,
-    "rag_pending": 220,
+    "rag_pending": 214,
     "requirements_low_confidence": 10416,
     "requirements_pending_status": 20724,
     "requirements_review_queue": 10417,
-    "sft_pending": 3760
+    "sft_pending": 3621
   },
   "notes": [
     "No synthetic companies/projects/answers are generated.",
@@ -134,17 +134,17 @@
     "success": 176
   },
   "portal_snapshot_projects": 0,
-  "rag_questions": 220,
+  "rag_questions": 214,
   "real_data_only": true,
   "requirement_matches": {
-    "evidence_supported_matches": 654,
-    "missing": 537,
+    "evidence_supported_matches": 0,
+    "missing": 0,
     "partially_satisfied": 0,
-    "satisfied": 111,
-    "total": 654,
-    "uncertain": 6,
+    "satisfied": 0,
+    "total": 0,
+    "uncertain": 0,
     "unknown": 0,
-    "verifiable": 654
+    "verifiable": 0
   },
   "requirements": {
     "definitions": {
@@ -166,20 +166,20 @@
   },
   "sft": {
     "quality_level": {
-      "silver": 3760
+      "silver": 3621
     },
-    "rejected_sft": 33,
+    "rejected_sft": 32,
     "review_status": {
-      "pending": 3760
+      "pending": 3621
     },
     "reviewed_trainable_sft": 0,
-    "silver_candidate_sft": 3727,
-    "structurally_valid_sft": 3727,
-    "test": 549,
+    "silver_candidate_sft": 3621,
+    "structurally_valid_sft": 3621,
+    "test": 528,
     "test_projects": 10,
-    "train": 2499,
+    "train": 2418,
     "train_projects": 26,
-    "validation": 712,
+    "validation": 675,
     "validation_projects": 7
   },
   "sources": 205,

@@ -2,14 +2,14 @@
   "counts": {
     "chunks": 11005,
     "documents": 205,
-    "evidence": 11751,
+    "evidence": 11269,
     "gold_requirements": 0,
-    "matches": 654,
+    "matches": 0,
     "projects": 120,
-    "rag_questions": 220,
-    "sft_test": 549,
-    "sft_train": 2499,
-    "sft_validation": 712,
+    "rag_questions": 214,
+    "sft_test": 528,
+    "sft_train": 2418,
+    "sft_validation": 675,
     "silver_requirements": 20724,
     "unknown_matches": 0,
     "validation_projects": 7
@@ -17,7 +17,7 @@
   "error_count": 0,
   "errors": [],
   "ok": true,
-  "warning_count": 13,
+  "warning_count": 14,
   "warnings": [
     "project_code missing/unknown project_id=a8135a43-e29d-5a97-b19d-59b2924bc114",
     "project_code missing/unknown project_id=70939f6e-f43b-549d-9b4e-0e7a9b78721c",
@@ -31,6 +31,7 @@
     "project_code missing/unknown project_id=c421d2cd-89e2-52f9-b5d6-5a2962cfd061",
     "project_code missing/unknown project_id=aa0362e4-5976-5ec6-b8d3-a36b1b942d21",
     "project_code missing/unknown project_id=bf3b3c6e-21d2-5a55-9c33-5bd14f5e44a1",
-    "approx chunk near-duplicates train/test=3"
+    "template_overlap train/test=8",
+    "approx chunk near-duplicates scanned=3 (classified in cross_split report)"
   ]
 }

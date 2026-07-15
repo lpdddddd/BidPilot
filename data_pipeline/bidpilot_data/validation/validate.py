@@ -136,6 +136,30 @@ def validate_rag(*, write_report: bool = True) -> dict[str, Any]:
     ratio = (unans / len(ragqs)) if ragqs else 0.0
     if ragqs and not (0.10 <= ratio <= 0.15):
         errors.append(f"unanswerable_ratio out of band: {ratio:.4f} (need 0.10-0.15)")
+    from collections import Counter as _Counter
+
+    if ragqs:
+        share = max(_Counter(q.get("project_id") for q in ragqs).values(), default=0) / len(ragqs)
+        if share > 0.10 + 1e-9:
+            errors.append(f"max_project_share={share:.4f} exceeds 0.10")
+        # multi_section integrity
+        for q in ragqs:
+            if q.get("question_type") != "multi_section":
+                continue
+            cids = q.get("gold_chunk_ids") or []
+            quotes = q.get("source_quotes") or []
+            if len(set(cids)) < 2:
+                errors.append(f"multi_section needs 2 chunks {q.get('question_id')}")
+            if len(quotes) < 2:
+                errors.append(f"multi_section needs 2 quotes {q.get('question_id')}")
+            ans = str(q.get("answer") or "")
+            if quotes and ans:
+                ok_both = all(
+                    fuzz.partial_ratio(qq[:80], ans[:500]) >= 40 or (qq[:20] in ans)
+                    for qq in quotes[:2]
+                )
+                if not ok_both:
+                    errors.append(f"multi_section answer missing dual evidence {q.get('question_id')}")
 
     report = {
         "ok": not errors,
@@ -287,6 +311,8 @@ def validate_all(*, allow_demo_fixture: bool = False) -> dict[str, Any]:
         if m.get("status") == "unknown":
             unknown_matches += 1
             errors.append(f"unknown match forbidden {m.get('match_id')}")
+        if not m.get("supplier_id"):
+            errors.append(f"match missing supplier_id {m.get('match_id')}")
         try:
             RequirementMatchAnnotation.model_validate(m)
         except ValidationError as exc:
@@ -299,6 +325,10 @@ def validate_all(*, allow_demo_fixture: bool = False) -> dict[str, Any]:
         for eid in eids:
             if eid not in evidence_ids and evidence_ids:
                 errors.append(f"match evidence_id missing {eid}")
+        # tender docs must never ground matches
+        evid_doc = doc_by_id.get(m.get("evidence_document_id") or "")
+        if evid_doc and evid_doc.get("document_type") in {"tender_document", "tender_notice", "tender", "announcement"}:
+            errors.append(f"match grounded on tender doc forbidden {m.get('match_id')}")
         if m.get("synthetic") is True:
             errors.append(f"synthetic match forbidden {m.get('match_id')}")
 
@@ -387,12 +417,18 @@ def validate_all(*, allow_demo_fixture: bool = False) -> dict[str, Any]:
     for tu in test_chunk_texts:
         if any(fuzz.token_set_ratio(tu[:500], tr[:500]) >= 98 for tr in train_chunk_texts):
             near_doc += 1
-    if near_doc:
-        # Shared tender templates across projects are common; keep as warning unless severe.
-        if near_doc >= 20:
-            errors.append(f"approx chunk near-duplicates train/test={near_doc}")
-        else:
-            warnings.append(f"approx chunk near-duplicates train/test={near_doc}")
+    from bidpilot_data.sft.cross_split import analyze_cross_split_similarity
+
+    xsim = analyze_cross_split_similarity()
+    if not xsim.get("ok"):
+        errors.append(
+            f"severe train/test near-duplicates={xsim.get('severe_train_test_near_duplicates')} "
+            "(see cross_split_similarity_report.json)"
+        )
+    if xsim.get("template_overlap"):
+        warnings.append(f"template_overlap train/test={xsim.get('template_overlap')}")
+    if near_doc and xsim.get("severe_train_test_near_duplicates", 0) == 0:
+        warnings.append(f"approx chunk near-duplicates scanned={near_doc} (classified in cross_split report)")
 
     train_users = [next(m["content"] for m in r["messages"] if m["role"] == "user") for r in sft_train[:200]]
     test_users = [next(m["content"] for m in r["messages"] if m["role"] == "user") for r in sft_test[:200]]

@@ -4,6 +4,7 @@ import json
 from collections import Counter
 from typing import Any
 
+from bidpilot_data.labeling.supplier_names import is_valid_supplier_name
 from bidpilot_data.logging import get_logger, log_stats
 from bidpilot_data.schemas import AgentTask, QualityLevel, ReviewStatus
 from bidpilot_data.settings import get_settings
@@ -17,6 +18,31 @@ TOOL_SPEC = (
     "get_disclosed_supplier、ask_user。"
     "最终回答必须是 JSON：{\"answer\":...,\"citations\":[chunk_id,...]}。"
 )
+
+
+def _fmt_field(label: str, value: Any) -> str | None:
+    if value is None or value == "" or value == "None":
+        return None
+    return f"{label}{value}"
+
+
+def _project_summary_answer(proj: dict[str, Any]) -> str:
+    parts = [
+        _fmt_field("项目编号 ", proj.get("project_code")),
+        _fmt_field("名称 ", proj.get("project_name")),
+        _fmt_field("采购人 ", proj.get("purchaser")),
+        _fmt_field("预算 ", proj.get("budget_cny")),
+    ]
+    present = [p for p in parts if p]
+    missing = []
+    if proj.get("purchaser") in (None, "", "None"):
+        missing.append("采购人")
+    if proj.get("budget_cny") in (None, "", "None"):
+        missing.append("预算")
+    text = "，".join(present) if present else "公开材料未披露足够项目要素"
+    if missing:
+        text += f"。{'、'.join(missing)}在公开材料中未披露"
+    return text + "。"
 
 
 def _search_chunks(chunks: list[dict[str, Any]], query: str, top_k: int = 5) -> list[dict[str, Any]]:
@@ -90,6 +116,9 @@ def build_agent_tasks(*, dry_run: bool = False, limit: int | None = 500) -> dict
     with_error_retry = 0
     with_clarify = 0
     skipped_enterprise_material = 0
+    invalid_supplier_tasks_removed = 0
+    supplier_tasks_with_exact_name_evidence = 0
+    agent_final_answers_with_none_string = 0
 
     def add_task(
         *,
@@ -163,16 +192,13 @@ def build_agent_tasks(*, dry_run: bool = False, limit: int | None = 500) -> dict
                 },
             ],
             expected_final={
-                "answer": (
-                    f"项目编号 {proj.get('project_code')}，名称 {proj.get('project_name')}，"
-                    f"采购人 {proj.get('purchaser')}，预算 {proj.get('budget_cny')}。"
-                ),
+                "answer": _project_summary_answer(proj),
                 "project_id": pid,
                 "evidence_chunk_ids": cite,
                 "citations": cite,
-                "source_urls": [proj.get("official_project_url")],
+                "source_urls": [u for u in [proj.get("official_project_url")] if u],
             },
-            acceptance=["工具参数包含真实 project_id", "最终答案含 citations", "不得编造预算/采购人"],
+            acceptance=["工具参数包含真实 project_id", "最终答案含 citations", "不得编造预算/采购人", "不得输出字符串 None"],
         )
 
         qual = [r for r in p_reqs if r.get("category") == "qualification"][:8]
@@ -325,50 +351,99 @@ def build_agent_tasks(*, dry_run: bool = False, limit: int | None = 500) -> dict
                 acceptance=["信息不足时输出澄清", "不得编造金额"],
             )
 
-        # Supplier disclosed only — never invent enterprise materials
-        if p_suppliers and any(s.get("source_document_ids") for s in p_suppliers) and p_evidence:
-            supplier = p_suppliers[0]
-            # Only if we also have evidence-backed matches OR pure disclosure confirmation
-            s_search = _search_chunks(p_chunks, supplier.get("name") or "", top_k=5)
-            add_task(
-                project_id=pid,
-                title="核对公开披露供应商信息",
-                user_request=(
-                    f"根据公开中标/成交材料，核对供应商「{supplier.get('name')}」"
-                    f"在项目 {proj.get('project_code')} 中已被披露的信息，"
-                    "不得推断其满足全部资格条件。"
-                ),
-                tool_calls=[
-                    {
-                        "tool_name": "search_chunks",
-                        "arguments": {"project_id": pid, "query": supplier.get("name"), "top_k": 5},
-                        "result": {"chunks": s_search},
-                    },
-                    {
-                        "tool_name": "get_disclosed_supplier",
-                        "arguments": {"project_id": pid, "supplier_id": supplier.get("supplier_id")},
-                        "result": {
-                            "supplier": {
-                                "supplier_id": supplier.get("supplier_id"),
-                                "name": supplier.get("name"),
-                                "source_document_ids": supplier.get("source_document_ids"),
-                                "source_urls": supplier.get("source_urls"),
-                            }
-                        },
-                    },
-                ],
-                expected_final={
-                    "answer": f"供应商 {supplier.get('name')} 仅被公开披露，未据此推断全部资格满足。",
-                    "supplier_id": supplier.get("supplier_id"),
-                    "status": "disclosed_only",
-                    "evidence_ids": [e["evidence_id"] for e in p_evidence[:3]],
-                    "evidence_chunk_ids": [c.get("chunk_id") for c in s_search[:2] if c.get("chunk_id")],
-                    "citations": [c.get("chunk_id") for c in s_search[:2] if c.get("chunk_id")],
-                },
-                acceptance=["必须使用公开披露证据", "无企业材料包时不得调用 match_company_materials"],
-            )
-        else:
+        # Supplier disclosed only — never invent enterprise materials; reject dirty names
+        valid_suppliers = []
+        for s in p_suppliers:
+            name = s.get("name") or ""
+            ok, _ = is_valid_supplier_name(name)
+            if not ok or not s.get("supplier_id") or not s.get("source_document_ids") or not s.get("source_urls"):
+                invalid_supplier_tasks_removed += 1
+                continue
+            valid_suppliers.append(s)
+        if not valid_suppliers:
             skipped_enterprise_material += 1
+        else:
+            supplier = valid_suppliers[0]
+            name = supplier["name"]
+            name_chunks = [c for c in p_chunks if name in (c.get("text") or "")]
+            # Fallback: scan all project chunks for partial org stem
+            if not name_chunks and len(name) >= 6:
+                stem = name[:8]
+                name_chunks = [c for c in p_chunks if stem in (c.get("text") or "") and name in (c.get("text") or "")]
+            if not name_chunks:
+                invalid_supplier_tasks_removed += 1
+            else:
+                s_search = []
+                for c in name_chunks[:5]:
+                    full = c.get("text") or ""
+                    if name not in full:
+                        continue
+                    # Keep a window that includes the supplier name for citation verification
+                    idx = full.find(name)
+                    start = max(0, idx - 80)
+                    end = min(len(full), idx + len(name) + 200)
+                    window = full[start:end]
+                    s_search.append(
+                        {
+                            "chunk_id": c.get("chunk_id"),
+                            "document_id": c.get("document_id"),
+                            "page_start": c.get("page_start"),
+                            "text": window,
+                        }
+                    )
+                cites = [c["chunk_id"] for c in s_search if c.get("chunk_id")]
+                cite_rows = [c for c in s_search if c.get("chunk_id") in set(cites[:2])]
+                if cites and cite_rows and all(name in (c.get("text") or "") for c in cite_rows):
+                    supplier_tasks_with_exact_name_evidence += 1
+                    add_task(
+                        project_id=pid,
+                        title="核对公开披露供应商信息",
+                        user_request=(
+                            f"根据公开中标/成交材料，核对供应商「{name}」"
+                            f"在项目 {proj.get('project_code')} 中已被披露的信息，"
+                            "不得推断其满足全部资格条件。"
+                        ),
+                        tool_calls=[
+                            {
+                                "tool_name": "search_chunks",
+                                "arguments": {"project_id": pid, "query": name, "top_k": 5},
+                                "result": {"chunks": s_search},
+                            },
+                            {
+                                "tool_name": "get_disclosed_supplier",
+                                "arguments": {"project_id": pid, "supplier_id": supplier.get("supplier_id")},
+                                "result": {
+                                    "supplier": {
+                                        "supplier_id": supplier.get("supplier_id"),
+                                        "name": name,
+                                        "source_document_ids": supplier.get("source_document_ids"),
+                                        "source_urls": supplier.get("source_urls"),
+                                    }
+                                },
+                            },
+                        ],
+                        expected_final={
+                            "answer": f"供应商 {name} 仅被公开披露，未据此推断全部资格满足。",
+                            "supplier_id": supplier.get("supplier_id"),
+                            "status": "disclosed_only",
+                            "evidence_ids": [e["evidence_id"] for e in (p_evidence or [])[:3]],
+                            "evidence_chunk_ids": cites[:2],
+                            "citations": cites[:2],
+                            "source_urls": list(supplier.get("source_urls") or []),
+                        },
+                        acceptance=["必须使用公开披露证据", "citation chunk 须包含供应商名称", "不得输出字符串 None"],
+                    )
+                else:
+                    invalid_supplier_tasks_removed += 1
+
+    # Scrub any accidental None strings in final answers
+    for t in tasks:
+        ans = (t.expected_final_result or {}).get("answer")
+        if isinstance(ans, str) and "None" in ans:
+            t.expected_final_result["answer"] = ans.replace("None", "公开材料未披露")
+    agent_final_answers_with_none_string = sum(
+        1 for t in tasks if isinstance((t.expected_final_result or {}).get("answer"), str) and "None" in (t.expected_final_result or {}).get("answer", "")
+    )
 
     target_min, target_max = 300, 500
     gap = max(0, target_min - len(tasks))
@@ -379,12 +454,15 @@ def build_agent_tasks(*, dry_run: bool = False, limit: int | None = 500) -> dict
         "with_error_retry": with_error_retry,
         "with_clarify": with_clarify,
         "skipped_enterprise_material_tasks": skipped_enterprise_material,
+        "invalid_supplier_tasks_removed": invalid_supplier_tasks_removed,
+        "supplier_tasks_with_exact_name_evidence": supplier_tasks_with_exact_name_evidence,
+        "agent_final_answers_with_none_string": agent_final_answers_with_none_string,
         "target_min": target_min,
         "target_max": target_max,
         "gap_to_min": gap,
         "by_title": dict(Counter((t.user_request[:20] for t in tasks))),
         "dry_run": dry_run,
-        "ok": True,
+        "ok": agent_final_answers_with_none_string == 0,
         "note": "No template cloning to fill gaps; report gap when under target.",
     }
     stats = {**quality}

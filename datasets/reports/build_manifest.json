@@ -66,12 +66,12 @@
     "level_a": 20,
     "level_b": 28,
     "projects_collected": 30,
-    "rag_eval": 280,
+    "rag_eval": 286,
     "requirements_gold": 1500,
     "reviewed_trainable_sft": 500,
-    "sft": 8740,
+    "sft": 8879,
     "sft_source_domains": 3,
     "with_tender_document": 57
   },
-  "generated_at": "2026-07-15T15:31:46.415216+00:00"
+  "generated_at": "2026-07-15T16:20:42.961195+00:00"
 }

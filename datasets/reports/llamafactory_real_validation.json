@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "errors": [],
+  "datasets": {
+    "bidpilot_sft_train": {
+      "records": 2418,
+      "errors": [],
+      "error_count": 0
+    },
+    "bidpilot_sft_validation": {
+      "records": 675,
+      "errors": [],
+      "error_count": 0
+    },
+    "bidpilot_sft_test": {
+      "records": 528,
+      "errors": [],
+      "error_count": 0
+    },
+    "bidpilot_sft_train_qwen3": {
+      "records": 2418,
+      "errors": [],
+      "error_count": 0
+    }
+  },
+  "external_llamafactory_validation": "not_run",
+  "followup_command": "export LLAMAFACTORY_HOME=/path/to/LLaMA-Factory && python scripts/vllm_infer.py --help >/dev/null; # or: llamafactory-cli train with --preview / do_train false if available"
+}

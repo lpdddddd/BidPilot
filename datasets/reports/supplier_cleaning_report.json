@@ -1,0 +1,157 @@
+{
+  "accepted_examples": [
+    "东莞市低空经济发展有限公司",
+    "东莞市低空经济发展有限公司与联通（广东）产业互联网有限公司组成的联合体",
+    "中国交通信息科技集团有限公司",
+    "广州市南粤工程建设监理有限公司",
+    "吴川市第八建筑工程公司吴川振文分公司",
+    "珠澳气象创新与应用研究中心",
+    "广东环天电子技术发展有限公司",
+    "广州捷程汽车租赁有限公司",
+    "中山市铂瑞家具有限公司",
+    "上海民航新时代机场设计研究院",
+    "上海民航新时代机场设计研究院有限公司",
+    "上海颐颂科技有限公司",
+    "深圳市安达业建设集团有限公司",
+    "中国人寿财产保险股份有限公司",
+    "中国人寿财产保险股份有限公司广州分公司",
+    "申能财产保险股份有限公司",
+    "申能财产保险股份有限公司广东省分公司",
+    "上海仪真分析仪器有限公司",
+    "广东华海建设集团有限公司",
+    "安徽蓝科信息科技有限公司"
+  ],
+  "accepted_suppliers": 21,
+  "duplicate_suppliers_removed": 49,
+  "raw_candidates": 248,
+  "rejected_candidates": 178,
+  "rejected_examples": [
+    {
+      "name": "供应商地址",
+      "reason": "no_org_suffix"
+    },
+    {
+      "name": "资格性审查",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "或者采购人线上／线下支付公共资源交易服务费后，需注册、登录广州市政采中心",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "供应商",
+      "reason": "stop_name"
+    },
+    {
+      "name": "或者采购人线上／线下支付公共资源交易服务费后",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "供应商地址",
+      "reason": "no_org_suffix"
+    },
+    {
+      "name": "资格性审查",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "或者采购人线上／线下支付公共资源交易服务费后，需注册、登录广州市政采中心",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "供应商",
+      "reason": "stop_name"
+    },
+    {
+      "name": "或者采购人线上／线下支付公共资源交易服务费后",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "服务名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "服务名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "服务名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "服务名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "货物名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "资格性审查",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "货物名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "货物名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "资格性审查",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "货物名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "服务名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "服务名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "服务名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "服务名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "工程名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "工程名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "工程名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "工程名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "服务名称",
+      "reason": "stop_contains"
+    },
+    {
+      "name": "技术得分",
+      "reason": "stop_contains"
+    }
+  ],
+  "rejection_reasons": {
+    "length": 4,
+    "narrative": 2,
+    "no_org_suffix": 52,
+    "stop_contains": 98,
+    "stop_name": 22
+  }
+}

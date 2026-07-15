@@ -270,9 +270,37 @@ class RequirementMatchAnnotation(StrictModel):
     def evidence_required_for_all_statuses(self) -> RequirementMatchAnnotation:
         if self.status == MatchStatus.unknown:
             raise ValueError("unknown MatchStatus is forbidden; use uncertain with requirement-specific evidence")
+        if not self.supplier_id:
+            raise ValueError("RequirementMatch requires non-empty supplier_id")
         has_ev = bool(self.evidence_ids) and bool(self.evidence_document_id) and bool(self.evidence_chunk_id)
         if not has_ev or not self.source_url or not (self.source_quote or "").strip():
             raise ValueError("RequirementMatch requires evidence_ids, evidence_document_id, evidence_chunk_id, source_url, source_quote")
+        return self
+
+
+class SupplierReviewOutcome(StrictModel):
+    """Whole-supplier review outcome when no specific Requirement can be bound."""
+
+    outcome_id: str
+    project_id: str
+    supplier_id: str
+    review_type: str  # qualification | compliance | evaluation | other
+    status: MatchStatus
+    reason: str
+    source_document_id: str
+    source_chunk_id: str
+    source_url: str
+    source_quote: str
+    page_number: int | None = Field(default=None, ge=1)
+    quality_level: QualityLevel = QualityLevel.silver
+    review_status: ReviewStatus = ReviewStatus.pending
+
+    @model_validator(mode="after")
+    def require_grounding(self) -> SupplierReviewOutcome:
+        if self.status == MatchStatus.unknown:
+            raise ValueError("unknown status forbidden on SupplierReviewOutcome")
+        if not self.supplier_id or not self.source_quote.strip():
+            raise ValueError("SupplierReviewOutcome requires supplier_id and source_quote")
         return self
 
 

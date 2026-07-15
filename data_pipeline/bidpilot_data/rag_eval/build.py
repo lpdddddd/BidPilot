@@ -484,7 +484,18 @@ def build_rag_eval(*, dry_run: bool = False, limit: int | None = 300) -> dict[st
         per_project[pid] += 1
         per_chunk[chunk_id] += 1
 
-    # 2) Multi-section from level_a/b with two chunks
+    # 2) Multi-section from level_a/b with complementary chunks (not first two)
+    COMPLEMENTARY = [
+        (("资格", "资质", "投标人"), ("否决", "无效", "废标"), "资格要求与否决情形"),
+        (("技术", "功能", "性能"), ("评分", "分值", "综合评分"), "技术要求与评分规则"),
+        (("服务期限", "履约期限", "合同期限"), ("付款", "结算", "履约保证金"), "服务期限与商务付款"),
+        (("人员", "项目经理", "团队"), ("证明材料", "证书", "社保证明"), "人员要求与证明材料"),
+    ]
+
+    def _chunk_hits(chunk: ChunkRecord, keys: tuple[str, ...]) -> int:
+        t = chunk.text or ""
+        return sum(1 for k in keys if k in t)
+
     for pid in sorted(ab_pids):
         if sum(1 for q in questions if q.answerable) >= answerable_target:
             break
@@ -495,16 +506,42 @@ def build_rag_eval(*, dry_run: bool = False, limit: int | None = 300) -> dict[st
         p_chunks = [c for c in chunks_all if c.project_id == pid]
         if len(p_chunks) < 2:
             continue
-        c1, c2 = p_chunks[0], p_chunks[1]
-        if per_chunk[c1.chunk_id] >= 2 or per_chunk[c2.chunk_id] >= 2:
+        pair = None
+        theme = ""
+        for keys_a, keys_b, theme_name in COMPLEMENTARY:
+            cands_a = sorted(p_chunks, key=lambda c: -_chunk_hits(c, keys_a))
+            cands_b = sorted(p_chunks, key=lambda c: -_chunk_hits(c, keys_b))
+            if not cands_a or not cands_b:
+                continue
+            if _chunk_hits(cands_a[0], keys_a) < 1 or _chunk_hits(cands_b[0], keys_b) < 1:
+                continue
+            for ca in cands_a[:5]:
+                for cb in cands_b[:5]:
+                    if ca.chunk_id == cb.chunk_id:
+                        continue
+                    path_a = (ca.section_path or "") or f"doc:{ca.document_id}:p{ca.page_start}"
+                    path_b = (cb.section_path or "") or f"doc:{cb.document_id}:p{cb.page_start}"
+                    if path_a == path_b and ca.document_id == cb.document_id and ca.page_start == cb.page_start:
+                        continue
+                    if per_chunk[ca.chunk_id] >= 2 or per_chunk[cb.chunk_id] >= 2:
+                        continue
+                    pair = (ca, cb)
+                    theme = theme_name
+                    break
+                if pair:
+                    break
+            if pair:
+                break
+        if not pair:
             continue
+        c1, c2 = pair
         q1 = _pick_requirement_like(c1)
         q2 = _pick_requirement_like(c2)
         if not q1 or not q2:
             continue
         question = (
             f"请结合项目「{_short_entity((projects.get(pid) or {}).get('project_name') or '', max_len=16)}」"
-            "的资格要求与否决情形，说明投标人需要同时注意哪些关键条件？"
+            f"的{theme}，说明投标人需要同时注意哪些关键条件？"
         )
         if question_leaks_quote(question, q1) or question_leaks_quote(question, q2):
             continue
@@ -512,15 +549,20 @@ def build_rag_eval(*, dry_run: bool = False, limit: int | None = 300) -> dict[st
         src2 = (docs.get(c2.document_id) or {}).get("source_url")
         if not src1:
             continue
-        answer = _answer_from_quote(q1, c1.text)
-        if not answer:
+        a1 = _answer_from_quote(q1, c1.text)
+        a2 = _answer_from_quote(q2, c2.text)
+        if not a1 or not a2:
+            continue
+        # Combined answer must cover both evidence spans
+        answer = f"{a1.rstrip('。；;')}；另方面，{a2}"
+        if _norm(a1[:24]) not in _norm(answer) or _norm(a2[:24]) not in _norm(answer):
             continue
         questions.append(
             RAGQuestion(
                 question_id=str(stable_uuid(f"ragq:multi:{pid}:{c1.chunk_id}:{c2.chunk_id}")),
                 project_id=pid,
                 question=question,
-                answer=answer,
+                answer=answer[:400],
                 answerable=True,
                 gold_chunk_ids=[c1.chunk_id, c2.chunk_id],
                 gold_document_ids=[c1.document_id, c2.document_id],
@@ -719,11 +761,74 @@ def build_rag_eval(*, dry_run: bool = False, limit: int | None = 300) -> dict[st
 
     final.extend(ans_keep)
     final.extend(unans[:u_take])
-    # Cap total
     final = final[:target]
+
+    # Enforce max_project_share <= 10% on FINAL count (iterative quality-priority trim)
+    def _trim_project_share(rows: list[RAGQuestion]) -> list[RAGQuestion]:
+        if not rows:
+            return rows
+        type_counts_local = Counter(q.question_type.value for q in rows)
+        for _ in range(20):
+            n = len(rows)
+            if n == 0:
+                return rows
+            cap = n // 10  # floor(n * 0.10); if 0, share cannot meet 10% → ok fails
+            by_pid = Counter(q.project_id for q in rows)
+            over = [(pid, cnt) for pid, cnt in by_pid.items() if cnt > max(cap, 0)]
+            if not over or cap < 1:
+                return rows
+            # Drop lowest-priority extras from oversized projects
+            pid, cnt = max(over, key=lambda x: x[1])
+            drop_n = cnt - cap
+            candidates = [q for q in rows if q.project_id == pid]
+
+            def drop_key(q: RAGQuestion) -> tuple:
+                tcount = type_counts_local.get(q.question_type.value, 0)
+                return (
+                    0 if q.quality_level.value == "gold" else 1,
+                    0 if (projects.get(q.project_id) or {}).get("bundle_level") in {"level_a", "level_b"} else 1,
+                    0 if tcount <= 2 else 1,  # protect scarce types
+                    0 if len(q.gold_chunk_ids) >= 2 else 1,
+                    q.question_id,
+                )
+
+            ranked = sorted(candidates, key=drop_key, reverse=True)
+            drop_ids = {q.question_id for q in ranked[:drop_n]}
+            # Prefer dropping answerable before collapsing unanswerable band too hard
+            rows = [q for q in rows if q.question_id not in drop_ids]
+            type_counts_local = Counter(q.question_type.value for q in rows)
+        return rows
+
+    final = _trim_project_share(final)
+    # Re-balance unanswerable ratio after trim if needed
+    if final:
+        u_ratio = sum(1 for q in final if not q.answerable) / len(final)
+        if u_ratio < 0.10:
+            # drop answerable until band or cannot
+            ans = [q for q in final if q.answerable]
+            una = [q for q in final if not q.answerable]
+            while ans and len(una) / (len(ans) + len(una)) < 0.10:
+                ans.pop()
+            final = _trim_project_share(ans + una)
+        elif u_ratio > 0.15:
+            ans = [q for q in final if q.answerable]
+            una = [q for q in final if not q.answerable]
+            while una and len(una) / (len(ans) + len(una)) > 0.15:
+                una.pop()
+            final = _trim_project_share(ans + una)
 
     unans_ratio = (sum(1 for q in final if not q.answerable) / len(final)) if final else 0.0
     by_type = Counter(q.question_type.value for q in final)
+    max_share = max(Counter(q.project_id for q in final).values(), default=0) / max(len(final), 1)
+    leak_n = 0
+    for q in final:
+        if q.answerable and q.source_quotes and any(question_leaks_quote(q.question, qq) for qq in q.source_quotes):
+            leak_n += 1
+
+    type_coverage_ok = sum(1 for t in TYPE_RATIOS if by_type.get(t.value, 0) > 0) >= 6
+    ok_band = 0.10 <= unans_ratio <= 0.15 if final else False
+    ok_share = max_share <= 0.10 + 1e-9 if final else False
+    ok = bool(final) and leak_n == 0 and ok_band and ok_share and type_coverage_ok
 
     quality_report = {
         "questions": len(final),
@@ -731,28 +836,21 @@ def build_rag_eval(*, dry_run: bool = False, limit: int | None = 300) -> dict[st
         "unanswerable": sum(1 for q in final if not q.answerable),
         "unanswerable_ratio": unans_ratio,
         "by_type": dict(by_type),
-        "max_project_share": (
-            max(Counter(q.project_id for q in final).values(), default=0) / max(len(final), 1)
-        ),
-        "leaky_questions": 0,
+        "max_project_share": max_share,
+        "leaky_questions": leak_n,
         "dry_run": dry_run,
         "target": target,
-        "ok_unanswerable_band": 0.10 <= unans_ratio <= 0.15 if final else False,
+        "ok_unanswerable_band": ok_band,
+        "ok_max_project_share": ok_share,
+        "ok_type_coverage": type_coverage_ok,
+        "ok": ok,
     }
-    # Leak audit
-    leak_n = 0
-    for q in final:
-        if q.answerable and q.source_quotes and question_leaks_quote(q.question, q.source_quotes[0]):
-            leak_n += 1
-    quality_report["leaky_questions"] = leak_n
 
     stats = {**quality_report}
     if not dry_run:
         write_jsonl(ensure_dir(settings.datasets_root / "eval" / "rag") / "questions.jsonl", final)
         write_json(ensure_dir(settings.datasets_root / "reports") / "rag_quality_report.json", quality_report)
-    log_stats(log, "rag_eval", {k: stats[k] for k in ("questions", "answerable", "unanswerable", "unanswerable_ratio")})
-    if final and not (0.10 <= unans_ratio <= 0.15):
-        log.warning("unanswerable ratio out of band: %.4f", unans_ratio)
+    log_stats(log, "rag_eval", {k: stats[k] for k in ("questions", "answerable", "unanswerable", "unanswerable_ratio", "max_project_share")})
     return stats
 
 

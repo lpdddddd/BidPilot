@@ -1,19 +1,17 @@
 {
-  "after_task_filters": 34599,
+  "after_task_filters": 34324,
   "balance": {
     "after_balance": {
-      "citation_qa": 218,
-      "evidence_match": 32,
+      "citation_qa": 212,
       "project_info_extract": 41,
       "qualification_extract": 870,
-      "requirement_classify": 1318,
-      "risk_detect": 942,
+      "requirement_classify": 1278,
+      "risk_detect": 913,
       "scoring_extract": 102,
       "tool_call": 237
     },
     "before_balance": {
-      "citation_qa": 218,
-      "evidence_match": 32,
+      "citation_qa": 212,
       "project_info_extract": 41,
       "qualification_extract": 870,
       "requirement_classify": 14819,
@@ -22,58 +20,53 @@
       "tool_call": 237
     },
     "dropped_by_balance": {
-      "requirement_classify": 13501,
-      "risk_detect": 9768
+      "requirement_classify": 13541,
+      "risk_detect": 9797
     },
     "max_ratio_basis": "final_kept_total_with_uncapped_anchor",
     "task_gaps": {
       "citation_qa": {
-        "gap": 82,
-        "have": 218,
+        "gap": 80,
+        "have": 212,
         "note": "insufficient real samples; no cloning allowed",
-        "target_count": 300,
+        "target_count": 292,
         "target_ratio": 0.08
       },
       "project_info_extract": {
-        "gap": 259,
+        "gap": 251,
         "have": 41,
         "note": "insufficient real samples; no cloning allowed",
-        "target_count": 300,
+        "target_count": 292,
         "target_ratio": 0.08
       },
       "scoring_extract": {
-        "gap": 198,
+        "gap": 190,
         "have": 102,
         "note": "insufficient real samples; no cloning allowed",
-        "target_count": 300,
+        "target_count": 292,
         "target_ratio": 0.08
       }
     },
-    "total_after": 3760,
-    "total_before": 27029
+    "total_after": 3653,
+    "total_before": 26991
   },
   "bundle_level_distribution": {
-    "level_b": 770,
-    "level_c": 2990
+    "level_b": 715,
+    "level_c": 2906
   },
   "by_task": {
-    "citation_qa": 218,
-    "evidence_match": 32,
+    "citation_qa": 180,
     "project_info_extract": 41,
     "qualification_extract": 870,
-    "requirement_classify": 1318,
-    "risk_detect": 942,
+    "requirement_classify": 1278,
+    "risk_detect": 913,
     "scoring_extract": 102,
     "tool_call": 237
   },
   "by_task_quality_level": {
     "citation_qa": {
       "gold": 0,
-      "silver": 218
-    },
-    "evidence_match": {
-      "gold": 0,
-      "silver": 32
+      "silver": 180
     },
     "project_info_extract": {
       "gold": 0,
@@ -85,11 +78,11 @@
     },
     "requirement_classify": {
       "gold": 0,
-      "silver": 1318
+      "silver": 1278
     },
     "risk_detect": {
       "gold": 0,
-      "silver": 942
+      "silver": 913
     },
     "scoring_extract": {
       "gold": 0,
@@ -102,12 +95,7 @@
   },
   "by_task_review_status": {
     "citation_qa": {
-      "pending": 218,
-      "rejected": 0,
-      "reviewed": 0
-    },
-    "evidence_match": {
-      "pending": 32,
+      "pending": 180,
       "rejected": 0,
       "reviewed": 0
     },
@@ -122,12 +110,12 @@
       "reviewed": 0
     },
     "requirement_classify": {
-      "pending": 1318,
+      "pending": 1278,
       "rejected": 0,
       "reviewed": 0
     },
     "risk_detect": {
-      "pending": 942,
+      "pending": 913,
       "rejected": 0,
       "reviewed": 0
     },
@@ -142,56 +130,60 @@
       "reviewed": 0
     }
   },
-  "candidate_raw": 38052,
+  "candidate_raw": 37392,
   "dedup": {
     "conflicting_gold_records": [],
     "cross_project_template_duplicates": 681,
-    "exact_duplicates_removed": 6494,
+    "exact_duplicates_removed": 6257,
     "near_duplicates_removed": 1076
   },
-  "deduped": 3760,
+  "deduped": 3621,
   "dry_run": false,
-  "effective_trainable_deprecated_alias_of_structurally_valid": 3727,
+  "effective_trainable_deprecated_alias_of_structurally_valid": 3621,
   "evidence_match_unknown_ratio": 0.0,
   "filtered_no_evidence": 0,
   "filters": {
-    "candidate_raw": 38052,
+    "candidate_raw": 37392,
     "filtered_empty_assistant": 0,
-    "filtered_exact_dup": 6494,
-    "filtered_incomplete_project": 3079,
-    "filtered_level_c_cross_doc": 374,
+    "filtered_exact_dup": 6257,
+    "filtered_incomplete_project": 3068,
+    "filtered_level_c_cross_doc": 0,
     "filtered_near_dup": 1076,
     "filtered_no_evidence_match": 0,
     "filtered_null_project_info": 0,
     "filtered_unknown_cap": 0,
-    "with_evidence": 34566,
-    "without_evidence_kept": 33
+    "with_evidence": 34292,
+    "without_evidence_kept": 32
   },
-  "gap_to_preferred": 8740,
+  "gap_to_preferred": 8879,
   "gold": 0,
   "note": "reviewed_trainable_sft must be gold+reviewed before formal LoRA",
   "preferred_target": 12500,
-  "rejected_sft": 33,
+  "rejected_sft": 32,
+  "rejected_sft_reasons": {
+    "missing_source": 32
+  },
   "reviewed_trainable_sft": 0,
-  "silver": 3760,
-  "silver_candidate_sft": 3727,
+  "silver": 3621,
+  "silver_candidate_sft": 3621,
   "source_domain_distribution": {
     "record_count": {
-      "download.ccgp.gov.cn": 3609,
-      "www.ccgp.gov.cn": 151
+      "download.ccgp.gov.cn": 3462,
+      "www.ccgp.gov.cn": 159
     },
     "reference_count": {
-      "download.ccgp.gov.cn": 3612,
+      "download.ccgp.gov.cn": 3471,
       "www.ccgp.gov.cn": 159
     }
   },
-  "structurally_valid_sft": 3727,
-  "test": 549,
+  "split_sum_equals_structurally_valid": true,
+  "structurally_valid_sft": 3621,
+  "test": 528,
   "test_projects": 10,
-  "total": 3760,
-  "train": 2499,
+  "total": 3621,
+  "train": 2418,
   "train_projects": 26,
-  "validation": 712,
+  "validation": 675,
   "validation_projects": 7,
-  "with_evidence": 34566
+  "with_evidence": 34292
 }

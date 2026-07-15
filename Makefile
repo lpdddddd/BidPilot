@@ -8,7 +8,7 @@ PIP ?= pip
 
 PIPELINE_DIR := $(ROOT_DIR)/data_pipeline
 
-.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft dataset-install dataset-test dataset-bootstrap dataset-download dataset-parse dataset-label dataset-review-export dataset-review-priority dataset-validate dataset-build-rag dataset-build-agent dataset-build-sft dataset-report dataset-demo
+.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft validate-sft-sample validate-sft-real dataset-install dataset-test dataset-bootstrap dataset-download dataset-parse dataset-label dataset-review-export dataset-review-priority dataset-validate dataset-build-rag dataset-build-agent dataset-build-sft dataset-report dataset-demo
 
 help:
 	@echo "BidPilot development commands"
@@ -24,7 +24,9 @@ help:
 	@echo "  make lint                Run ruff + mypy"
 	@echo "  make format              Run ruff format"
 	@echo "  make import-demo         Import demo pack"
-	@echo "  make validate-sft        Validate ShareGPT sample"
+	@echo "  make validate-sft        Validate real LLaMAFactory SFT files"
+	@echo "  make validate-sft-sample Validate sample_sharegpt.json"
+	@echo "  make validate-sft-real   Validate bidpilot_sft_train/val/test JSON"
 	@echo "  make dataset-install     Install data_pipeline package"
 	@echo "  make dataset-test        Run data_pipeline tests"
 	@echo "  make dataset-bootstrap   Bootstrap demo fixtures into datasets/"
@@ -76,11 +78,17 @@ format:
 import-demo:
 	$(PYTHON) $(ROOT_DIR)/scripts/import_demo_data.py
 
-validate-sft:
+validate-sft-sample:
 	$(PYTHON) $(ROOT_DIR)/training/llamafactory/scripts/validate_sft_dataset.py \
 		--dataset-file $(ROOT_DIR)/training/llamafactory/data/sample_sharegpt.json \
 		--dataset-info $(ROOT_DIR)/training/llamafactory/data/dataset_info.json \
 		--dataset-name bidpilot_sample_sharegpt
+
+validate-sft-real:
+	$(PYTHON) $(ROOT_DIR)/training/llamafactory/scripts/validate_sft_real.py \
+		--repo-root $(ROOT_DIR)
+
+validate-sft: validate-sft-real
 
 dataset-install:
 	cd $(PIPELINE_DIR) && $(PIP) install -e ".[dev]"

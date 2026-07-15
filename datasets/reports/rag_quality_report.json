@@ -1,23 +1,26 @@
 {
-  "answerable": 187,
+  "answerable": 182,
   "by_type": {
-    "commercial": 24,
-    "evidence": 13,
-    "multi_section": 11,
+    "commercial": 22,
+    "evidence": 10,
+    "multi_section": 9,
     "project_basic": 20,
-    "qualification": 46,
+    "qualification": 48,
     "rejection": 9,
     "scoring": 26,
     "technical": 25,
     "time_location": 13,
-    "unanswerable": 33
+    "unanswerable": 32
   },
   "dry_run": false,
   "leaky_questions": 0,
-  "max_project_share": 0.11818181818181818,
+  "max_project_share": 0.09813084112149532,
+  "ok": true,
+  "ok_max_project_share": true,
+  "ok_type_coverage": true,
   "ok_unanswerable_band": true,
-  "questions": 220,
+  "questions": 214,
   "target": 300,
-  "unanswerable": 33,
-  "unanswerable_ratio": 0.15
+  "unanswerable": 32,
+  "unanswerable_ratio": 0.14953271028037382
 }

@@ -1,8 +1,8 @@
 {
   "conflicting_gold_records": [],
   "cross_project_template_duplicates": 681,
-  "exact_duplicates_removed": 6494,
-  "generated_at": "2026-07-15T15:31:43.086703+00:00",
+  "exact_duplicates_removed": 6257,
+  "generated_at": "2026-07-15T16:20:26.040963+00:00",
   "method": "exact_sha1 + simhash64 LSH bands + rapidfuzz token_set_ratio",
   "near_duplicates_removed": 1076
 }

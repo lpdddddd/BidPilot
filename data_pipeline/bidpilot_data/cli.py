@@ -307,9 +307,7 @@ def build_rag(dry_run: bool = False, limit: int = 300, verbose: bool = False) ->
 
     stats = build_rag_eval(dry_run=dry_run, limit=limit)
     print(stats)
-    if not dry_run and stats.get("questions") and not stats.get("ok_unanswerable_band", True):
-        raise typer.Exit(code=1)
-    if not dry_run and stats.get("leaky_questions", 0) > 0:
+    if not dry_run and stats.get("questions") and not stats.get("ok", False):
         raise typer.Exit(code=1)
 
 
