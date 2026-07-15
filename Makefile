@@ -6,7 +6,9 @@ COMPOSE := docker compose --env-file $(ROOT_DIR)/.env -f $(INFRA_DIR)/docker-com
 PYTHON ?= python
 PIP ?= pip
 
-.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft
+PIPELINE_DIR := $(ROOT_DIR)/data_pipeline
+
+.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft dataset-install dataset-test dataset-bootstrap dataset-download dataset-parse dataset-label dataset-review-export dataset-validate dataset-build-sft dataset-report dataset-demo
 
 help:
 	@echo "BidPilot development commands"
@@ -23,6 +25,17 @@ help:
 	@echo "  make format              Run ruff format"
 	@echo "  make import-demo         Import demo pack"
 	@echo "  make validate-sft        Validate ShareGPT sample"
+	@echo "  make dataset-install     Install data_pipeline package"
+	@echo "  make dataset-test        Run data_pipeline tests"
+	@echo "  make dataset-bootstrap   Bootstrap demo fixtures into datasets/"
+	@echo "  make dataset-download    Resume pending downloads"
+	@echo "  make dataset-parse       Parse -> clean -> chunk"
+	@echo "  make dataset-label       Rule-based requirement labeling"
+	@echo "  make dataset-review-export Export review CSV"
+	@echo "  make dataset-validate    Validate all dataset artifacts"
+	@echo "  make dataset-build-sft   Build ShareGPT SFT splits"
+	@echo "  make dataset-report      Write dataset statistics reports"
+	@echo "  make dataset-demo        Run full local demo pipeline"
 
 infra-up:
 	$(COMPOSE) up -d
@@ -68,3 +81,39 @@ validate-sft:
 		--dataset-file $(ROOT_DIR)/training/llamafactory/data/sample_sharegpt.json \
 		--dataset-info $(ROOT_DIR)/training/llamafactory/data/dataset_info.json \
 		--dataset-name bidpilot_sample_sharegpt
+
+dataset-install:
+	cd $(PIPELINE_DIR) && $(PIP) install -e ".[dev]"
+
+dataset-test:
+	cd $(PIPELINE_DIR) && pytest -q
+
+dataset-bootstrap:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data bootstrap
+
+dataset-download:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data download --resume
+
+dataset-parse:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data parse --resume
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data clean --resume
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data chunk --resume
+
+dataset-label:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data label requirements --mode rules --resume
+
+dataset-review-export:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data review export
+
+dataset-validate:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data validate all
+
+dataset-build-sft:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data build-sft
+
+dataset-report:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data report
+
+dataset-demo:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data run-demo
+

@@ -1,0 +1,78 @@
+random_seed: 42
+
+paths:
+  repo_root: ..
+  datasets: ../datasets
+  demo_data: ../demo_data
+  configs: .
+  llamafactory_data: ../training/llamafactory/data
+
+projects:
+  collected_target: 150
+  with_tender_document_min: 100
+  level_a_min: 20
+  level_b_min: 40
+  finely_annotated_target: 30
+  heldout_target: 10
+  preferred_province: 广东
+
+requirements:
+  gold_target_min: 1500
+  gold_target_max: 2500
+
+rag_eval:
+  target_min: 500
+  target_max: 800
+  unanswerable_ratio_min: 0.10
+  unanswerable_ratio_max: 0.15
+
+disclosed_suppliers:
+  # Only suppliers disclosed in official public filings
+  synthetic_forbidden: true
+
+requirement_matches:
+  target_min: 1000
+  target_max: 1500
+  allow_unknown: true
+  forbid_inferred_from_award_only: true
+
+agent_tasks:
+  target_min: 300
+  target_max: 500
+
+sft:
+  target_min: 10000
+  target_max: 15000
+  preferred_target: 12500
+  task_targets:
+    requirement_classify: 2500
+    project_info_extract: 1000
+    qualification_extract: 2000
+    scoring_extract: 1500
+    risk_detect: 1500
+    evidence_match: 2000
+    tool_call: 1000
+    citation_qa: 1000
+  train_ratio: 0.8
+  validation_ratio: 0.1
+  test_ratio: 0.1
+
+download:
+  timeout_seconds: 30
+  max_retries: 3
+  rate_limit_per_second: 1.0
+  user_agent: "BidPilotDataBot/0.1 (+https://github.com/lpdddddd/BidPilot; research; respect robots)"
+
+chunking:
+  max_tokens: 800
+  overlap_tokens: 80
+  min_tokens: 40
+
+labeling:
+  temperature: 0.0
+  max_retries: 3
+  low_confidence_threshold: 0.55
+  prompt_version: "req_label_v1"
+
+splits:
+  heldout_project_count: 10

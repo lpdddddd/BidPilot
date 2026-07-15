@@ -1,0 +1,125 @@
+# Official public procurement / public-resource trading source whitelist.
+# Third-party aggregator sites must not be primary sources.
+# Do not bypass captcha, login walls, paywalls, or signature verification.
+
+rate_limit_per_second: 0.8
+user_agent: "BidPilotDataBot/0.1 (+https://github.com/lpdddddd/BidPilot; research; respect robots)"
+timeout_seconds: 30
+max_retries: 3
+
+allowed_domain_suffixes:
+  - gov.cn
+  - gdzwfw.gov.cn
+
+sites:
+  - site_id: ccgp
+    name: 中国政府采购网
+    base_url: https://www.ccgp.gov.cn/
+    domains:
+      - www.ccgp.gov.cn
+      - search.ccgp.gov.cn
+      - download.ccgp.gov.cn
+      - pub.ccgp.gov.cn
+    source_type: national_procurement
+    priority: 1
+    province_focus: null
+    notes: "Official MOF procurement portal. Search may rate-limit; prefer list pages and detail HTML."
+
+  - site_id: ggzy
+    name: 全国公共资源交易平台
+    base_url: https://www.ggzy.gov.cn/
+    domains:
+      - www.ggzy.gov.cn
+      - deal.ggzy.gov.cn
+    source_type: national_public_resource
+    priority: 2
+    province_focus: null
+    notes: "Deal subdomains may be unreachable; record pending when blocked."
+
+  - site_id: zycg
+    name: 中央政府采购网
+    base_url: https://www.zycg.gov.cn/
+    domains:
+      - www.zycg.gov.cn
+      - ggzy.zycg.gov.cn
+      - oldpt.zycg.gov.cn
+    source_type: central_procurement
+    priority: 3
+    province_focus: null
+    notes: "Some sections require login; do not bypass."
+
+  - site_id: gdgpo
+    name: 广东省政府采购网
+    base_url: https://gdgpo.czt.gd.gov.cn/
+    domains:
+      - gdgpo.czt.gd.gov.cn
+    source_type: provincial_procurement
+    priority: 1
+    province_focus: 广东
+    notes: "Often under maintenance or 403; record pending and continue elsewhere."
+
+  - site_id: zbtb_gd
+    name: 广东省招标投标监管网
+    base_url: https://zbtb.gd.gov.cn/
+    domains:
+      - zbtb.gd.gov.cn
+    source_type: provincial_supervision
+    priority: 2
+    province_focus: 广东
+    notes: "SPA portal; signed APIs must not be reverse-engineered for bypass."
+
+  - site_id: ygp_gd
+    name: 广东省公共资源交易平台（粤公平）
+    base_url: https://ygp.gdzwfw.gov.cn/
+    domains:
+      - ygp.gdzwfw.gov.cn
+      - www.gdzwfw.gov.cn
+    source_type: provincial_public_resource
+    priority: 1
+    province_focus: 广东
+    notes: "Public HTML/SPA. Do not forge request signatures."
+
+  - site_id: gzggzy
+    name: 广州公共资源交易中心 / 广州交易集团
+    base_url: https://www.gzggzy.cn/
+    domains:
+      - www.gzggzy.cn
+      - ywtb.gzggzy.cn
+    source_type: municipal_public_resource
+    priority: 2
+    province_focus: 广东
+    notes: "Epoint APIs may require tokens; save pending URLs when blocked."
+
+discovery:
+  preferred_province: 广东
+  expand_provinces:
+    - 北京
+    - 江苏
+    - 浙江
+    - 山东
+    - 河南
+    - 四川
+  default_keywords:
+    - 信息化
+    - 软件
+    - 运维
+    - 数据治理
+    - 网络安全
+    - 信息系统
+    - 系统集成
+    - 数字化
+    - 云服务
+    - 咨询服务
+  industry_keywords:
+    信息化软件: [信息化, 软件, 信息系统, 系统集成, 应用系统]
+    系统运维: [运维, 运维服务, 系统运维, 维保]
+    网络安全: [网络安全, 信息安全, 等保, 安全服务]
+    数据治理: [数据治理, 大数据, 数据共享, 数据中心]
+    云服务: [云服务, 云计算, 云平台]
+    咨询服务: [咨询, 监理, 项目管理服务]
+    教育设备: [教育, 教学设备, 实训]
+    医疗设备: [医疗, 医院, 医用]
+    食品配送: [食堂, 配餐, 食品]
+    物业服务: [物业, 保洁, 安保服务]
+    工程服务: [工程, 施工, 装修]
+    检测服务: [检测, 检验, 测试服务]

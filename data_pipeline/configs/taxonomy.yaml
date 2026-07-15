@@ -1,0 +1,145 @@
+categories:
+  - project_info
+  - qualification
+  - commercial
+  - technical
+  - scoring
+  - pricing
+  - contract
+  - delivery
+  - service
+  - personnel
+  - performance
+  - certification
+  - financial
+  - legal
+  - mandatory_rejection
+  - submission
+  - other
+
+# Map pipeline taxonomy -> backend RequirementCategory for DB import
+db_category_map:
+  project_info: project_info
+  qualification: qualification
+  commercial: commercial
+  technical: technical
+  scoring: scoring
+  pricing: commercial
+  contract: contract
+  delivery: deadline
+  service: material
+  personnel: qualification
+  performance: qualification
+  certification: qualification
+  financial: commercial
+  legal: mandatory
+  mandatory_rejection: invalid_bid
+  submission: material
+  other: project_info
+
+risk_levels:
+  - low
+  - medium
+  - high
+  - critical
+
+quality_levels:
+  - gold
+  - silver
+  - pending
+
+review_statuses:
+  - reviewed
+  - auto_checked
+  - unreviewed
+  - pending
+
+mandatory_keywords:
+  - 必须
+  - 应当
+  - 应
+  - 须
+  - 不得
+  - 严禁
+
+rejection_keywords:
+  - 否则投标无效
+  - 投标无效
+  - 否决投标
+  - 按废标处理
+  - 废标
+  - 无效响应
+  - 视为无效
+  - 取消投标资格
+
+category_keywords:
+  project_info:
+    - 项目名称
+    - 采购人
+    - 预算金额
+    - 项目编号
+  qualification:
+    - 营业执照
+    - 资质
+    - 资格要求
+    - 投标人资格
+  commercial:
+    - 商务
+    - 付款
+    - 履约保证金
+  technical:
+    - 技术要求
+    - 技术参数
+    - 功能要求
+  scoring:
+    - 评分办法
+    - 综合评分
+    - 分值
+  pricing:
+    - 报价
+    - 单价
+    - 最高限价
+  contract:
+    - 合同条款
+    - 违约责任
+  delivery:
+    - 交货期
+    - 工期
+    - 交货地点
+  service:
+    - 售后服务
+    - 质保
+  personnel:
+    - 项目经理
+    - 团队
+    - 人员配备
+  performance:
+    - 类似业绩
+    - 业绩要求
+  certification:
+    - 认证
+    - ISO
+    - CMMI
+  financial:
+    - 财务报表
+    - 审计报告
+    - 注册资本
+  legal:
+    - 无重大违法
+    - 承诺函
+  mandatory_rejection:
+    - 否决
+    - 废标
+    - 投标无效
+  submission:
+    - 递交
+    - 密封
+    - 投标文件组成
+
+fields:
+  - mandatory
+  - score
+  - risk_level
+  - evidence_required
+  - source_page
+  - source_section

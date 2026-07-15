@@ -1,0 +1,192 @@
+{
+  "agent_tasks": 0,
+  "bundle_levels": {
+    "incomplete": 24,
+    "level_a": 0,
+    "level_b": 3,
+    "level_c": 5
+  },
+  "chunks": 3177,
+  "disclosed_suppliers": 17,
+  "discovered_projects": 131,
+  "discovery_failures": 3,
+  "documents": {
+    "award_notices": 8,
+    "by_extension": {
+      ".doc": 3,
+      ".docx": 4,
+      ".html": 32,
+      ".jpg": 1,
+      ".pdf": 8,
+      ".zip": 1
+    },
+    "by_type": {
+      "award_notice": 8,
+      "other": 10,
+      "other_notice": 3,
+      "tender_document": 11,
+      "tender_notice": 17
+    },
+    "contract_notices": 0,
+    "docx": 7,
+    "evaluation_results": 0,
+    "html": 32,
+    "pdf": 8,
+    "tender_documents": 11,
+    "total": 49
+  },
+  "download_failures": 0,
+  "downloaded_projects": 32,
+  "failure_reasons": {
+    "[Errno -2] Name or service not known": 1,
+    "access restricted status=403 url=https://gdgpo.czt.gd.gov.cn/": 1,
+    "access_restricted_403": 1
+  },
+  "gaps": {
+    "finely_annotated": 30,
+    "heldout": 0,
+    "level_a": 20,
+    "level_b": 37,
+    "projects_collected": 118,
+    "rag_eval": 456,
+    "requirements_gold": 1500,
+    "sft": 3062,
+    "with_tender_document": 92
+  },
+  "generated_at": "2026-07-15T07:59:22.366303+00:00",
+  "human_review_todo": {
+    "matches_unknown": 4143,
+    "rag_pending": 44,
+    "requirements_pending": 2026,
+    "sft_pending": 9438
+  },
+  "notes": [
+    "No synthetic companies/projects/answers are generated.",
+    "Gaps must not be filled with fictional samples.",
+    "Gold labels require human review with page-level evidence."
+  ],
+  "official_source_distribution": {
+    "download.ccgp.gov.cn": 0,
+    "www.ccgp.gov.cn": 32
+  },
+  "parse_status_counts": {
+    "failed": 4,
+    "ocr_required": 2,
+    "success": 43
+  },
+  "rag_questions": 44,
+  "real_data_only": true,
+  "requirement_matches": {
+    "missing": 0,
+    "partially_satisfied": 0,
+    "satisfied": 0,
+    "total": 4143,
+    "unknown": 4143,
+    "verifiable": 0
+  },
+  "requirements": {
+    "gold": 0,
+    "pending_review": 2026,
+    "quality": {
+      "silver": 3949
+    },
+    "review_status": {
+      "pending": 3949
+    },
+    "silver": 3949
+  },
+  "sft": {
+    "quality": {
+      "silver": 9438
+    },
+    "test": 2261,
+    "test_projects": 13,
+    "train": 4754,
+    "train_projects": 18,
+    "validation": 2423,
+    "validation_projects": 2
+  },
+  "sources": 49,
+  "synthetic_forbidden": true,
+  "targets": {
+    "agent_tasks": {
+      "target_max": 500,
+      "target_min": 300
+    },
+    "chunking": {
+      "max_tokens": 800,
+      "min_tokens": 40,
+      "overlap_tokens": 80
+    },
+    "disclosed_suppliers": {
+      "synthetic_forbidden": true
+    },
+    "download": {
+      "max_retries": 3,
+      "rate_limit_per_second": 1.0,
+      "timeout_seconds": 30,
+      "user_agent": "BidPilotDataBot/0.1 (+https://github.com/lpdddddd/BidPilot; research; respect robots)"
+    },
+    "labeling": {
+      "low_confidence_threshold": 0.55,
+      "max_retries": 3,
+      "prompt_version": "req_label_v1",
+      "temperature": 0.0
+    },
+    "paths": {
+      "configs": ".",
+      "datasets": "../datasets",
+      "demo_data": "../demo_data",
+      "llamafactory_data": "../training/llamafactory/data",
+      "repo_root": ".."
+    },
+    "projects": {
+      "collected_target": 150,
+      "finely_annotated_target": 30,
+      "heldout_target": 10,
+      "level_a_min": 20,
+      "level_b_min": 40,
+      "preferred_province": "广东",
+      "with_tender_document_min": 100
+    },
+    "rag_eval": {
+      "target_max": 800,
+      "target_min": 500,
+      "unanswerable_ratio_max": 0.15,
+      "unanswerable_ratio_min": 0.1
+    },
+    "random_seed": 42,
+    "requirement_matches": {
+      "allow_unknown": true,
+      "forbid_inferred_from_award_only": true,
+      "target_max": 1500,
+      "target_min": 1000
+    },
+    "requirements": {
+      "gold_target_max": 2500,
+      "gold_target_min": 1500
+    },
+    "sft": {
+      "preferred_target": 12500,
+      "target_max": 15000,
+      "target_min": 10000,
+      "task_targets": {
+        "citation_qa": 1000,
+        "evidence_match": 2000,
+        "project_info_extract": 1000,
+        "qualification_extract": 2000,
+        "requirement_classify": 2500,
+        "risk_detect": 1500,
+        "scoring_extract": 1500,
+        "tool_call": 1000
+      },
+      "test_ratio": 0.1,
+      "train_ratio": 0.8,
+      "validation_ratio": 0.1
+    },
+    "splits": {
+      "heldout_project_count": 10
+    }
+  },
+  "validation_ok": true
+}

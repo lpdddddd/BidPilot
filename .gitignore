@@ -34,16 +34,39 @@ frontend/.vite/
 .DS_Store
 
 # Data & training outputs
-datasets/raw/*
-datasets/interim/*
-datasets/processed/*
+datasets/raw/**
+datasets/interim/**
+datasets/processed/**
+datasets/silver/**
+datasets/gold/**
+datasets/review/**
+datasets/eval/**
+datasets/sft/**
+datasets/rejected/**
+datasets/reports/**
+datasets/archive/**
+datasets/fixtures/**
 !datasets/**/.gitkeep
+!datasets/manifests/.gitkeep
+!datasets/reports/.gitkeep
+# Small official manifests / reports that are safe to version
+!datasets/manifests/source_manifest.example.jsonl
+!datasets/manifests/official_source_seeds.jsonl
+!datasets/manifests/projects.jsonl
+!datasets/reports/dataset_statistics.json
+!datasets/reports/validation_report.json
+!datasets/reports/discovery_batch_report.json
+!datasets/reports/build_manifest.json
 training/llamafactory/outputs/*
 !training/llamafactory/outputs/.gitkeep
+training/llamafactory/data/bidpilot_sft_*.json
 *.pt
 *.bin
 *.safetensors
 *.gguf
+*.pdf
+ocr_cache/
+**/paddleocr/**
 
 # Secrets & local overrides
 .env

@@ -1,0 +1,22 @@
+{
+  "counts": {
+    "chunks": 3177,
+    "documents": 49,
+    "evidence": 371,
+    "gold_requirements": 0,
+    "matches": 4143,
+    "projects": 32,
+    "rag_questions": 44,
+    "sft_test": 2261,
+    "sft_train": 4754,
+    "silver_requirements": 3949,
+    "unknown_matches": 4143
+  },
+  "error_count": 0,
+  "errors": [],
+  "ok": true,
+  "warning_count": 1,
+  "warnings": [
+    "project_code missing/unknown project_id=a8135a43-e29d-5a97-b19d-59b2924bc114"
+  ]
+}

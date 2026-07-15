@@ -96,35 +96,75 @@ make frontend   # http://localhost:5173
 make format
 make lint
 make test
+make dataset-test
 make validate-sft
 ```
 
+## 数据流水线：从原始文件到 LLaMAFactory
+
+`data_pipeline/` 是独立 Python 包（`bidpilot-data`），与业务后端解耦；后端不 import `llamafactory`。
+
+```bash
+make dataset-install
+
+# 本地 demo（不依赖外网/模型 API，使用 demo_data + 规则标注）
+make dataset-demo
+
+# 分步执行
+make dataset-bootstrap
+make dataset-parse          # parse -> clean -> chunk
+make dataset-label          # rules 模式；LLM 模式需配置 DATASET_MODEL_NAME
+make dataset-review-export  # 导出人工审核 CSV
+# 人工填写 decision/reviewer 后：
+# python -m bidpilot_data review import --file datasets/review/exported/requirements_review.csv
+make dataset-build-sft
+make dataset-validate
+make dataset-report
+```
+
+环境变量（见 `.env.example`）：
+
+- `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `DATASET_MODEL_NAME` — OpenAI-compatible 标注
+- `DATABASE_URL` — 可选 `python -m bidpilot_data db import-*`
+
+产出目录：
+
+- `datasets/silver|gold|review|eval|sft/`
+- `datasets/reports/{dataset_statistics,validation_report,build_manifest}.json`
+- `training/llamafactory/data/dataset_info.json`（注册 `bidpilot_sft_train(_qwen3)` 等）
+
+质量约束：自动标注只能是 silver/pending；accept/corrected + reviewer 才能升 gold；按 `project_id` 划分 train/val/test。
+
+详情见 [data_pipeline/README.md](data_pipeline/README.md) 与 [DATASET_BUILD_REPORT.md](DATASET_BUILD_REPORT.md)。
+
 ## LLaMAFactory 数据导出与训练流程
 
-1. 准备 JSON/JSONL 标注
-2. 导出 ShareGPT messages：
+1. 通过流水线生成 `datasets/sft/{train,validation,test}/sharegpt.json`，或：
 
 ```bash
 python training/llamafactory/scripts/export_sft_dataset.py \
-  --input datasets/gold/annotations.jsonl \
+  --input datasets/sft/source/all.jsonl \
   --output-dir training/llamafactory/data/exported \
   --task-type requirement_classify \
   --require-json-assistant
 ```
 
-3. 校验：
+2. 校验：
 
 ```bash
 make validate-sft
+make dataset-validate
 ```
 
-4. 在外部 LLaMAFactory 中手动启动（本仓库不自动训练）：
+3. 在外部 LLaMAFactory 中手动启动（本仓库不自动训练）：
 
 ```bash
 export LLAMAFACTORY_HOME=/path/to/LLaMA-Factory
 cd "$LLAMAFACTORY_HOME"
 llamafactory-cli train /absolute/path/to/bidpilot/training/llamafactory/configs/qwen3_8b_qlora_sft.yaml
 ```
+
+在 YAML 中将 `dataset` 设为 `bidpilot_sft_train_qwen3`（或 `bidpilot_sft_train`），`dataset_dir` 指向 `training/llamafactory/data`。
 
 详细说明见 [training/llamafactory/README.md](training/llamafactory/README.md)。
 
@@ -138,17 +178,18 @@ llamafactory-cli train /absolute/path/to/bidpilot/training/llamafactory/configs/
 6. 前端基础页面骨架
 7. 演示数据导入脚本
 8. LLaMAFactory ShareGPT 导出 / 校验与 QLoRA 配置模板
-9. pytest 覆盖 health、模型、API、约束、导入幂等、ShareGPT、泄漏检查
+9. **可安装 data_pipeline**：采集/解析/切块/标注/审核/RAG&Agent 评测/SFT/校验/DB 导入
+10. pytest 覆盖 backend 与 data_pipeline
 
 ## 后续开发顺序建议
 
-1. 文档解析流水线（PDF/OCR）与 chunk 入库
-2. Qdrant 向量化与 Dense RAG
-3. OpenSearch BM25 与混合检索
-4. LangGraph Agent 合规审查工作流
-5. 认证授权与组织权限
-6. 领域微调数据规模化与多 GPU QLoRA 训练
-7. 人机协同标注与 gold/silver 质量管理
+1. 合规公开源采集规模化 + OCR
+2. 人工审核沉淀 gold 需求/RAG/SFT
+3. Qdrant 向量化与 Dense RAG
+4. OpenSearch BM25 与混合检索
+5. LangGraph Agent 合规审查工作流
+6. 认证授权与组织权限
+7. 多 GPU QLoRA 正式训练
 
 ## Makefile 命令
 
@@ -166,3 +207,8 @@ llamafactory-cli train /absolute/path/to/bidpilot/training/llamafactory/configs/
 | `make lint` | ruff + mypy |
 | `make format` | ruff format/fix |
 | `make import-demo` | 导入演示数据 |
+| `make dataset-install` | 安装 data_pipeline |
+| `make dataset-test` | 数据流水线测试 |
+| `make dataset-demo` | 本地 demo 全流程 |
+| `make dataset-build-sft` | 构建 ShareGPT SFT |
+| `make dataset-validate` | 数据集校验 |

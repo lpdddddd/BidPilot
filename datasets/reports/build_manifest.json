@@ -1,0 +1,31 @@
+{
+  "artifacts": {
+    "chunks": "datasets/interim/chunks/chunks.jsonl",
+    "discovery_batch": "datasets/reports/discovery_batch_report.json",
+    "documents": "datasets/manifests/documents.jsonl",
+    "evidence": "datasets/silver/evidence.jsonl",
+    "gold_requirements": "datasets/gold/requirements.jsonl",
+    "projects": "datasets/manifests/projects.jsonl",
+    "sft_train": "datasets/sft/train/sharegpt.json",
+    "silver_requirements": "datasets/silver/requirements.jsonl",
+    "validation_report": "datasets/reports/validation_report.json"
+  },
+  "bundle_levels": {
+    "incomplete": 24,
+    "level_a": 0,
+    "level_b": 3,
+    "level_c": 5
+  },
+  "gaps": {
+    "finely_annotated": 30,
+    "heldout": 0,
+    "level_a": 20,
+    "level_b": 37,
+    "projects_collected": 118,
+    "rag_eval": 456,
+    "requirements_gold": 1500,
+    "sft": 3062,
+    "with_tender_document": 92
+  },
+  "generated_at": "2026-07-15T07:59:22.366303+00:00"
+}

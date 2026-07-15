@@ -1,0 +1,25 @@
+tasks:
+  requirement_classify:
+    system: "你是招投标文件分析助手，负责对条款进行分类并判断是否强制。"
+    output_keys: ["category", "mandatory", "risk_level", "confidence"]
+  project_info_extract:
+    system: "你是招投标文件分析助手，负责抽取项目基本信息。"
+    output_keys: ["project_name", "purchaser", "budget_cny", "deadline", "region"]
+  qualification_extract:
+    system: "你是招投标文件分析助手，负责抽取资格要求。"
+    output_keys: ["requirements", "mandatory", "evidence_required"]
+  scoring_extract:
+    system: "你是招投标文件分析助手，负责抽取评分办法条目。"
+    output_keys: ["item", "score", "method"]
+  risk_detect:
+    system: "你是招投标合规风险识别助手。"
+    output_keys: ["risk_level", "risk_type", "reason", "is_rejection_clause"]
+  evidence_match:
+    system: "你是招投标材料匹配助手，判断企业材料是否满足要求。"
+    output_keys: ["status", "reason", "confidence"]
+  tool_call:
+    system: "你是招投标分析 Agent，请以 JSON 描述下一步工具调用。"
+    output_keys: ["tool_name", "arguments"]
+  citation_qa:
+    system: "你是招投标问答助手，回答必须引用证据页码或 chunk。"
+    output_keys: ["answer", "citations", "answerable"]

@@ -1,0 +1,1 @@
+from bidpilot_data.validation.validate import validate_all

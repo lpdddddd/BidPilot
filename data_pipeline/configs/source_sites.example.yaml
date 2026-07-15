@@ -1,0 +1,16 @@
+# Copy to source_sites.yaml and maintain the official domain whitelist.
+# See source_sites.yaml for the maintained BidPilot configuration.
+
+rate_limit_per_second: 0.8
+user_agent: "BidPilotDataBot/0.1 (+https://github.com/lpdddddd/BidPilot; research; respect robots)"
+allowed_domain_suffixes:
+  - gov.cn
+
+sites:
+  - site_id: ccgp
+    name: 中国政府采购网
+    base_url: https://www.ccgp.gov.cn/
+    domains: [www.ccgp.gov.cn, download.ccgp.gov.cn]
+    source_type: national_procurement
+    priority: 1
+    allowed: true
