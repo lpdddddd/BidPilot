@@ -1,0 +1,23 @@
+[
+  {
+    "requirement_id": "11111111-1111-1111-1111-111111111101",
+    "company_name": "星河安防科技有限公司",
+    "status": "satisfied",
+    "reason": "企业提供了有效营业执照扫描件",
+    "risk_level": "low",
+    "confidence": 0.95,
+    "quality_level": "gold",
+    "review_status": "reviewed"
+  },
+  {
+    "requirement_id": "11111111-1111-1111-1111-111111111102",
+    "company_name": "星河安防科技有限公司",
+    "status": "partially_satisfied",
+    "reason": "产品手册仅证明150路接入能力",
+    "risk_level": "medium",
+    "confidence": 0.72,
+    "recommended_action": "补充厂商授权与扩容方案",
+    "quality_level": "silver",
+    "review_status": "reviewed"
+  }
+]

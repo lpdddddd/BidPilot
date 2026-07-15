@@ -1,0 +1,24 @@
+[
+  {
+    "requirement_id": "11111111-1111-1111-1111-111111111101",
+    "requirement_code": "REQ-QUAL-001",
+    "category": "qualification",
+    "title": "投标人须具备有效营业执照",
+    "normalized_requirement": "投标人须提供有效营业执照",
+    "mandatory": true,
+    "risk_level": "high",
+    "quality_level": "gold",
+    "review_status": "reviewed"
+  },
+  {
+    "requirement_id": "11111111-1111-1111-1111-111111111102",
+    "requirement_code": "REQ-TECH-001",
+    "category": "technical",
+    "title": "系统支持不少于200路视频接入",
+    "normalized_requirement": "视频接入能力不少于200路",
+    "mandatory": true,
+    "risk_level": "medium",
+    "quality_level": "silver",
+    "review_status": "reviewed"
+  }
+]

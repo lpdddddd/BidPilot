@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.env
+*.egg-info/
+.eggs/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Data & training outputs
+datasets/raw/*
+datasets/interim/*
+datasets/processed/*
+!datasets/**/.gitkeep
+training/llamafactory/outputs/*
+!training/llamafactory/outputs/.gitkeep
+*.pt
+*.bin
+*.safetensors
+*.gguf
+
+# Secrets & local overrides
+.env
+.env.local
+*.pem
+credentials.json
+
+# Logs
+*.log
+logs/
+
+# Alembic / local DB
+*.db
+*.sqlite3
+
+# Local postgres data
+.pgdata/

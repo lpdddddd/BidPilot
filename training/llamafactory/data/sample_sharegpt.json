@@ -1,0 +1,59 @@
+[
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手。"
+      },
+      {
+        "role": "user",
+        "content": "判断以下条款的类别：投标人须提供有效营业执照。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"category\":\"qualification\",\"mandatory\":true}"
+      }
+    ],
+    "project_id": "demo-project-train-001",
+    "task_type": "requirement_classify",
+    "split_hint": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手。"
+      },
+      {
+        "role": "user",
+        "content": "判断以下条款的类别：投标截止时间为2026年8月1日17:00。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"category\":\"deadline\",\"mandatory\":true}"
+      }
+    ],
+    "project_id": "demo-project-train-002",
+    "task_type": "requirement_classify",
+    "split_hint": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手。"
+      },
+      {
+        "role": "user",
+        "content": "判断以下条款的类别：本项目采用综合评分法。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"category\":\"scoring\",\"mandatory\":false}"
+      }
+    ],
+    "project_id": "demo-project-test-001",
+    "task_type": "requirement_classify",
+    "split_hint": "test"
+  }
+]
