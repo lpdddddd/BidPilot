@@ -1,17 +1,17 @@
 {
-  "after_task_filters": 34324,
+  "after_task_filters": 34325,
   "balance": {
     "after_balance": {
-      "citation_qa": 212,
+      "citation_qa": 213,
       "project_info_extract": 41,
       "qualification_extract": 870,
-      "requirement_classify": 1278,
-      "risk_detect": 913,
+      "requirement_classify": 1279,
+      "risk_detect": 914,
       "scoring_extract": 102,
       "tool_call": 237
     },
     "before_balance": {
-      "citation_qa": 212,
+      "citation_qa": 213,
       "project_info_extract": 41,
       "qualification_extract": 870,
       "requirement_classify": 14819,
@@ -20,14 +20,14 @@
       "tool_call": 237
     },
     "dropped_by_balance": {
-      "requirement_classify": 13541,
-      "risk_detect": 9797
+      "requirement_classify": 13540,
+      "risk_detect": 9796
     },
     "max_ratio_basis": "final_kept_total_with_uncapped_anchor",
     "task_gaps": {
       "citation_qa": {
-        "gap": 80,
-        "have": 212,
+        "gap": 79,
+        "have": 213,
         "note": "insufficient real samples; no cloning allowed",
         "target_count": 292,
         "target_ratio": 0.08
@@ -47,26 +47,26 @@
         "target_ratio": 0.08
       }
     },
-    "total_after": 3653,
-    "total_before": 26991
+    "total_after": 3656,
+    "total_before": 26992
   },
   "bundle_level_distribution": {
-    "level_b": 715,
-    "level_c": 2906
+    "level_b": 716,
+    "level_c": 2908
   },
   "by_task": {
-    "citation_qa": 180,
+    "citation_qa": 181,
     "project_info_extract": 41,
     "qualification_extract": 870,
-    "requirement_classify": 1278,
-    "risk_detect": 913,
+    "requirement_classify": 1279,
+    "risk_detect": 914,
     "scoring_extract": 102,
     "tool_call": 237
   },
   "by_task_quality_level": {
     "citation_qa": {
       "gold": 0,
-      "silver": 180
+      "silver": 181
     },
     "project_info_extract": {
       "gold": 0,
@@ -78,11 +78,11 @@
     },
     "requirement_classify": {
       "gold": 0,
-      "silver": 1278
+      "silver": 1279
     },
     "risk_detect": {
       "gold": 0,
-      "silver": 913
+      "silver": 914
     },
     "scoring_extract": {
       "gold": 0,
@@ -95,7 +95,7 @@
   },
   "by_task_review_status": {
     "citation_qa": {
-      "pending": 180,
+      "pending": 181,
       "rejected": 0,
       "reviewed": 0
     },
@@ -110,12 +110,12 @@
       "reviewed": 0
     },
     "requirement_classify": {
-      "pending": 1278,
+      "pending": 1279,
       "rejected": 0,
       "reviewed": 0
     },
     "risk_detect": {
-      "pending": 913,
+      "pending": 914,
       "rejected": 0,
       "reviewed": 0
     },
@@ -130,20 +130,20 @@
       "reviewed": 0
     }
   },
-  "candidate_raw": 37392,
+  "candidate_raw": 37393,
   "dedup": {
     "conflicting_gold_records": [],
     "cross_project_template_duplicates": 681,
     "exact_duplicates_removed": 6257,
     "near_duplicates_removed": 1076
   },
-  "deduped": 3621,
+  "deduped": 3624,
   "dry_run": false,
-  "effective_trainable_deprecated_alias_of_structurally_valid": 3621,
+  "effective_trainable_deprecated_alias_of_structurally_valid": 3624,
   "evidence_match_unknown_ratio": 0.0,
   "filtered_no_evidence": 0,
   "filters": {
-    "candidate_raw": 37392,
+    "candidate_raw": 37393,
     "filtered_empty_assistant": 0,
     "filtered_exact_dup": 6257,
     "filtered_incomplete_project": 3068,
@@ -152,10 +152,10 @@
     "filtered_no_evidence_match": 0,
     "filtered_null_project_info": 0,
     "filtered_unknown_cap": 0,
-    "with_evidence": 34292,
+    "with_evidence": 34293,
     "without_evidence_kept": 32
   },
-  "gap_to_preferred": 8879,
+  "gap_to_preferred": 8876,
   "gold": 0,
   "note": "reviewed_trainable_sft must be gold+reviewed before formal LoRA",
   "preferred_target": 12500,
@@ -164,26 +164,26 @@
     "missing_source": 32
   },
   "reviewed_trainable_sft": 0,
-  "silver": 3621,
-  "silver_candidate_sft": 3621,
+  "silver": 3624,
+  "silver_candidate_sft": 3624,
   "source_domain_distribution": {
     "record_count": {
-      "download.ccgp.gov.cn": 3462,
+      "download.ccgp.gov.cn": 3465,
       "www.ccgp.gov.cn": 159
     },
     "reference_count": {
-      "download.ccgp.gov.cn": 3471,
+      "download.ccgp.gov.cn": 3475,
       "www.ccgp.gov.cn": 159
     }
   },
   "split_sum_equals_structurally_valid": true,
-  "structurally_valid_sft": 3621,
-  "test": 528,
+  "structurally_valid_sft": 3624,
+  "test": 719,
   "test_projects": 10,
-  "total": 3621,
-  "train": 2418,
-  "train_projects": 26,
-  "validation": 675,
-  "validation_projects": 7,
-  "with_evidence": 34292
+  "total": 3624,
+  "train": 1919,
+  "train_projects": 20,
+  "validation": 986,
+  "validation_projects": 13,
+  "with_evidence": 34293
 }

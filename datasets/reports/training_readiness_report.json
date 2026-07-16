@@ -1,0 +1,98 @@
+{
+  "blocked_gates": [
+    "pilot_reviewed_gold_ge_500: Gold/reviewed_trainable=0 forbidden for training",
+    "pilot_domains_ge_5",
+    "pilot_llamafactory_preprocess: external=blocked_dependency_missing",
+    "formal_reviewed_gold_ge_target",
+    "formal_requirement_matches_with_evidence",
+    "formal_rag_agent_mins",
+    "formal_level_ab",
+    "formal_lf_preprocess"
+  ],
+  "current_metrics": {
+    "agent_tasks": 238,
+    "cross_split_full_scan_ok": true,
+    "gold_requirements": 0,
+    "gold_sft": 0,
+    "level_a": 0,
+    "level_b": 12,
+    "llamafactory_external_status": "blocked_dependency_missing",
+    "llamafactory_internal_ok": true,
+    "llamafactory_preprocess_executed": false,
+    "multi_section_dual_answer_pass": 10,
+    "rag_ok": true,
+    "rag_questions": 215,
+    "rejected_sft": 32,
+    "requirement_matches": 0,
+    "reviewed_trainable_sft": 0,
+    "source_domain_count": 2,
+    "source_domains": [
+      "download.ccgp.gov.cn",
+      "www.ccgp.gov.cn"
+    ],
+    "split_sum_equals_structurally_valid": true,
+    "structurally_valid_sft": 3624,
+    "task_type_count": 7,
+    "task_types": [
+      "citation_qa",
+      "project_info_extract",
+      "qualification_extract",
+      "requirement_classify",
+      "risk_detect",
+      "scoring_extract",
+      "tool_call"
+    ],
+    "test": 719,
+    "train": 1919,
+    "validation": 986,
+    "validation_ok": true
+  },
+  "gates": {
+    "formal_full_cross_split": true,
+    "formal_level_ab": false,
+    "formal_lf_preprocess": false,
+    "formal_rag_agent_mins": false,
+    "formal_requirement_matches_with_evidence": false,
+    "formal_reviewed_gold_ge_target": false,
+    "human_project_split_no_leak": true,
+    "human_rag_quality_ok": true,
+    "human_rejected_excluded_from_splits": true,
+    "human_sft_internal_format_ok": true,
+    "human_structurally_valid_sft": true,
+    "pilot_domains_ge_5": false,
+    "pilot_llamafactory_preprocess": false,
+    "pilot_project_mutex": true,
+    "pilot_reviewed_gold_ge_500": false,
+    "pilot_task_types_ge_5": true
+  },
+  "passed_gates": [
+    "human_structurally_valid_sft",
+    "human_rejected_excluded_from_splits",
+    "human_project_split_no_leak",
+    "human_rag_quality_ok",
+    "human_sft_internal_format_ok",
+    "pilot_task_types_ge_5",
+    "pilot_project_mutex",
+    "formal_full_cross_split"
+  ],
+  "ready_for_formal_lora": false,
+  "ready_for_human_review": true,
+  "ready_for_pilot_lora": false,
+  "recommended_next_action": "Start human review of silver requirements/RAG/Agent/SFT; collect result-class docs for RequirementMatch; install LLaMAFactory and rerun preprocess.",
+  "stage": "ready_for_human_review",
+  "target_metrics": {
+    "formal_agent_min": 300,
+    "formal_level_a_min": 20,
+    "formal_level_b_min": 40,
+    "formal_rag_min": 500,
+    "formal_requirement_matches_min": 1,
+    "formal_reviewed_gold_sft_min": 10000,
+    "pilot_reviewed_gold_sft_min": 500,
+    "pilot_source_domains_min": 5,
+    "pilot_task_types_min": 5
+  },
+  "warnings": [
+    "Gold=0 or reviewed_trainable_sft=0 ⇒ training gates closed",
+    "LLaMAFactory external preprocess not completed (blocked_dependency_missing)"
+  ]
+}

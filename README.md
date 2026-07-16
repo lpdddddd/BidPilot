@@ -97,9 +97,11 @@ make format
 make lint
 make test
 make dataset-test
-make validate-sft          # real train/val/test ShareGPT
-make validate-sft-sample   # sample_sharegpt.json only
-make validate-sft-real     # alias of validate-sft
+make validate-sft-internal     # ShareGPT structure only
+make validate-sft-llamafactory # real LLaMAFactory preprocess (fails if LF missing)
+make validate-sft-real         # internal + LLaMAFactory preprocess
+make validate-sft              # alias of validate-sft-real
+make validate-sft-sample       # sample_sharegpt.json only
 ```
 
 ## 数据流水线：从原始文件到 LLaMAFactory
@@ -154,9 +156,11 @@ python training/llamafactory/scripts/export_sft_dataset.py \
 2. 校验：
 
 ```bash
-make validate-sft          # real train/val/test ShareGPT
-make validate-sft-sample   # sample_sharegpt.json only
-make validate-sft-real     # alias of validate-sft
+make validate-sft-internal     # ShareGPT structure only
+make validate-sft-llamafactory # real LLaMAFactory preprocess (fails if LF missing)
+make validate-sft-real         # internal + LLaMAFactory preprocess
+make validate-sft              # alias of validate-sft-real
+make validate-sft-sample       # sample_sharegpt.json only
 make dataset-validate
 ```
 

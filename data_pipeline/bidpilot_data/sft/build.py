@@ -46,6 +46,79 @@ def _assistant_json(obj: dict[str, Any]) -> str:
     return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
 
 
+def _cluster_projects_by_shared_chunks(
+    records: list[Any],
+    chunks: dict[str, dict[str, Any]],
+) -> dict[str, str]:
+    """Union projects that share exact normalized chunk hashes (potential split leaks).
+
+    Returns mapping project_id -> cluster_root.
+    """
+    import hashlib
+    from bidpilot_data.sft.dedup import normalize_user_text
+
+    parent: dict[str, str] = {}
+
+    def find(x: str) -> str:
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: str, b: str) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    from bidpilot_data.sft.dedup import hamming64, simhash64
+
+    hash_to_projects: dict[str, set[str]] = {}
+    sim_items: list[tuple[int, str, str]] = []  # simhash, norm, pid
+    for r in records:
+        pid = r.project_id if hasattr(r, "project_id") else r.get("project_id")
+        if not pid:
+            continue
+        find(pid)
+        cids = r.source_chunk_ids if hasattr(r, "source_chunk_ids") else (r.get("source_chunk_ids") or [])
+        for cid in cids or []:
+            ch = chunks.get(cid)
+            if not ch:
+                continue
+            text = (ch.get("text") or "").strip()
+            if len(text) < 80:
+                continue
+            norm = normalize_user_text(text)
+            h = hashlib.sha1(norm.encode("utf-8")).hexdigest()
+            hash_to_projects.setdefault(h, set()).add(pid)
+            if len(norm) >= 100:
+                sim_items.append((simhash64(norm), norm[:200], pid))
+    for _h, pids in hash_to_projects.items():
+        if len(pids) < 2:
+            continue
+        root = sorted(pids)[0]
+        for p in pids:
+            union(root, p)
+    # Near-duplicate business chunks across projects (SimHash LSH)
+    buckets: dict[int, list[tuple[int, str, str]]] = {}
+    for sh, norm, pid in sim_items:
+        for b in range(4):
+            key = (b << 16) | ((sh >> (b * 16)) & 0xFFFF)
+            buckets.setdefault(key, []).append((sh, norm, pid))
+    for group in buckets.values():
+        if len(group) < 2:
+            continue
+        for i in range(min(len(group), 40)):
+            for j in range(i + 1, min(len(group), 40)):
+                sh1, n1, p1 = group[i]
+                sh2, n2, p2 = group[j]
+                if p1 == p2:
+                    continue
+                if hamming64(sh1, sh2) <= 2:
+                    union(p1, p2)
+    return {p: find(p) for p in parent}
+
+
 def _split_projects(
     project_ids: list[str],
     seed: int,
@@ -55,49 +128,67 @@ def _split_projects(
     *,
     min_validation: int = 5,
     min_test: int = 10,
+    cluster_of: dict[str, str] | None = None,
 ) -> DatasetSplitManifest:
-    """Project-level split with validation/test floors. Never sample-level random split."""
+    """Project-level split with validation/test floors. Never sample-level random split.
+
+    When cluster_of is provided, all projects in a cluster stay in the same spit.
+    """
     ids = sorted(set(project_ids))
+    cluster_of = cluster_of or {p: p for p in ids}
+    # Build atomic cluster units
+    clusters: dict[str, list[str]] = {}
+    for p in ids:
+        clusters.setdefault(cluster_of.get(p, p), []).append(p)
+    units = sorted(clusters.keys())
     rng = random.Random(seed)
-    rng.shuffle(ids)
-    n = len(ids)
+    rng.shuffle(units)
+    n = len(units)
     if n < min_validation + min_test + 1:
-        # Best-effort: still enforce mutual exclusion; report may flag gaps.
         min_test = min(min_test, max(1, n // 3))
         min_validation = min(min_validation, max(1, (n - min_test) // 3))
     held_n = min(max(heldout, min_test), max(0, n - min_validation - 1))
-    held = ids[:held_n]
-    remain = ids[held_n:]
+    held_units = units[:held_n]
+    remain = units[held_n:]
     n_remain = len(remain)
     n_val = max(min_validation, int(n_remain * val_r))
     n_val = min(n_val, max(0, n_remain - 1))
     n_train = max(0, n_remain - n_val)
-    # Prefer ratio if it still meets floor
     ratio_train = int(n_remain * train_r)
     if ratio_train >= 1 and n_remain - ratio_train >= min_validation:
         n_train = ratio_train
         n_val = n_remain - n_train
-    train = remain[:n_train]
-    val = remain[n_train:]
-    test = sorted(set(held))
-    # Ensure min test by moving from train if needed
-    while len(test) < min_test and train:
-        test.append(train.pop())
-    test = sorted(set(test))
-    while len(val) < min_validation and train:
-        val.append(train.pop())
+    train_u = remain[:n_train]
+    val_u = remain[n_train:]
+    test_u = list(held_units)
+    while len(test_u) < min_test and train_u:
+        test_u.append(train_u.pop())
+    while len(val_u) < min_validation and train_u:
+        val_u.append(train_u.pop())
+
+    def expand(us: list[str]) -> list[str]:
+        out: list[str] = []
+        for u in us:
+            out.extend(clusters.get(u, [u]))
+        return sorted(set(out))
+
+    train = expand(train_u)
+    val = expand(val_u)
+    test = expand(test_u)
+    held = expand(held_units)
     return DatasetSplitManifest(
         seed=seed,
         created_at=datetime.now(timezone.utc),
         train_project_ids=sorted(train),
         validation_project_ids=sorted(val),
-        test_project_ids=test,
+        test_project_ids=sorted(test),
         heldout_project_ids=sorted(held),
         counts={
             "train_projects": len(train),
             "validation_projects": len(val),
             "test_projects": len(test),
-            "total_projects": n,
+            "total_projects": len(ids),
+            "leak_clusters": len(clusters),
         },
     )
 
@@ -581,8 +672,11 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
     ]
     rejected_sft = rejected_rows
 
-    # Project-level split ONLY on structurally valid records
+    # Project-level split ONLY on structurally valid records.
+    # Cluster projects that share identical source chunks so they cannot land in different splits.
     project_ids = [r.project_id for r in structurally_valid if r.project_id and r.project_id != "unknown"]
+    chunk_map = {c["chunk_id"]: c for c in read_jsonl(settings.datasets_root / "interim" / "chunks" / "chunks.jsonl")}
+    cluster_of = _cluster_projects_by_shared_chunks(structurally_valid, chunk_map)
     manifest = _split_projects(
         project_ids,
         seed=seed,
@@ -591,6 +685,7 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
         heldout=int(cfg.get("splits", {}).get("heldout_project_count", 10)),
         min_validation=int(split_cfg.get("min_validation_projects", 5)),
         min_test=int(split_cfg.get("min_test_projects", 10)),
+        cluster_of=cluster_of,
     )
     train_set = set(manifest.train_project_ids)
     val_set = set(manifest.validation_project_ids)
@@ -741,6 +836,75 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
         "reviewed_trainable_sft": len(reviewed_trainable),
         "silver_candidate_sft": len(silver_candidate),
         "rejected_sft": len(rejected_sft),
+    }
+
+    # Repair cross-split severe leaks: collapse multi-split leak components into train.
+    from bidpilot_data.sft.cross_split import (
+        analyze_cross_split_similarity,
+        coalesce_projects_to_split,
+        collect_leaky_project_pairs,
+    )
+
+    moved_n = 0
+
+    def _reassign() -> None:
+        nonlocal splits
+        splits = {"train": [], "validation": [], "test": []}
+        for rec in structurally_valid:
+            if rec.project_id in train_set:
+                rec.split = SplitName.train
+                rec.is_test_project = False
+                splits["train"].append(rec)
+            elif rec.project_id in val_set:
+                rec.split = SplitName.validation
+                splits["validation"].append(rec)
+            else:
+                rec.split = SplitName.test
+                rec.is_test_project = True
+                splits["test"].append(rec)
+        if not dry_run:
+            for name, items in splits.items():
+                write_jsonl(ensure_dir(settings.datasets_root / "sft" / name) / "records.jsonl", items)
+
+    for _ in range(6):
+        _reassign()
+        x = analyze_cross_split_similarity()
+        if x.get("ok"):
+            break
+        pairs = collect_leaky_project_pairs(x)
+        if not pairs:
+            break
+        train_set, val_set, test_set, moved2 = coalesce_projects_to_split(
+            train=set(train_set),
+            validation=set(val_set),
+            test=set(test_set),
+            leak_pairs=pairs,
+        )
+        moved_n += moved2
+
+    _reassign()
+    analyze_cross_split_similarity()
+    manifest.train_project_ids = sorted(train_set)
+    manifest.validation_project_ids = sorted(val_set)
+    manifest.test_project_ids = sorted(test_set)
+    manifest.counts = {
+        **(manifest.counts or {}),
+        "train_projects": len(train_set),
+        "validation_projects": len(val_set),
+        "test_projects": len(test_set),
+        "leak_projects_moved": moved_n,
+    }
+    stats["train"] = len(splits["train"])
+    stats["validation"] = len(splits["validation"])
+    stats["test"] = len(splits["test"])
+    stats["train_projects"] = len(train_set)
+    stats["validation_projects"] = len(val_set)
+    stats["test_projects"] = len(test_set)
+    stats["split_sum_equals_structurally_valid"] = (
+        len(splits["train"]) + len(splits["validation"]) + len(splits["test"]) == len(structurally_valid)
+    )
+    by_split_and_task = {
+        name: dict(Counter(r.task_type.value for r in items)) for name, items in splits.items()
     }
 
     # Per-split distribution report

@@ -1,15 +1,15 @@
 {
   "after_balance": {
-    "citation_qa": 180,
+    "citation_qa": 181,
     "project_info_extract": 41,
     "qualification_extract": 870,
-    "requirement_classify": 1278,
-    "risk_detect": 913,
+    "requirement_classify": 1279,
+    "risk_detect": 914,
     "scoring_extract": 102,
     "tool_call": 237
   },
   "before_balance": {
-    "citation_qa": 212,
+    "citation_qa": 213,
     "project_info_extract": 41,
     "qualification_extract": 870,
     "requirement_classify": 14819,
@@ -18,51 +18,51 @@
     "tool_call": 237
   },
   "bundle_level_distribution": {
-    "level_b": 715,
-    "level_c": 2906
+    "level_b": 716,
+    "level_c": 2908
   },
   "by_split_and_task": {
     "test": {
-      "citation_qa": 34,
-      "project_info_extract": 9,
-      "qualification_extract": 93,
-      "requirement_classify": 174,
-      "risk_detect": 147,
-      "scoring_extract": 16,
-      "tool_call": 55
+      "citation_qa": 48,
+      "project_info_extract": 10,
+      "qualification_extract": 190,
+      "requirement_classify": 285,
+      "risk_detect": 212,
+      "scoring_extract": 45,
+      "tool_call": 54
     },
     "train": {
-      "citation_qa": 135,
-      "project_info_extract": 25,
-      "qualification_extract": 559,
-      "requirement_classify": 865,
-      "risk_detect": 615,
-      "scoring_extract": 75,
-      "tool_call": 144
+      "citation_qa": 71,
+      "project_info_extract": 19,
+      "qualification_extract": 351,
+      "requirement_classify": 509,
+      "risk_detect": 357,
+      "scoring_extract": 24,
+      "tool_call": 106
     },
     "validation": {
-      "citation_qa": 11,
-      "project_info_extract": 7,
-      "qualification_extract": 218,
-      "requirement_classify": 239,
-      "risk_detect": 151,
-      "scoring_extract": 11,
-      "tool_call": 38
+      "citation_qa": 62,
+      "project_info_extract": 12,
+      "qualification_extract": 329,
+      "requirement_classify": 485,
+      "risk_detect": 345,
+      "scoring_extract": 33,
+      "tool_call": 77
     }
   },
   "by_task": {
-    "citation_qa": 180,
+    "citation_qa": 181,
     "project_info_extract": 41,
     "qualification_extract": 870,
-    "requirement_classify": 1278,
-    "risk_detect": 913,
+    "requirement_classify": 1279,
+    "risk_detect": 914,
     "scoring_extract": 102,
     "tool_call": 237
   },
   "by_task_quality_level": {
     "citation_qa": {
       "gold": 0,
-      "silver": 180
+      "silver": 181
     },
     "project_info_extract": {
       "gold": 0,
@@ -74,11 +74,11 @@
     },
     "requirement_classify": {
       "gold": 0,
-      "silver": 1278
+      "silver": 1279
     },
     "risk_detect": {
       "gold": 0,
-      "silver": 913
+      "silver": 914
     },
     "scoring_extract": {
       "gold": 0,
@@ -91,7 +91,7 @@
   },
   "by_task_review_status": {
     "citation_qa": {
-      "pending": 180,
+      "pending": 181,
       "rejected": 0,
       "reviewed": 0
     },
@@ -106,12 +106,12 @@
       "reviewed": 0
     },
     "requirement_classify": {
-      "pending": 1278,
+      "pending": 1279,
       "rejected": 0,
       "reviewed": 0
     },
     "risk_detect": {
-      "pending": 913,
+      "pending": 914,
       "rejected": 0,
       "reviewed": 0
     },
@@ -127,28 +127,28 @@
     }
   },
   "dropped_by_balance": {
-    "requirement_classify": 13541,
-    "risk_detect": 9797
+    "requirement_classify": 13540,
+    "risk_detect": 9796
   },
-  "generated_at": "2026-07-15T16:20:26.033569+00:00",
+  "generated_at": "2026-07-15T17:13:34.112656+00:00",
   "rejected_sft": 32,
   "reviewed_trainable_sft": 0,
-  "silver_candidate_sft": 3621,
+  "silver_candidate_sft": 3624,
   "source_domain_distribution": {
     "record_count": {
-      "download.ccgp.gov.cn": 3462,
+      "download.ccgp.gov.cn": 3465,
       "www.ccgp.gov.cn": 159
     },
     "reference_count": {
-      "download.ccgp.gov.cn": 3471,
+      "download.ccgp.gov.cn": 3475,
       "www.ccgp.gov.cn": 159
     }
   },
-  "structurally_valid_sft": 3621,
+  "structurally_valid_sft": 3624,
   "task_gaps": {
     "citation_qa": {
-      "gap": 80,
-      "have": 212,
+      "gap": 79,
+      "have": 213,
       "note": "insufficient real samples; no cloning allowed",
       "target_count": 292,
       "target_ratio": 0.08

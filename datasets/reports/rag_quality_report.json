@@ -1,9 +1,9 @@
 {
-  "answerable": 182,
+  "answerable": 183,
   "by_type": {
     "commercial": 22,
     "evidence": 10,
-    "multi_section": 9,
+    "multi_section": 10,
     "project_basic": 20,
     "qualification": 48,
     "rejection": 9,
@@ -13,14 +13,20 @@
     "unanswerable": 32
   },
   "dry_run": false,
+  "failed_question_ids": [],
   "leaky_questions": 0,
-  "max_project_share": 0.09813084112149532,
+  "max_project_share": 0.09767441860465116,
+  "multi_section_dual_answer_pass": 10,
+  "multi_section_dual_chunk_pass": 10,
+  "multi_section_dual_source_pass": 10,
+  "multi_section_total": 10,
   "ok": true,
   "ok_max_project_share": true,
+  "ok_multi_section": true,
   "ok_type_coverage": true,
   "ok_unanswerable_band": true,
-  "questions": 214,
+  "questions": 215,
   "target": 300,
   "unanswerable": 32,
-  "unanswerable_ratio": 0.14953271028037382
+  "unanswerable_ratio": 0.14883720930232558
 }

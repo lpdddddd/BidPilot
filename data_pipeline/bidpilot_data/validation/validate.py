@@ -142,24 +142,31 @@ def validate_rag(*, write_report: bool = True) -> dict[str, Any]:
         share = max(_Counter(q.get("project_id") for q in ragqs).values(), default=0) / len(ragqs)
         if share > 0.10 + 1e-9:
             errors.append(f"max_project_share={share:.4f} exceeds 0.10")
-        # multi_section integrity
+        # multi_section integrity (dual chunk, dual source, dual answer parts)
+        from bidpilot_data.rag_eval.build import multi_section_dual_answer_ok
+
         for q in ragqs:
             if q.get("question_type") != "multi_section":
                 continue
+            qid = q.get("question_id")
             cids = q.get("gold_chunk_ids") or []
             quotes = q.get("source_quotes") or []
+            urls = q.get("source_urls") or []
+            pages = q.get("source_pages") or []
+            docs_ids = q.get("source_document_ids") or []
             if len(set(cids)) < 2:
-                errors.append(f"multi_section needs 2 chunks {q.get('question_id')}")
-            if len(quotes) < 2:
-                errors.append(f"multi_section needs 2 quotes {q.get('question_id')}")
+                errors.append(f"multi_section needs 2 chunks {qid}")
+            if len(quotes) < 2 or not all(str(x).strip() for x in quotes[:2]):
+                errors.append(f"multi_section needs 2 non-empty quotes {qid}")
+            if len(urls) < 2 or not urls[0] or not urls[1]:
+                errors.append(f"multi_section missing second source_url {qid}")
+            if len(docs_ids) < 2 or not docs_ids[0] or not docs_ids[1]:
+                errors.append(f"multi_section missing second document_id {qid}")
+            if len(pages) < 2 or not pages[0] or not pages[1]:
+                errors.append(f"multi_section missing page_number {qid}")
             ans = str(q.get("answer") or "")
-            if quotes and ans:
-                ok_both = all(
-                    fuzz.partial_ratio(qq[:80], ans[:500]) >= 40 or (qq[:20] in ans)
-                    for qq in quotes[:2]
-                )
-                if not ok_both:
-                    errors.append(f"multi_section answer missing dual evidence {q.get('question_id')}")
+            if len(quotes) >= 2 and not multi_section_dual_answer_ok(ans, quotes[0], quotes[1]):
+                errors.append(f"multi_section answer not dual-supported {qid}")
 
     report = {
         "ok": not errors,
@@ -402,43 +409,33 @@ def validate_all(*, allow_demo_fixture: bool = False) -> dict[str, Any]:
             errors.append("PORTAL_SNAPSHOT leaked into agent tasks")
             break
 
-    # Approximate document/chunk leakage across train/test via near-duplicate text
-    train_chunk_texts = [
-        chunk_by_id[r.get("source_chunk_ids", [None])[0]]["text"]
-        for r in sft_train
-        if r.get("source_chunk_ids") and r.get("source_chunk_ids")[0] in chunk_by_id
-    ][:200]
-    test_chunk_texts = [
-        chunk_by_id[r.get("source_chunk_ids", [None])[0]]["text"]
-        for r in sft_test
-        if r.get("source_chunk_ids") and r.get("source_chunk_ids")[0] in chunk_by_id
-    ][:200]
-    near_doc = 0
-    for tu in test_chunk_texts:
-        if any(fuzz.token_set_ratio(tu[:500], tr[:500]) >= 98 for tr in train_chunk_texts):
-            near_doc += 1
     from bidpilot_data.sft.cross_split import analyze_cross_split_similarity
+    from bidpilot_data.reporting.training_readiness import build_training_readiness_report
 
     xsim = analyze_cross_split_similarity()
+    if not xsim.get("full_scan"):
+        errors.append("cross_split report missing full_scan=true")
     if not xsim.get("ok"):
         errors.append(
-            f"severe train/test near-duplicates={xsim.get('severe_train_test_near_duplicates')} "
+            "cross-split full-scan gate failed: "
+            f"severe_business={xsim.get('severe_business_overlap')} "
+            f"same_project_or_document={xsim.get('same_project_or_document')} "
+            f"exact_duplicate={xsim.get('exact_duplicate')} "
+            f"fail_count={xsim.get('fail_count')} "
             "(see cross_split_similarity_report.json)"
         )
     if xsim.get("template_overlap"):
-        warnings.append(f"template_overlap train/test={xsim.get('template_overlap')}")
-    if near_doc and xsim.get("severe_train_test_near_duplicates", 0) == 0:
-        warnings.append(f"approx chunk near-duplicates scanned={near_doc} (classified in cross_split report)")
+        warnings.append(f"template_overlap={xsim.get('template_overlap')} (warning only)")
+    if xsim.get("project_leaks"):
+        errors.append(f"project leaks across splits: {xsim.get('project_leaks')}")
 
-    train_users = [next(m["content"] for m in r["messages"] if m["role"] == "user") for r in sft_train[:200]]
-    test_users = [next(m["content"] for m in r["messages"] if m["role"] == "user") for r in sft_test[:200]]
-    near = 0
-    for tu in test_users:
-        if any(fuzz.token_set_ratio(tu, tr) >= 98 for tr in train_users):
-            near += 1
-    if near:
-        warnings.append(f"approx question near-duplicates train/test={near}")
-
+    readiness = build_training_readiness_report()
+    warnings.append(
+        f"training_readiness stage={readiness.get('stage')} "
+        f"human={readiness.get('ready_for_human_review')} "
+        f"pilot={readiness.get('ready_for_pilot_lora')} "
+        f"formal={readiness.get('ready_for_formal_lora')}"
+    )
     for c in chunks:
         if not (c.get("text") or "").strip():
             errors.append(f"empty chunk {c.get('chunk_id')}")
@@ -485,6 +482,19 @@ def validate_all(*, allow_demo_fixture: bool = False) -> dict[str, Any]:
             "unknown_matches": unknown_matches,
             "sft_validation": len(sft_val),
             "validation_projects": len(val_projects),
+        },
+        "cross_split": {
+            "full_scan": xsim.get("full_scan"),
+            "ok": xsim.get("ok"),
+            "severe_business_overlap": xsim.get("severe_business_overlap"),
+            "template_overlap": xsim.get("template_overlap"),
+            "items_scanned": xsim.get("items_scanned"),
+        },
+        "training_readiness": {
+            "stage": readiness.get("stage"),
+            "ready_for_human_review": readiness.get("ready_for_human_review"),
+            "ready_for_pilot_lora": readiness.get("ready_for_pilot_lora"),
+            "ready_for_formal_lora": readiness.get("ready_for_formal_lora"),
         },
     }
     write_json(datasets / "reports" / "validation_report.json", report)

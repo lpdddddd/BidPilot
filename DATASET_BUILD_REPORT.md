@@ -1,6 +1,6 @@
 # BidPilot Dataset Build Report
 
-Generated at: `2026-07-15T16:20:42.961195+00:00`
+Generated at: `2026-07-15T17:22:06.095095+00:00`
 
 ## Policy
 
@@ -53,19 +53,19 @@ Generated at: `2026-07-15T16:20:42.961195+00:00`
 - review_queue (exported CSV source): **10417**
 - Disclosed suppliers: **21**
 - Matches: {'total': 0, 'evidence_supported_matches': 0, 'unknown': 0, 'satisfied': 0, 'missing': 0, 'partially_satisfied': 0, 'uncertain': 0, 'verifiable': 0}
-- RAG questions: **214**
+- RAG questions: **215**
 - Agent tasks: **238** (multi-step=204)
 
 ## SFT Quality Gates
 
-- structurally_valid_sft: **3621**
+- structurally_valid_sft: **3624**
 - reviewed_trainable_sft: **0** (formal LoRA gate)
-- silver_candidate_sft: **3621**
+- silver_candidate_sft: **3624**
 - rejected_sft: **32**
-- split counts: train=2418, validation=675, test=528
-- projects: train=26, validation=7, test=10
-- quality_level: `{'silver': 3621}`
-- review_status: `{'pending': 3621}`
+- split counts: train=1919, validation=986, test=719
+- projects: train=28, validation=5, test=10
+- quality_level: `{'silver': 3624}`
+- review_status: `{'pending': 3624}`
 
 ## Target Gaps (not filled with fiction)
 
@@ -76,14 +76,14 @@ Generated at: `2026-07-15T16:20:42.961195+00:00`
 - finely_annotated: **30** remaining
 - heldout: **0** remaining
 - requirements_gold: **1500** remaining
-- rag_eval: **286** remaining
-- sft: **8879** remaining
+- rag_eval: **285** remaining
+- sft: **8876** remaining
 - sft_source_domains: **3** remaining
 - reviewed_trainable_sft: **500** remaining
 
 ## Human Review TODO
 
-`{'requirements_pending_status': 20724, 'requirements_low_confidence': 10416, 'requirements_review_queue': 10417, 'rag_pending': 214, 'matches_unknown': 0, 'sft_pending': 3621}`
+`{'requirements_pending_status': 20724, 'requirements_low_confidence': 10416, 'requirements_review_queue': 10417, 'rag_pending': 215, 'matches_unknown': 0, 'sft_pending': 3624}`
 
 Validation ok: **True**
 

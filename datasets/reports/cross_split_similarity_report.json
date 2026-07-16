@@ -1,155 +1,43 @@
 {
-  "note": "template_overlap = shared legal/portal boilerplate across distinct projects; severe = near-identical core business clauses (scoring/spec/contract) across train/test.",
+  "candidate_pairs": 83166,
+  "chunks_scanned": 1996,
+  "exact_duplicate": 0,
+  "fail_count": 0,
+  "full_scan": true,
+  "items_scanned": 5620,
+  "kind_counts": {},
+  "note": "full_scan candidate recall via exact-hash + SimHash LSH + n-gram co-occurrence; template_overlap requires low residual similarity after boilerplate strip and low business entities.",
   "ok": true,
-  "pair_count": 8,
-  "pairs": [
-    {
-      "kind": "template_overlap",
-      "similarity": 100.0,
-      "test": {
-        "chunk_id": "dd5eaac2-4a7b-5d4b-9eaa-c133cf3bb396",
-        "document_id": "b82e131e-90aa-54fd-af6c-69ab8471a865",
-        "project_id": "fe74ac2a-c1b8-592b-a6d0-f5a5e13198e2",
-        "record_id": "4247311b-4058-52da-b089-8a452d4a6a69",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=E1DC0313CC7F91148EA0AB8DCA8328"
-      },
-      "train": {
-        "chunk_id": "a985ab5c-73ec-5019-aa5d-462c0e5b2f53",
-        "document_id": "3f4435d7-296d-51b0-97e3-cb9843961107",
-        "project_id": "e4a298f5-8013-5617-8983-ac96e54d32fc",
-        "record_id": "670932b6-8926-505a-9419-8e7ddc1a35a3",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=E813CFD40627B2B581B7544BAD41EE"
-      }
-    },
-    {
-      "kind": "template_overlap",
-      "similarity": 100.0,
-      "test": {
-        "chunk_id": "9b171a29-5a6e-570d-98e9-63bb21b32f14",
-        "document_id": "b82e131e-90aa-54fd-af6c-69ab8471a865",
-        "project_id": "fe74ac2a-c1b8-592b-a6d0-f5a5e13198e2",
-        "record_id": "72d7e25d-6da6-539b-901d-71f2d267f6c3",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=E1DC0313CC7F91148EA0AB8DCA8328"
-      },
-      "train": {
-        "chunk_id": "1f31ff77-d934-5432-beb4-fc0d46e69a46",
-        "document_id": "65183fb2-a971-5b5c-8566-bad9077091f9",
-        "project_id": "9d3c2112-d8de-5505-b6fd-5accc23af170",
-        "record_id": "35419b9d-fbe7-593d-8aef-8635fa73308b",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=9F76677F791FEBDAC6DE4FA6697072"
-      }
-    },
-    {
-      "kind": "template_overlap",
-      "similarity": 100.0,
-      "test": {
-        "chunk_id": "92e0e385-fc3a-5a96-ab38-168ef5492b3c",
-        "document_id": "b82e131e-90aa-54fd-af6c-69ab8471a865",
-        "project_id": "fe74ac2a-c1b8-592b-a6d0-f5a5e13198e2",
-        "record_id": "312e34ba-0590-5366-accb-8318bc9909dd",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=E1DC0313CC7F91148EA0AB8DCA8328"
-      },
-      "train": {
-        "chunk_id": "19daeb3e-2bc7-5feb-a614-af8fe07be5a4",
-        "document_id": "3f4435d7-296d-51b0-97e3-cb9843961107",
-        "project_id": "e4a298f5-8013-5617-8983-ac96e54d32fc",
-        "record_id": "0bfd7ea1-fa4c-5339-ace4-5146ca0d24d7",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=E813CFD40627B2B581B7544BAD41EE"
-      }
-    },
-    {
-      "kind": "template_overlap",
-      "similarity": 100.0,
-      "test": {
-        "chunk_id": "92e0e385-fc3a-5a96-ab38-168ef5492b3c",
-        "document_id": "b82e131e-90aa-54fd-af6c-69ab8471a865",
-        "project_id": "fe74ac2a-c1b8-592b-a6d0-f5a5e13198e2",
-        "record_id": "312e34ba-0590-5366-accb-8318bc9909dd",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=E1DC0313CC7F91148EA0AB8DCA8328"
-      },
-      "train": {
-        "chunk_id": "df6f83dc-75f4-572f-a522-98d83927f5d1",
-        "document_id": "65183fb2-a971-5b5c-8566-bad9077091f9",
-        "project_id": "9d3c2112-d8de-5505-b6fd-5accc23af170",
-        "record_id": "2e0785cc-2ac5-5803-948b-29a6b8e22012",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=9F76677F791FEBDAC6DE4FA6697072"
-      }
-    },
-    {
-      "kind": "template_overlap",
-      "similarity": 99.65237543453071,
-      "test": {
-        "chunk_id": "1c60e3fa-775f-5c24-a132-37668aec58e8",
-        "document_id": "8bbac12b-956a-5339-869e-d53100e6a048",
-        "project_id": "20e306bd-ec4f-59ad-b37c-539c3def5a23",
-        "record_id": "395cd70c-5b4f-5572-a97b-cbaf1a57f346",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=9E4AEF2F5B6EFCBEF684CA8CE1E62A"
-      },
-      "train": {
-        "chunk_id": "62a49a14-1fad-5a09-91f8-66ce635ed08f",
-        "document_id": "517a2645-c3f8-58b4-96d1-9df9b8fb33bf",
-        "project_id": "a7d6ce61-4750-5d49-b5ed-6025ffce8715",
-        "record_id": "13f8adfe-a556-596a-949b-002cb27b4114",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=AC86BDC3A8A3000400231390B106C3"
-      }
-    },
-    {
-      "kind": "template_overlap",
-      "similarity": 100.0,
-      "test": {
-        "chunk_id": "1a0e43fa-5ee4-5d3d-8278-bb9d38d4a15b",
-        "document_id": "b82e131e-90aa-54fd-af6c-69ab8471a865",
-        "project_id": "fe74ac2a-c1b8-592b-a6d0-f5a5e13198e2",
-        "record_id": "c51e200b-c01f-54ba-896f-c803bee4e7a8",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=E1DC0313CC7F91148EA0AB8DCA8328"
-      },
-      "train": {
-        "chunk_id": "b0287e4f-ec3b-593d-8434-5f8c849a1651",
-        "document_id": "65183fb2-a971-5b5c-8566-bad9077091f9",
-        "project_id": "9d3c2112-d8de-5505-b6fd-5accc23af170",
-        "record_id": "11431601-0a84-50a1-8312-098901ceaba6",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=9F76677F791FEBDAC6DE4FA6697072"
-      }
-    },
-    {
-      "kind": "template_overlap",
-      "similarity": 100.0,
-      "test": {
-        "chunk_id": "3bc24edb-183e-5938-ac84-65707044fe61",
-        "document_id": "b82e131e-90aa-54fd-af6c-69ab8471a865",
-        "project_id": "fe74ac2a-c1b8-592b-a6d0-f5a5e13198e2",
-        "record_id": "c51e200b-c01f-54ba-896f-c803bee4e7a8",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=E1DC0313CC7F91148EA0AB8DCA8328"
-      },
-      "train": {
-        "chunk_id": "6c3b85c1-3e81-5535-978c-94369b692be6",
-        "document_id": "3f4435d7-296d-51b0-97e3-cb9843961107",
-        "project_id": "e4a298f5-8013-5617-8983-ac96e54d32fc",
-        "record_id": "27e5a107-fb32-5844-9dc2-351b7e7d1edb",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=E813CFD40627B2B581B7544BAD41EE"
-      }
-    },
-    {
-      "kind": "template_overlap",
-      "similarity": 100.0,
-      "test": {
-        "chunk_id": "b2b958b5-3322-5a7a-8db3-0e75d969184b",
-        "document_id": "b82e131e-90aa-54fd-af6c-69ab8471a865",
-        "project_id": "fe74ac2a-c1b8-592b-a6d0-f5a5e13198e2",
-        "record_id": "fd6a4867-6c38-506e-a23a-3b57e469a36d",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=E1DC0313CC7F91148EA0AB8DCA8328"
-      },
-      "train": {
-        "chunk_id": "2e8da43e-952b-5972-9d92-9e301c325af2",
-        "document_id": "65183fb2-a971-5b5c-8566-bad9077091f9",
-        "project_id": "9d3c2112-d8de-5505-b6fd-5accc23af170",
-        "record_id": "2509045d-25a7-5eed-8ef1-41ec18082982",
-        "source_url": "https://download.ccgp.gov.cn/oss/download?uuid=9F76677F791FEBDAC6DE4FA6697072"
-      }
-    }
-  ],
+  "pair_count": 0,
+  "pairs": [],
+  "precise_comparisons": 83166,
+  "project_leaks": [],
   "same_project_or_document": 0,
+  "severe_business_overlap": 0,
   "severe_train_test_near_duplicates": 0,
-  "template_overlap": 8,
-  "threshold": 98
+  "split_stats": {
+    "test": {
+      "chunks": 387,
+      "documents": 21,
+      "items": 1106,
+      "projects": 10,
+      "records": 719
+    },
+    "train": {
+      "chunks": 1098,
+      "documents": 61,
+      "items": 3017,
+      "projects": 28,
+      "records": 1919
+    },
+    "validation": {
+      "chunks": 511,
+      "documents": 17,
+      "items": 1497,
+      "projects": 5,
+      "records": 986
+    }
+  },
+  "template_overlap": 0,
+  "threshold": 95
 }

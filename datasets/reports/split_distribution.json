@@ -3,97 +3,97 @@
     "test_projects_below_10": 0,
     "validation_projects_below_5": 0
   },
-  "generated_at": "2026-07-15T16:20:26.033596+00:00",
+  "generated_at": "2026-07-15T17:17:17.201457+00:00",
   "test": {
     "bundle_level": {
-      "level_b": 5,
-      "level_c": 5
+      "level_b": 3,
+      "level_c": 7
     },
     "industry": {
-      "cybersecurity": 40,
-      "hardware_equipment": 154,
-      "unknown": 334
+      "cloud_service": 104,
+      "consulting_service": 267,
+      "information_system_maintenance": 5,
+      "non_it": 161,
+      "unknown": 182
     },
     "project_count": 10,
     "quality_level": {
-      "silver": 528
+      "silver": 719
     },
-    "record_count": 528,
+    "record_count": 719,
     "source_domain": {
-      "download.ccgp.gov.cn": 467,
-      "www.ccgp.gov.cn": 21
+      "download.ccgp.gov.cn": 643,
+      "www.ccgp.gov.cn": 38
     },
     "task_type": {
-      "citation_qa": 34,
-      "project_info_extract": 9,
-      "qualification_extract": 93,
-      "requirement_classify": 174,
-      "risk_detect": 147,
-      "scoring_extract": 16,
-      "tool_call": 55
+      "citation_qa": 47,
+      "project_info_extract": 10,
+      "qualification_extract": 144,
+      "requirement_classify": 241,
+      "risk_detect": 188,
+      "scoring_extract": 38,
+      "tool_call": 51
     }
   },
   "train": {
     "bundle_level": {
-      "level_b": 4,
-      "level_c": 22
+      "level_b": 6,
+      "level_c": 13
     },
     "industry": {
-      "cloud_service": 104,
-      "consulting_service": 654,
-      "cybersecurity": 127,
+      "consulting_service": 225,
+      "cybersecurity": 167,
       "data_governance": 14,
-      "information_system_maintenance": 5,
-      "non_it": 161,
-      "system_integration": 64,
-      "unknown": 1289
+      "hardware_equipment": 155,
+      "non_it": 223,
+      "unknown": 648
     },
-    "project_count": 26,
+    "project_count": 19,
     "quality_level": {
-      "silver": 2418
+      "silver": 1432
     },
-    "record_count": 2418,
+    "record_count": 1432,
     "source_domain": {
-      "download.ccgp.gov.cn": 2199,
-      "www.ccgp.gov.cn": 105
+      "download.ccgp.gov.cn": 1288,
+      "www.ccgp.gov.cn": 67
     },
     "task_type": {
-      "citation_qa": 135,
-      "project_info_extract": 25,
-      "qualification_extract": 559,
-      "requirement_classify": 865,
-      "risk_detect": 615,
-      "scoring_extract": 75,
-      "tool_call": 144
+      "citation_qa": 71,
+      "project_info_extract": 18,
+      "qualification_extract": 351,
+      "requirement_classify": 509,
+      "risk_detect": 357,
+      "scoring_extract": 24,
+      "tool_call": 102
     }
   },
   "validation": {
     "bundle_level": {
       "level_b": 3,
-      "level_c": 4
+      "level_c": 11
     },
     "industry": {
-      "consulting_service": 9,
-      "non_it": 223,
-      "unknown": 443
+      "consulting_service": 172,
+      "system_integration": 64,
+      "unknown": 1237
     },
-    "project_count": 7,
+    "project_count": 14,
     "quality_level": {
-      "silver": 675
+      "silver": 1473
     },
-    "record_count": 675,
+    "record_count": 1473,
     "source_domain": {
-      "download.ccgp.gov.cn": 614,
-      "www.ccgp.gov.cn": 33
+      "download.ccgp.gov.cn": 1352,
+      "www.ccgp.gov.cn": 54
     },
     "task_type": {
-      "citation_qa": 11,
-      "project_info_extract": 7,
-      "qualification_extract": 218,
-      "requirement_classify": 239,
-      "risk_detect": 151,
-      "scoring_extract": 11,
-      "tool_call": 38
+      "citation_qa": 63,
+      "project_info_extract": 13,
+      "qualification_extract": 375,
+      "requirement_classify": 529,
+      "risk_detect": 369,
+      "scoring_extract": 40,
+      "tool_call": 84
     }
   }
 }

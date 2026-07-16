@@ -282,6 +282,15 @@ def build_reports() -> dict[str, Any]:
         stats["parse_status_counts"][st] = stats["parse_status_counts"].get(st, 0) + 1
 
     write_json(root / "reports" / "dataset_statistics.json", stats)
+    from bidpilot_data.reporting.training_readiness import build_training_readiness_report
+
+    readiness = build_training_readiness_report()
+    stats["training_readiness"] = {
+        "stage": readiness.get("stage"),
+        "ready_for_human_review": readiness.get("ready_for_human_review"),
+        "ready_for_pilot_lora": readiness.get("ready_for_pilot_lora"),
+        "ready_for_formal_lora": readiness.get("ready_for_formal_lora"),
+    }
     manifest = {
         "generated_at": stats["generated_at"],
         "artifacts": {
@@ -297,10 +306,14 @@ def build_reports() -> dict[str, Any]:
             "task_distribution": "datasets/reports/task_distribution.json",
             "dedup_report": "datasets/reports/dedup_report.json",
             "split_distribution": "datasets/reports/split_distribution.json",
+            "training_readiness": "datasets/reports/training_readiness_report.json",
+            "cross_split_similarity": "datasets/reports/cross_split_similarity_report.json",
+            "llamafactory_real_validation": "datasets/reports/llamafactory_real_validation.json",
         },
         "gaps": stats["gaps"],
         "bundle_levels": stats["bundle_levels"],
         "domain_diversity": stats["domain_diversity"],
+        "training_readiness": stats["training_readiness"],
     }
     write_json(root / "reports" / "build_manifest.json", manifest)
 

@@ -4,6 +4,8 @@ import re
 from collections import Counter, defaultdict
 from typing import Any
 
+from rapidfuzz import fuzz
+
 from bidpilot_data.logging import get_logger, log_stats
 from bidpilot_data.schemas import (
     ChunkRecord,
@@ -17,6 +19,48 @@ from bidpilot_data.settings import get_settings
 from bidpilot_data.utils import ensure_dir, read_jsonl, stable_uuid, write_json, write_jsonl
 
 log = get_logger(__name__)
+
+
+def _norm(text: str) -> str:
+    return re.sub(r"\s+", "", text or "")
+
+
+def split_multi_section_answer(answer: str) -> tuple[str, str] | None:
+    """Split combined multi_section answer into two evidence-backed parts."""
+    a = (answer or "").strip()
+    if not a:
+        return None
+    for sep in ("；另方面，", ";另方面，", "；另一方面，", "。另方面，", "；另外，"):
+        if sep in a:
+            p1, p2 = a.split(sep, 1)
+            if p1.strip() and p2.strip():
+                return p1.strip(), p2.strip()
+    # Fallback: middle split if two sentences
+    parts = re.split(r"[；;。]", a)
+    parts = [p.strip() for p in parts if p.strip()]
+    if len(parts) >= 2:
+        return parts[0], parts[1]
+    return None
+
+
+def multi_section_dual_answer_ok(answer: str, quote1: str, quote2: str) -> bool:
+    """Each answer part must be supported by the corresponding quote (not only concat overlap)."""
+    parts = split_multi_section_answer(answer)
+    if not parts:
+        return False
+    a1, a2 = parts
+    q1, q2 = (quote1 or "").strip(), (quote2 or "").strip()
+    if not q1 or not q2:
+        return False
+
+    def supported(part: str, quote: str) -> bool:
+        if not part or not quote:
+            return False
+        if _norm(part[:24]) in _norm(quote) or _norm(quote[:24]) in _norm(part):
+            return True
+        return fuzz.partial_ratio(part[:120], quote[:400]) >= 55
+
+    return supported(a1, q1) and supported(a2, q2)
 
 # Scenario templates close to real procurement IT/ops projects (must pass corpus absence check).
 UNANSWERABLE_TEMPLATES = [
@@ -89,10 +133,6 @@ TYPE_RATIOS = {
     QuestionType.evidence: 0.05,
     QuestionType.multi_section: 0.05,
 }
-
-
-def _norm(text: str) -> str:
-    return re.sub(r"\s+", "", text or "")
 
 
 def _longest_common_substr_len(a: str, b: str) -> int:
@@ -547,15 +587,24 @@ def build_rag_eval(*, dry_run: bool = False, limit: int | None = 300) -> dict[st
             continue
         src1 = (docs.get(c1.document_id) or {}).get("source_url")
         src2 = (docs.get(c2.document_id) or {}).get("source_url")
-        if not src1:
+        # Both sources required (document_id/chunk_id/url/page/quote)
+        if not src1 or not src2:
+            continue
+        if not c1.document_id or not c2.document_id:
+            continue
+        if not c1.page_start or not c2.page_start:
+            continue
+        path_a = (c1.section_path or "") or f"doc:{c1.document_id}:p{c1.page_start}"
+        path_b = (c2.section_path or "") or f"doc:{c2.document_id}:p{c2.page_start}"
+        if path_a == path_b:
             continue
         a1 = _answer_from_quote(q1, c1.text)
         a2 = _answer_from_quote(q2, c2.text)
         if not a1 or not a2:
             continue
-        # Combined answer must cover both evidence spans
+        # Combined answer must cover both evidence spans with per-part support
         answer = f"{a1.rstrip('。；;')}；另方面，{a2}"
-        if _norm(a1[:24]) not in _norm(answer) or _norm(a2[:24]) not in _norm(answer):
+        if not multi_section_dual_answer_ok(answer, q1, q2):
             continue
         questions.append(
             RAGQuestion(
@@ -567,8 +616,8 @@ def build_rag_eval(*, dry_run: bool = False, limit: int | None = 300) -> dict[st
                 gold_chunk_ids=[c1.chunk_id, c2.chunk_id],
                 gold_document_ids=[c1.document_id, c2.document_id],
                 source_document_ids=[c1.document_id, c2.document_id],
-                source_urls=[u for u in [src1, src2] if u],
-                source_pages=[c1.page_start, c2.page_start],
+                source_urls=[src1, src2],
+                source_pages=[int(c1.page_start), int(c2.page_start)],
                 source_quotes=[q1[:220], q2[:220]],
                 question_type=QuestionType.multi_section,
                 difficulty=Difficulty.hard,
@@ -828,7 +877,58 @@ def build_rag_eval(*, dry_run: bool = False, limit: int | None = 300) -> dict[st
     type_coverage_ok = sum(1 for t in TYPE_RATIOS if by_type.get(t.value, 0) > 0) >= 6
     ok_band = 0.10 <= unans_ratio <= 0.15 if final else False
     ok_share = max_share <= 0.10 + 1e-9 if final else False
-    ok = bool(final) and leak_n == 0 and ok_band and ok_share and type_coverage_ok
+
+    multi_failed: list[dict[str, str]] = []
+    multi_total = 0
+    multi_dual_chunk = 0
+    multi_dual_source = 0
+    multi_dual_answer = 0
+    chunk_lookup = {c.chunk_id: c for c in chunks_all}
+    for q in final:
+        if q.question_type != QuestionType.multi_section:
+            continue
+        multi_total += 1
+        cids = q.gold_chunk_ids or []
+        quotes = q.source_quotes or []
+        urls = q.source_urls or []
+        pages = q.source_pages or []
+        docs_ids = q.source_document_ids or []
+        reasons: list[str] = []
+        if len(set(cids)) >= 2:
+            multi_dual_chunk += 1
+        else:
+            reasons.append("need_two_distinct_chunks")
+        paths = []
+        for cid in cids[:2]:
+            ch = chunk_lookup.get(cid)
+            if ch:
+                paths.append((ch.section_path or "") or f"doc:{ch.document_id}:p{ch.page_start}")
+        if len(paths) == 2 and paths[0] == paths[1]:
+            reasons.append("same_section_path")
+        if (
+            len(urls) >= 2
+            and all(urls[:2])
+            and len(docs_ids) >= 2
+            and all(docs_ids[:2])
+            and len(pages) >= 2
+            and all(pages[:2])
+            and len(quotes) >= 2
+            and all(q.strip() for q in quotes[:2])
+        ):
+            multi_dual_source += 1
+        else:
+            reasons.append("missing_second_source_fields")
+        if len(quotes) >= 2 and multi_section_dual_answer_ok(q.answer or "", quotes[0], quotes[1]):
+            multi_dual_answer += 1
+        else:
+            reasons.append("answer_not_dual_supported")
+        if reasons:
+            multi_failed.append({"question_id": q.question_id, "reason": ";".join(reasons)})
+
+    ok_multi = multi_total == 0 or (
+        multi_dual_chunk == multi_total and multi_dual_source == multi_total and multi_dual_answer == multi_total
+    )
+    ok = bool(final) and leak_n == 0 and ok_band and ok_share and type_coverage_ok and ok_multi
 
     quality_report = {
         "questions": len(final),
@@ -843,6 +943,12 @@ def build_rag_eval(*, dry_run: bool = False, limit: int | None = 300) -> dict[st
         "ok_unanswerable_band": ok_band,
         "ok_max_project_share": ok_share,
         "ok_type_coverage": type_coverage_ok,
+        "multi_section_total": multi_total,
+        "multi_section_dual_chunk_pass": multi_dual_chunk,
+        "multi_section_dual_source_pass": multi_dual_source,
+        "multi_section_dual_answer_pass": multi_dual_answer,
+        "failed_question_ids": multi_failed[:50],
+        "ok_multi_section": ok_multi,
         "ok": ok,
     }
 
