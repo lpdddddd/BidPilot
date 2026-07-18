@@ -3,6 +3,7 @@ import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { getProject } from "../api/client";
+import DocumentCenter from "../features/documents/DocumentCenter";
 import type { Project } from "../types/api";
 import { usePageTitle } from "../components/usePageTitle";
 
@@ -113,7 +114,7 @@ export default function ProjectDetailPage() {
             {
               key: "documents",
               label: "文档中心",
-              children: <PendingCapability title="文档中心" step="第 3 步（文件上传与解析）" />,
+              children: <DocumentCenter projectId={project.id} />,
             },
             {
               key: "search",

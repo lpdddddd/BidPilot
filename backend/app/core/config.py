@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
 
     # Comma-separated list of allowed CORS origins for the dev frontend.
-    # "*" keeps local development friction-free; tighten before any deployment.
-    cors_origins: str = "*"
+    # Never defaults to "*": explicit localhost origins only.
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     database_url: str = "postgresql+psycopg://bidpilot:change_me_postgres@localhost:5432/bidpilot"
 
@@ -47,14 +47,22 @@ class Settings(BaseSettings):
         "text/plain",
         "application/json",
     )
+    # Extensions accepted by the upload endpoint; parsing support may still
+    # mark a file failed/ocr_required after inspection.
+    allowed_upload_extensions: tuple[str, ...] = (
+        "pdf",
+        "docx",
+        "txt",
+        "html",
+        "htm",
+        "xlsx",
+    )
+    presigned_url_expire_seconds: int = 15 * 60
 
 
     @property
     def cors_origins_list(self) -> list[str]:
-        raw = self.cors_origins.strip()
-        if not raw or raw == "*":
-            return ["*"]
-        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache

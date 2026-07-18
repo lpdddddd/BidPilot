@@ -17,7 +17,7 @@ const CAPABILITY_STAGES: CapabilityStage[] = [
   { name: "文件解析", status: "pending", note: "招标文件上传与结构化解析，第 3 步接入" },
   { name: "RAG 检索", status: "pending", note: "向量检索与证据引用，第 4～5 步接入" },
   { name: "智能审查 Agent", status: "pending", note: "合规规则与工作流审查，第 6～10 步接入" },
-  { name: "LoRA 领域模型", status: "pending", note: "领域微调模型，第 11 步接入" },
+  { name: "LoRA 领域模型", status: "pending", note: "领域微调模型，第 14 步接入" },
 ];
 
 export default function DashboardPage() {

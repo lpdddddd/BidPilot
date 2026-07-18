@@ -30,19 +30,61 @@ export type ProjectCreatePayload = {
   region?: string;
 };
 
+export type ParseStatus =
+  | "pending"
+  | "processing"
+  | "success"
+  | "partial"
+  | "ocr_required"
+  | "failed";
+
+export type DocumentMetadata = {
+  parser_name?: string;
+  parser_version?: string;
+  parsed_at?: string;
+  source_sha256?: string;
+  extracted_text_storage_key?: string | null;
+  extracted_characters?: number | null;
+  parse_error?: string | null;
+  original_file_name?: string;
+};
+
 export type DocumentItem = {
   id: string;
   project_id: string;
+  organization_id: string;
   file_name: string;
   document_type: string;
-  parse_status: string;
+  parse_status: ParseStatus;
   mime_type?: string | null;
+  sha256?: string | null;
+  file_size?: number | null;
+  page_count?: number | null;
+  is_scanned: boolean;
+  metadata_json?: DocumentMetadata | null;
   created_at: string;
+  updated_at: string;
 };
 
 export type DocumentListResponse = {
   items: DocumentItem[];
   total: number;
+};
+
+export type DocumentPreviewResponse = {
+  document_id: string;
+  parse_status: ParseStatus;
+  page_count: number | null;
+  extracted_characters: number | null;
+  preview: string;
+  truncated: boolean;
+  max_chars: number;
+};
+
+export type DocumentDownloadResponse = {
+  download_url: string;
+  expires_in_seconds: number;
+  file_name: string;
 };
 
 export type HealthResponse = {

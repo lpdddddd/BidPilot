@@ -45,3 +45,19 @@ class DocumentRead(BaseModel):
 class DocumentListResponse(BaseModel):
     items: list[DocumentRead]
     total: int
+
+
+class DocumentPreviewResponse(BaseModel):
+    document_id: UUID
+    parse_status: ParseStatus
+    page_count: int | None
+    extracted_characters: int | None
+    preview: str
+    truncated: bool
+    max_chars: int
+
+
+class DocumentDownloadResponse(BaseModel):
+    download_url: str
+    expires_in_seconds: int
+    file_name: str

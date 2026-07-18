@@ -37,6 +37,7 @@ class ParseStatus(StrEnum):
     processing = "processing"
     success = "success"
     partial = "partial"
+    ocr_required = "ocr_required"
     failed = "failed"
 
 

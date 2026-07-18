@@ -90,6 +90,18 @@ make backend    # http://localhost:8000/docs
 make frontend   # http://localhost:5173
 ```
 
+## 文档上传与解析
+
+前置条件：PostgreSQL 已迁移（`make migrate`）、MinIO 可用（`make infra-up` 或本地 MinIO，
+bucket 由 compose 的 minio-init 自动创建；`.env` 中配置 `MINIO_*`）。
+
+- 上传入口：项目详情页「文档中心」，或 `POST /api/v1/projects/{id}/documents/upload`
+- 支持格式：PDF、DOCX、TXT、HTML/HTM、XLSX（单文件默认最大 50MB）
+- 不支持自动解析：DOC、WPS；扫描 PDF 会如实标记为 `ocr_required`（OCR 后续步骤接入）
+- 解析状态：`pending → processing → success / ocr_required / failed`，失败可在 UI 重新解析
+- 原文与解析文本均存 MinIO：`projects/{project_id}/documents/{document_id}/{original,parsed}/...`
+- 预览接口只返回前 N 字符（默认 5000）；下载走 MinIO 预签名 URL，密钥不暴露给前端
+
 ## 测试 / 静态检查
 
 ```bash

@@ -20,10 +20,12 @@ app = FastAPI(
     description="BidPilot API - tender analysis and compliance review scaffold",
 )
 
+# No cookie/session auth yet, so credentials stay disabled; origins come from
+# CORS_ORIGINS (comma-separated) and never default to "*".
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
