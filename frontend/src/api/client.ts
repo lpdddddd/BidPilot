@@ -1,75 +1,40 @@
-import axios from "axios";
+import { http } from "./http";
+import type {
+  DocumentListResponse,
+  HealthResponse,
+  Project,
+  ProjectCreatePayload,
+  ProjectListResponse,
+  ReadyResponse,
+} from "../types/api";
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || "";
-
-export const api = axios.create({
-  baseURL,
-  timeout: 15000,
-});
-
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const detail =
-      error.response?.data?.detail ||
-      error.message ||
-      "请求失败，请稍后重试";
-    return Promise.reject(new Error(typeof detail === "string" ? detail : JSON.stringify(detail)));
-  },
-);
-
-export type Project = {
-  id: string;
-  organization_id: string;
-  project_code: string;
-  project_name: string;
-  purchaser?: string | null;
-  procurement_agency?: string | null;
-  procurement_method?: string | null;
-  industry?: string | null;
-  region?: string | null;
-  budget_cny?: string | null;
-  price_ceiling_cny?: string | null;
-  bid_deadline?: string | null;
-  status: string;
-  metadata_json?: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
-};
-
-export type DocumentItem = {
-  id: string;
-  project_id: string;
-  file_name: string;
-  document_type: string;
-  parse_status: string;
-  mime_type?: string | null;
-  created_at: string;
-};
-
-export async function listProjects() {
-  const { data } = await api.get<{ items: Project[]; total: number }>("/api/v1/projects");
+export async function getHealth(): Promise<HealthResponse> {
+  const { data } = await http.get<HealthResponse>("/health");
   return data;
 }
 
-export async function createProject(payload: {
-  project_code: string;
-  project_name: string;
-  purchaser?: string;
-  industry?: string;
-  region?: string;
-}) {
-  const { data } = await api.post<Project>("/api/v1/projects", payload);
+export async function getReady(): Promise<ReadyResponse> {
+  const { data } = await http.get<ReadyResponse>("/ready");
   return data;
 }
 
-export async function getProject(projectId: string) {
-  const { data } = await api.get<Project>(`/api/v1/projects/${projectId}`);
+export async function listProjects(): Promise<ProjectListResponse> {
+  const { data } = await http.get<ProjectListResponse>("/api/v1/projects");
   return data;
 }
 
-export async function listDocuments(projectId: string) {
-  const { data } = await api.get<{ items: DocumentItem[]; total: number }>(
+export async function createProject(payload: ProjectCreatePayload): Promise<Project> {
+  const { data } = await http.post<Project>("/api/v1/projects", payload);
+  return data;
+}
+
+export async function getProject(projectId: string): Promise<Project> {
+  const { data } = await http.get<Project>(`/api/v1/projects/${projectId}`);
+  return data;
+}
+
+export async function listDocuments(projectId: string): Promise<DocumentListResponse> {
+  const { data } = await http.get<DocumentListResponse>(
     `/api/v1/projects/${projectId}/documents`,
   );
   return data;

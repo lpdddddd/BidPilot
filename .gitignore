@@ -102,3 +102,6 @@ logs/
 
 # Local postgres data
 .pgdata/
+
+# TypeScript incremental build info
+*.tsbuildinfo

@@ -1,0 +1,158 @@
+@import url("https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap");
+
+:root {
+  /* BidPilot design tokens: graphite/ink blue shell, warm-white content, cyan AI accent */
+  --bp-ink-950: #0c1622;
+  --bp-ink-900: #102138;
+  --bp-ink-800: #16304f;
+  --bp-ink-700: #1f4370;
+  --bp-primary: #1f4e79;
+  --bp-accent: #13c2c2;
+  --bp-surface: #f4f6f8;
+  --bp-panel: #ffffff;
+  --bp-text: #1c2b3a;
+  --bp-text-muted: #5b6b7c;
+  --bp-border: #e3e8ee;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  color: var(--bp-text);
+  font-family: "Source Sans 3", "Noto Sans SC", -apple-system, "PingFang SC", sans-serif;
+  background: var(--bp-surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+.bp-shell {
+  min-height: 100vh;
+}
+
+.bp-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+}
+
+.bp-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 64px;
+  padding: 0 20px;
+  color: #f4f7fa;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.bp-logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--bp-ink-700), var(--bp-accent));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.bp-sider-footer {
+  margin-top: auto;
+  padding: 16px 20px;
+  color: rgba(244, 247, 250, 0.45);
+  font-size: 12px;
+  line-height: 1.6;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.bp-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 64px;
+  padding: 0 24px;
+  background: var(--bp-panel);
+  border-bottom: 1px solid var(--bp-border);
+}
+
+.bp-topbar-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--bp-text);
+}
+
+.bp-topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.bp-content {
+  padding: 24px;
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.bp-page-header {
+  margin-bottom: 20px;
+}
+
+.bp-page-title {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--bp-text);
+}
+
+.bp-page-subtitle {
+  margin: 0;
+  color: var(--bp-text-muted);
+  font-size: 14px;
+  max-width: 65ch;
+}
+
+.bp-panel {
+  background: var(--bp-panel);
+  border: 1px solid var(--bp-border);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.bp-stat-label {
+  color: var(--bp-text-muted);
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.bp-stat-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .bp-content {
+    padding: 16px;
+  }
+
+  .bp-topbar {
+    padding: 0 16px;
+  }
+}

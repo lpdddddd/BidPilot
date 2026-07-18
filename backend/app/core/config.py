@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     debug: bool = True
     api_v1_prefix: str = "/api/v1"
 
+    # Comma-separated list of allowed CORS origins for the dev frontend.
+    # "*" keeps local development friction-free; tighten before any deployment.
+    cors_origins: str = "*"
+
     database_url: str = "postgresql+psycopg://bidpilot:change_me_postgres@localhost:5432/bidpilot"
 
     redis_url: str = "redis://localhost:6379/0"
@@ -43,6 +47,14 @@ class Settings(BaseSettings):
         "text/plain",
         "application/json",
     )
+
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        raw = self.cors_origins.strip()
+        if not raw or raw == "*":
+            return ["*"]
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 @lru_cache
