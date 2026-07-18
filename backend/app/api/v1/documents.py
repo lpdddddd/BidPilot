@@ -5,13 +5,15 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.document import (
+    ChunkListResponse,
+    ChunkSummaryResponse,
     DocumentCreate,
     DocumentDownloadResponse,
     DocumentListResponse,
     DocumentPreviewResponse,
     DocumentRead,
 )
-from app.services import document_tasks
+from app.services import chunk_tasks, document_tasks
 from app.services.document import DocumentService
 
 router = APIRouter()
@@ -104,3 +106,44 @@ def reparse_document(
     document = DocumentService(db).request_reparse(project_id, document_id)
     background_tasks.add_task(document_tasks.run_document_parse, document.id)
     return document
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/chunk",
+    response_model=DocumentRead,
+)
+def build_document_chunks(
+    project_id: UUID,
+    document_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> DocumentRead:
+    document = DocumentService(db).request_chunking(project_id, document_id)
+    background_tasks.add_task(chunk_tasks.run_document_chunking, document.id)
+    return document
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/chunks",
+    response_model=ChunkListResponse,
+)
+def list_document_chunks(
+    project_id: UUID,
+    document_id: UUID,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+) -> ChunkListResponse:
+    return DocumentService(db).list_chunks(project_id, document_id, skip=skip, limit=limit)
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/chunk-summary",
+    response_model=ChunkSummaryResponse,
+)
+def get_chunk_summary(
+    project_id: UUID,
+    document_id: UUID,
+    db: Session = Depends(get_db),
+) -> ChunkSummaryResponse:
+    return DocumentService(db).chunk_summary(project_id, document_id)

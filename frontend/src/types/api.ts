@@ -38,15 +38,32 @@ export type ParseStatus =
   | "ocr_required"
   | "failed";
 
+export type ChunkingStatus = "pending" | "processing" | "success" | "failed";
+
+export type ChunkingMeta = {
+  status: ChunkingStatus;
+  chunk_count?: number;
+  total_tokens?: number;
+  section_count?: number;
+  chunker_name?: string;
+  chunker_version?: string;
+  tokenizer?: string | null;
+  source_sha256?: string;
+  error?: string | null;
+  completed_at?: string | null;
+};
+
 export type DocumentMetadata = {
   parser_name?: string;
   parser_version?: string;
   parsed_at?: string;
   source_sha256?: string;
   extracted_text_storage_key?: string | null;
+  page_index_storage_key?: string | null;
   extracted_characters?: number | null;
   parse_error?: string | null;
   original_file_name?: string;
+  chunking?: ChunkingMeta | null;
 };
 
 export type DocumentItem = {
@@ -85,6 +102,57 @@ export type DocumentDownloadResponse = {
   download_url: string;
   expires_in_seconds: number;
   file_name: string;
+};
+
+export type ChunkMetadata = {
+  chunker_name?: string;
+  chunker_version?: string;
+  tokenizer?: string;
+  source_sha256?: string;
+  source_char_start?: number;
+  source_char_end?: number;
+  core_char_start?: number;
+  core_char_end?: number;
+  overlap_prefix_chars?: number;
+  section_path?: string[];
+  heading_level?: number | null;
+  chunk_kind?: string;
+  extracted_text_storage_key?: string;
+};
+
+export type ChunkItem = {
+  id: string;
+  document_id: string;
+  project_id: string;
+  chunk_index: number;
+  section: string | null;
+  clause_id: string | null;
+  page_start: number | null;
+  page_end: number | null;
+  content: string;
+  content_hash: string | null;
+  token_count: number | null;
+  metadata_json: ChunkMetadata | null;
+  qdrant_point_id: string | null;
+  created_at: string;
+};
+
+export type ChunkListResponse = {
+  items: ChunkItem[];
+  total: number;
+};
+
+export type ChunkSummaryResponse = {
+  document_id: string;
+  status: string;
+  chunk_count: number;
+  section_count: number;
+  total_tokens: number;
+  chunker_name: string | null;
+  chunker_version: string | null;
+  tokenizer: string | null;
+  error: string | null;
+  completed_at: string | null;
 };
 
 export type HealthResponse = {

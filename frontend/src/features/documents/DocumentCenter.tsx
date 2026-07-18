@@ -16,6 +16,7 @@ import {
   Upload,
 } from "antd";
 import {
+  BlockOutlined,
   DownloadOutlined,
   EyeOutlined,
   InboxOutlined,
@@ -24,13 +25,15 @@ import {
 } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  buildDocumentChunks,
   getDocumentDownload,
   getDocumentPreview,
   listDocuments,
   reparseDocument,
   uploadDocument,
 } from "../../api/client";
-import type { DocumentItem, ParseStatus } from "../../types/api";
+import ChunkViewer from "./ChunkViewer";
+import type { ChunkingStatus, DocumentItem, ParseStatus } from "../../types/api";
 
 const MAX_UPLOAD_MB = 50;
 const SUPPORTED_EXTENSIONS = ["pdf", "docx", "txt", "html", "htm", "xlsx"];
@@ -61,6 +64,13 @@ const STATUS_CONFIG: Record<ParseStatus, { label: string; color: string }> = {
   partial: { label: "部分成功", color: "orange" },
   ocr_required: { label: "需要 OCR", color: "orange" },
   failed: { label: "解析失败", color: "red" },
+};
+
+const CHUNK_STATUS_CONFIG: Record<ChunkingStatus, { label: string; color: string }> = {
+  pending: { label: "等待构建", color: "default" },
+  processing: { label: "构建中", color: "processing" },
+  success: { label: "已完成", color: "green" },
+  failed: { label: "构建失败", color: "red" },
 };
 
 function formatBytes(size?: number | null): string {
@@ -157,15 +167,22 @@ export default function DocumentCenter({ projectId }: { projectId: string }) {
   const [documentType, setDocumentType] = useState<string>("");
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [previewTarget, setPreviewTarget] = useState<DocumentItem | null>(null);
+  const [chunkTarget, setChunkTarget] = useState<DocumentItem | null>(null);
 
   const query = useQuery({
     queryKey: ["documents", projectId],
     queryFn: () => listDocuments(projectId),
     refetchInterval: (q) => {
       const items = q.state.data?.items;
-      const active = items?.some(
-        (item) => item.parse_status === "pending" || item.parse_status === "processing",
-      );
+      const active = items?.some((item) => {
+        const chunkStatus = item.metadata_json?.chunking?.status;
+        return (
+          item.parse_status === "pending" ||
+          item.parse_status === "processing" ||
+          chunkStatus === "pending" ||
+          chunkStatus === "processing"
+        );
+      });
       return active ? 3000 : false;
     },
   });
@@ -199,6 +216,15 @@ export default function DocumentCenter({ projectId }: { projectId: string }) {
     mutationFn: (documentId: string) => getDocumentDownload(projectId, documentId),
     onSuccess: (data) => {
       window.open(data.download_url, "_blank", "noopener");
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+
+  const chunkMutation = useMutation({
+    mutationFn: (documentId: string) => buildDocumentChunks(projectId, documentId),
+    onSuccess: () => {
+      message.success("已开始构建 Chunk");
+      queryClient.invalidateQueries({ queryKey: ["documents", projectId] });
     },
     onError: (error: Error) => message.error(error.message),
   });
@@ -261,6 +287,44 @@ export default function DocumentCenter({ projectId }: { projectId: string }) {
         },
       },
       {
+        title: "Chunk",
+        key: "chunking",
+        width: 190,
+        render: (_: unknown, row: DocumentItem) => {
+          const chunking = row.metadata_json?.chunking;
+          if (!chunking) {
+            return (
+              <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                未构建
+              </Typography.Text>
+            );
+          }
+          const config = CHUNK_STATUS_CONFIG[chunking.status] ?? {
+            label: chunking.status,
+            color: "default",
+          };
+          const tag =
+            chunking.status === "failed" && chunking.error ? (
+              <Tooltip title={chunking.error}>
+                <Tag color={config.color}>{config.label}</Tag>
+              </Tooltip>
+            ) : (
+              <Tag color={config.color}>{config.label}</Tag>
+            );
+          return (
+            <Space size={4} wrap>
+              {tag}
+              {chunking.status === "success" && chunking.chunk_count != null && (
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {chunking.chunk_count} 块 / {(chunking.total_tokens ?? 0).toLocaleString()}{" "}
+                  tokens
+                </Typography.Text>
+              )}
+            </Space>
+          );
+        },
+      },
+      {
         title: "上传时间",
         dataIndex: "created_at",
         width: 160,
@@ -269,43 +333,68 @@ export default function DocumentCenter({ projectId }: { projectId: string }) {
       {
         title: "操作",
         key: "actions",
-        width: 200,
-        render: (_: unknown, row: DocumentItem) => (
-          <Space size={4}>
-            <Button
-              type="link"
-              size="small"
-              icon={<EyeOutlined />}
-              disabled={row.parse_status !== "success"}
-              onClick={() => setPreviewTarget(row)}
-            >
-              预览
-            </Button>
-            <Button
-              type="link"
-              size="small"
-              icon={<DownloadOutlined />}
-              loading={downloadMutation.isPending && downloadMutation.variables === row.id}
-              onClick={() => downloadMutation.mutate(row.id)}
-            >
-              下载
-            </Button>
-            {(row.parse_status === "failed" || row.parse_status === "ocr_required") && (
+        width: 280,
+        render: (_: unknown, row: DocumentItem) => {
+          const chunking = row.metadata_json?.chunking;
+          const chunkBuilt = chunking?.status === "success";
+          const chunkBusy =
+            chunking?.status === "pending" || chunking?.status === "processing";
+          return (
+            <Space size={4} wrap>
               <Button
                 type="link"
                 size="small"
-                icon={<RedoOutlined />}
-                loading={reparseMutation.isPending && reparseMutation.variables === row.id}
-                onClick={() => reparseMutation.mutate(row.id)}
+                icon={<EyeOutlined />}
+                disabled={row.parse_status !== "success"}
+                onClick={() => setPreviewTarget(row)}
               >
-                重新解析
+                预览
               </Button>
-            )}
-          </Space>
-        ),
+              {row.parse_status === "success" && (
+                <>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<BlockOutlined />}
+                    disabled={chunkBusy}
+                    loading={chunkMutation.isPending && chunkMutation.variables === row.id}
+                    onClick={() => chunkMutation.mutate(row.id)}
+                  >
+                    {chunkBuilt ? "重新构建" : "构建 Chunk"}
+                  </Button>
+                  {chunkBuilt && (
+                    <Button type="link" size="small" onClick={() => setChunkTarget(row)}>
+                      查看 Chunk
+                    </Button>
+                  )}
+                </>
+              )}
+              <Button
+                type="link"
+                size="small"
+                icon={<DownloadOutlined />}
+                loading={downloadMutation.isPending && downloadMutation.variables === row.id}
+                onClick={() => downloadMutation.mutate(row.id)}
+              >
+                下载
+              </Button>
+              {(row.parse_status === "failed" || row.parse_status === "ocr_required") && (
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<RedoOutlined />}
+                  loading={reparseMutation.isPending && reparseMutation.variables === row.id}
+                  onClick={() => reparseMutation.mutate(row.id)}
+                >
+                  重新解析
+                </Button>
+              )}
+            </Space>
+          );
+        },
       },
     ],
-    [downloadMutation, reparseMutation],
+    [downloadMutation, reparseMutation, chunkMutation],
   );
 
   return (
@@ -400,6 +489,11 @@ export default function DocumentCenter({ projectId }: { projectId: string }) {
         projectId={projectId}
         document={previewTarget}
         onClose={() => setPreviewTarget(null)}
+      />
+      <ChunkViewer
+        projectId={projectId}
+        document={chunkTarget}
+        onClose={() => setChunkTarget(null)}
       />
     </div>
   );

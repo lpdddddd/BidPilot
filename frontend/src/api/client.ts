@@ -1,5 +1,7 @@
 import { http } from "./http";
 import type {
+  ChunkListResponse,
+  ChunkSummaryResponse,
   DocumentDownloadResponse,
   DocumentItem,
   DocumentListResponse,
@@ -97,6 +99,38 @@ export async function reparseDocument(
 ): Promise<DocumentItem> {
   const { data } = await http.post<DocumentItem>(
     `/api/v1/projects/${projectId}/documents/${documentId}/reparse`,
+  );
+  return data;
+}
+
+export async function buildDocumentChunks(
+  projectId: string,
+  documentId: string,
+): Promise<DocumentItem> {
+  const { data } = await http.post<DocumentItem>(
+    `/api/v1/projects/${projectId}/documents/${documentId}/chunk`,
+  );
+  return data;
+}
+
+export async function listDocumentChunks(
+  projectId: string,
+  documentId: string,
+  params: { skip?: number; limit?: number } = {},
+): Promise<ChunkListResponse> {
+  const { data } = await http.get<ChunkListResponse>(
+    `/api/v1/projects/${projectId}/documents/${documentId}/chunks`,
+    { params },
+  );
+  return data;
+}
+
+export async function getChunkSummary(
+  projectId: string,
+  documentId: string,
+): Promise<ChunkSummaryResponse> {
+  const { data } = await http.get<ChunkSummaryResponse>(
+    `/api/v1/projects/${projectId}/documents/${documentId}/chunk-summary`,
   );
   return data;
 }

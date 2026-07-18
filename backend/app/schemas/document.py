@@ -61,3 +61,40 @@ class DocumentDownloadResponse(BaseModel):
     download_url: str
     expires_in_seconds: int
     file_name: str
+
+
+class ChunkRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    document_id: UUID
+    project_id: UUID
+    chunk_index: int
+    section: str | None
+    clause_id: str | None
+    page_start: int | None
+    page_end: int | None
+    content: str
+    content_hash: str | None
+    token_count: int | None
+    metadata_json: dict[str, Any] | None
+    qdrant_point_id: str | None
+    created_at: datetime
+
+
+class ChunkListResponse(BaseModel):
+    items: list[ChunkRead]
+    total: int
+
+
+class ChunkSummaryResponse(BaseModel):
+    document_id: UUID
+    status: str
+    chunk_count: int
+    section_count: int
+    total_tokens: int
+    chunker_name: str | None
+    chunker_version: str | None
+    tokenizer: str | None
+    error: str | None
+    completed_at: str | None

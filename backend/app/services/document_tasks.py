@@ -7,6 +7,7 @@ SessionLocal).
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime
 from uuid import UUID
@@ -25,9 +26,11 @@ SESSION_FACTORY = SessionLocal
 
 
 def parsed_text_key(document: Document) -> str:
-    return (
-        f"projects/{document.project_id}/documents/{document.id}/parsed/extracted.txt"
-    )
+    return f"projects/{document.project_id}/documents/{document.id}/parsed/extracted.txt"
+
+
+def page_index_key(document: Document) -> str:
+    return f"projects/{document.project_id}/documents/{document.id}/parsed/page_index.json"
 
 
 def run_document_parse(document_id: UUID) -> None:
@@ -63,6 +66,7 @@ def _parse_document(session: Session, document_id: UUID) -> None:
     result = parse_document(content, extension)
 
     text_key: str | None = None
+    page_key: str | None = None
     if result.status == ParseStatus.success and result.text:
         text_key = parsed_text_key(document)
         try:
@@ -76,15 +80,45 @@ def _parse_document(session: Session, document_id: UUID) -> None:
             session.commit()
             return
 
+        # Real page-to-character mapping exists only for PDFs; other formats
+        # have no reliable page notion and get no sidecar.
+        if result.page_spans:
+            page_key = page_index_key(document)
+            sidecar = {
+                "source_sha256": document.sha256,
+                "generated_by": f"{PARSER_NAME}/{PARSER_VERSION}",
+                "pages": [
+                    {"page": s.page, "char_start": s.char_start, "char_end": s.char_end}
+                    for s in result.page_spans
+                ],
+            }
+            try:
+                storage.put_bytes(
+                    page_key,
+                    json.dumps(sidecar, ensure_ascii=False).encode("utf-8"),
+                    content_type="application/json",
+                )
+            except StorageError as exc:
+                _apply_result_meta(document, status=ParseStatus.failed, error=str(exc))
+                session.commit()
+                return
+
     _apply_result_meta(
         document,
         status=result.status,
         error=result.error,
         text_key=text_key,
+        page_index_key_value=page_key,
         extracted_characters=result.extracted_characters,
         page_count=result.page_count,
     )
     session.commit()
+
+    # A freshly parsed document automatically gets its chunks (re)built.
+    if result.status == ParseStatus.success:
+        from app.services import chunk_tasks
+
+        chunk_tasks.run_document_chunking(document.id)
 
 
 def _apply_result_meta(
@@ -93,6 +127,7 @@ def _apply_result_meta(
     status: ParseStatus,
     error: str | None = None,
     text_key: str | None = None,
+    page_index_key_value: str | None = None,
     extracted_characters: int | None = None,
     page_count: int | None = None,
 ) -> None:
@@ -109,6 +144,7 @@ def _apply_result_meta(
             "parsed_at": datetime.now(UTC).isoformat(),
             "source_sha256": document.sha256,
             "extracted_text_storage_key": text_key,
+            "page_index_storage_key": page_index_key_value,
             "extracted_characters": extracted_characters,
             "parse_error": error,
         }

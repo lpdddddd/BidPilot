@@ -5,8 +5,8 @@ import io
 
 import pytest
 from app.core.config import get_settings
+from app.services import chunk_tasks, document_tasks
 from app.services import document as document_service
-from app.services import document_tasks
 from app.services.storage import StorageError
 from sqlalchemy.orm import sessionmaker
 
@@ -41,6 +41,7 @@ def storage(monkeypatch) -> FakeStorage:
     fake = FakeStorage()
     monkeypatch.setattr(document_service, "get_document_storage", lambda: fake)
     monkeypatch.setattr(document_tasks, "get_document_storage", lambda: fake)
+    monkeypatch.setattr(chunk_tasks, "get_document_storage", lambda: fake)
     return fake
 
 
@@ -48,6 +49,7 @@ def storage(monkeypatch) -> FakeStorage:
 def task_session_factory(monkeypatch, engine):
     factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     monkeypatch.setattr(document_tasks, "SESSION_FACTORY", factory)
+    monkeypatch.setattr(chunk_tasks, "SESSION_FACTORY", factory)
     return factory
 
 
@@ -181,6 +183,33 @@ def test_reparse_resets_and_reruns(client, storage, task_session_factory, projec
     assert reparse.json()["parse_status"] == "pending"
 
     detail = client.get(f"/api/v1/projects/{project_id}/documents/{doc_id}").json()
+    assert detail["parse_status"] == "success"
+
+
+def test_binary_disguised_as_txt_fails_parsing(client, storage, task_session_factory, project_id):
+    # PNG header + random-ish binary payload renamed to .txt must not be
+    # reported as successfully parsed text.
+    binary = b"\x89PNG\r\n\x1a\n" + bytes(range(256)) * 8
+    response = _upload(client, project_id, "disguised.txt", binary)
+    assert response.status_code == 201
+    doc_id = response.json()["id"]
+
+    detail = client.get(f"/api/v1/projects/{project_id}/documents/{doc_id}").json()
+    assert detail["parse_status"] == "failed"
+    assert detail["metadata_json"]["parse_error"]
+    # No extracted artifact should exist for a failed parse.
+    assert not any(key.endswith("extracted.txt") for key in storage.objects)
+
+
+def test_utf8_and_gbk_txt_still_parse(client, storage, task_session_factory, project_id):
+    utf8 = _upload(client, project_id, "utf8.txt", "第一章 总则：本项目为测试。".encode())
+    assert utf8.status_code == 201
+    detail = client.get(f"/api/v1/projects/{project_id}/documents/{utf8.json()['id']}").json()
+    assert detail["parse_status"] == "success"
+
+    gbk = _upload(client, project_id, "gbk.txt", "第一章 总则：本项目为测试。".encode("gb18030"))
+    assert gbk.status_code == 201
+    detail = client.get(f"/api/v1/projects/{project_id}/documents/{gbk.json()['id']}").json()
     assert detail["parse_status"] == "success"
 
 

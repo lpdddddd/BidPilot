@@ -6,14 +6,19 @@ import unicodedata
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, UploadFile, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models import Document
+from app.models.document import DocumentChunk
 from app.models.enums import DocumentType, ParseStatus
 from app.repositories.document import DocumentRepository
 from app.repositories.project import ProjectRepository
 from app.schemas.document import (
+    ChunkListResponse,
+    ChunkRead,
+    ChunkSummaryResponse,
     DocumentCreate,
     DocumentDownloadResponse,
     DocumentListResponse,
@@ -272,6 +277,89 @@ class DocumentService:
             download_url=url,
             expires_in_seconds=self.settings.presigned_url_expire_seconds,
             file_name=document.file_name,
+        )
+
+    # --------------------------------------------------------------- chunking
+
+    def request_chunking(self, project_id: UUID, document_id: UUID) -> DocumentRead:
+        """Mark the document for (re)chunking; the actual work runs in the
+        background task with its own session."""
+        document = self._require_document(project_id, document_id)
+        if document.parse_status != ParseStatus.success:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"文档解析状态为 {document.parse_status.value}，"
+                    "只有解析成功的文档才能构建 Chunk"
+                ),
+            )
+        meta = dict(document.metadata_json or {})
+        chunking = dict(meta.get("chunking") or {})
+        chunking.update({"status": "pending", "error": None})
+        meta["chunking"] = chunking
+        document.metadata_json = meta
+        self.db.commit()
+        self.db.refresh(document)
+        return DocumentRead.model_validate(document)
+
+    def list_chunks(
+        self,
+        project_id: UUID,
+        document_id: UUID,
+        *,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> ChunkListResponse:
+        self._require_document(project_id, document_id)
+        total = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(DocumentChunk)
+                .where(DocumentChunk.document_id == document_id)
+            )
+            or 0
+        )
+        items = list(
+            self.db.scalars(
+                select(DocumentChunk)
+                .where(DocumentChunk.document_id == document_id)
+                .order_by(DocumentChunk.chunk_index)
+                .offset(skip)
+                .limit(limit)
+            )
+        )
+        return ChunkListResponse(
+            items=[ChunkRead.model_validate(item) for item in items],
+            total=total,
+        )
+
+    def chunk_summary(self, project_id: UUID, document_id: UUID) -> ChunkSummaryResponse:
+        document = self._require_document(project_id, document_id)
+        meta = document.metadata_json or {}
+        chunking = meta.get("chunking") or {}
+
+        row = self.db.execute(
+            select(
+                func.count(DocumentChunk.id),
+                func.coalesce(func.sum(DocumentChunk.token_count), 0),
+                func.count(func.distinct(DocumentChunk.section)).filter(
+                    DocumentChunk.section.is_not(None)
+                ),
+            ).where(DocumentChunk.document_id == document_id)
+        ).one()
+        chunk_count, total_tokens, section_count = int(row[0]), int(row[1]), int(row[2])
+
+        return ChunkSummaryResponse(
+            document_id=document.id,
+            status=str(chunking.get("status") or ("success" if chunk_count else "not_built")),
+            chunk_count=chunk_count,
+            section_count=section_count,
+            total_tokens=total_tokens,
+            chunker_name=chunking.get("chunker_name"),
+            chunker_version=chunking.get("chunker_version"),
+            tokenizer=chunking.get("tokenizer"),
+            error=chunking.get("error"),
+            completed_at=chunking.get("completed_at"),
         )
 
     # ------------------------------------------------------- legacy endpoints

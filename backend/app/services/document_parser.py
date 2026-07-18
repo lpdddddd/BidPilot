@@ -8,16 +8,26 @@ layer, is reported honestly as failed / ocr_required. No fake results.
 from __future__ import annotations
 
 import io
+import re
 from dataclasses import dataclass
 
 from app.models.enums import ParseStatus
 
 PARSER_NAME = "bidpilot-basic-parser"
-PARSER_VERSION = "1.0.0"
+PARSER_VERSION = "1.1.0"
 
 # A PDF whose pages yield fewer characters than this on average is treated as
 # a scanned document that needs OCR.
 _MIN_CHARS_PER_PAGE = 10
+
+
+@dataclass
+class PageSpan:
+    """Character range of one PDF page inside the extracted text."""
+
+    page: int
+    char_start: int
+    char_end: int
 
 
 @dataclass
@@ -26,6 +36,9 @@ class ParseResult:
     text: str = ""
     page_count: int | None = None
     error: str | None = None
+    # Only populated for PDF: real page-to-character mapping. None means the
+    # format has no reliable page notion (DOCX/TXT/HTML/XLSX).
+    page_spans: list[PageSpan] | None = None
 
     @property
     def extracted_characters(self) -> int:
@@ -71,7 +84,23 @@ def _parse_pdf(content: bytes) -> ParseResult:
         except Exception:  # noqa: BLE001 - keep going; a single bad page is not fatal
             pages_text.append("")
 
-    text = "\n".join(part.strip() for part in pages_text if part.strip())
+    # Build the extracted text and the page-to-character mapping together so
+    # every span is exact with respect to the final artifact.
+    segments: list[str] = []
+    spans: list[PageSpan] = []
+    cursor = 0
+    for page_number, raw in enumerate(pages_text, start=1):
+        part = raw.strip()
+        if not part:
+            continue
+        if segments:
+            cursor += 1  # "\n" separator between page segments
+        start = cursor
+        segments.append(part)
+        cursor += len(part)
+        spans.append(PageSpan(page=page_number, char_start=start, char_end=cursor))
+    text = "\n".join(segments)
+
     if page_count > 0 and len(text) < _MIN_CHARS_PER_PAGE * page_count:
         return ParseResult(
             status=ParseStatus.ocr_required,
@@ -79,7 +108,12 @@ def _parse_pdf(content: bytes) -> ParseResult:
             page_count=page_count,
             error="PDF 无可提取文本层，疑似扫描件，需要 OCR",
         )
-    return ParseResult(status=ParseStatus.success, text=text, page_count=page_count)
+    return ParseResult(
+        status=ParseStatus.success,
+        text=text,
+        page_count=page_count,
+        page_spans=spans,
+    )
 
 
 def _parse_docx(content: bytes) -> ParseResult:
@@ -98,19 +132,40 @@ def _parse_docx(content: bytes) -> ParseResult:
     return ParseResult(status=ParseStatus.success, text=text)
 
 
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
+
+
+def _looks_like_text(text: str) -> bool:
+    """Reject decodes that are structurally not natural text (binary sniff)."""
+    if not text.strip():
+        return False
+    control_count = len(_CONTROL_CHARS_RE.findall(text))
+    return control_count / len(text) < 0.02
+
+
 def _parse_txt(content: bytes) -> ParseResult:
-    text: str | None = None
-    for encoding in ("utf-8", "gb18030", "utf-16", "latin-1"):
+    # Binary files renamed to .txt must fail honestly, not "parse" via a
+    # lenient codec. NUL bytes are a hard binary signal.
+    if b"\x00" in content:
+        return ParseResult(status=ParseStatus.failed, error="文件包含二进制内容，不是文本文件")
+
+    candidates = ["utf-8", "gb18030"]
+    if content.startswith((b"\xff\xfe", b"\xfe\xff")):
+        candidates = ["utf-16", *candidates]
+
+    for encoding in candidates:
         try:
             text = content.decode(encoding)
-            break
         except (UnicodeDecodeError, UnicodeError):
             continue
-    if text is None:
-        return ParseResult(status=ParseStatus.failed, error="无法识别文本编码")
-    if not text.strip():
-        return ParseResult(status=ParseStatus.failed, error="文本文件内容为空")
-    return ParseResult(status=ParseStatus.success, text=text)
+        if not text.strip():
+            return ParseResult(status=ParseStatus.failed, error="文本文件内容为空")
+        if _looks_like_text(text):
+            return ParseResult(status=ParseStatus.success, text=text)
+    return ParseResult(
+        status=ParseStatus.failed,
+        error="无法识别文本编码或内容不是可读文本",
+    )
 
 
 def _parse_html(content: bytes) -> ParseResult:
