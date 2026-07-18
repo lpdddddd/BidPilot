@@ -1,73 +1,56 @@
 {
-  "ok": false,
+  "ok": true,
   "internal": {
     "ok": true,
     "errors": [],
     "datasets": {
       "bidpilot_sft_train": {
-        "records": 1919,
+        "records": 2738,
         "errors": [],
         "error_count": 0
       },
       "bidpilot_sft_validation": {
-        "records": 986,
+        "records": 549,
         "errors": [],
         "error_count": 0
       },
       "bidpilot_sft_test": {
-        "records": 719,
+        "records": 337,
         "errors": [],
         "error_count": 0
       },
       "bidpilot_sft_train_qwen3": {
-        "records": 1919,
+        "records": 2738,
         "errors": [],
         "error_count": 0
       }
     },
     "mode": "internal"
   },
-  "external": {
-    "ok": false,
-    "status": "blocked_dependency_missing",
-    "detection": {
-      "cli": null,
-      "LLAMAFACTORY_HOME": null,
-      "importable": false,
-      "import_error": "No module named 'llamafactory'"
-    },
-    "external_llamafactory_validation": "blocked_dependency_missing",
-    "preprocess_executed": false,
-    "install_command": "pip install llamafactory  # or: git clone https://github.com/hiyouga/LLaMA-Factory && cd LLaMA-Factory && pip install -e . && export LLAMAFACTORY_HOME=$PWD",
-    "followup_command": "cd /root/autodl-tmp/bidpilot/training/llamafactory && python scripts/validate_sft_real.py --repo-root ../.. --mode llamafactory",
-    "note": "Internal JSON validation may pass, but LLaMAFactory preprocess was NOT run."
-  },
-  "external_llamafactory_validation": "blocked_dependency_missing",
+  "external": null,
+  "external_llamafactory_validation": "not_requested",
   "preprocess_executed": false,
-  "errors": [],
   "datasets": {
     "bidpilot_sft_train": {
-      "records": 1919,
+      "records": 2738,
       "errors": [],
       "error_count": 0
     },
     "bidpilot_sft_validation": {
-      "records": 986,
+      "records": 549,
       "errors": [],
       "error_count": 0
     },
     "bidpilot_sft_test": {
-      "records": 719,
+      "records": 337,
       "errors": [],
       "error_count": 0
     },
     "bidpilot_sft_train_qwen3": {
-      "records": 1919,
+      "records": 2738,
       "errors": [],
       "error_count": 0
     }
   },
-  "followup_command": "cd /root/autodl-tmp/bidpilot/training/llamafactory && python scripts/validate_sft_real.py --repo-root ../.. --mode llamafactory",
-  "install_command": "pip install llamafactory  # or: git clone https://github.com/hiyouga/LLaMA-Factory && cd LLaMA-Factory && pip install -e . && export LLAMAFACTORY_HOME=$PWD",
-  "note": "Full ok=true only when internal structure validation AND LLaMAFactory preprocess both succeed. Missing LLaMAFactory must be status blocked_dependency_missing, not 'passed'."
+  "errors": []
 }

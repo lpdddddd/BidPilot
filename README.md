@@ -98,8 +98,9 @@ make lint
 make test
 make dataset-test
 make validate-sft-internal     # ShareGPT structure only
-make validate-sft-llamafactory # real LLaMAFactory preprocess (fails if LF missing)
-make validate-sft-real         # internal + LLaMAFactory preprocess
+make validate-sft-smoke        # internal + LF preprocess smoke (64/split)
+make validate-sft-llamafactory # real LLaMAFactory full preprocess (fails if LF missing)
+make validate-sft-real         # internal + full LLaMAFactory preprocess
 make validate-sft              # alias of validate-sft-real
 make validate-sft-sample       # sample_sharegpt.json only
 ```
@@ -157,8 +158,9 @@ python training/llamafactory/scripts/export_sft_dataset.py \
 
 ```bash
 make validate-sft-internal     # ShareGPT structure only
-make validate-sft-llamafactory # real LLaMAFactory preprocess (fails if LF missing)
-make validate-sft-real         # internal + LLaMAFactory preprocess
+make validate-sft-smoke        # internal + LF preprocess smoke (64/split)
+make validate-sft-llamafactory # real LLaMAFactory full preprocess (fails if LF missing)
+make validate-sft-real         # internal + full LLaMAFactory preprocess
 make validate-sft              # alias of validate-sft-real
 make validate-sft-sample       # sample_sharegpt.json only
 make dataset-validate

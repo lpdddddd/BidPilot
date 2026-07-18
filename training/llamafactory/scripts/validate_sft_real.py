@@ -170,8 +170,11 @@ def _percentile(xs: list[float], p: float) -> float:
     return float(ys[max(0, min(k, len(ys) - 1))])
 
 
-def run_llamafactory_preprocess(root: Path, *, max_samples: int = 64) -> dict[str, Any]:
-    """Actually invoke LLaMA-Factory data loading / template encode. Never starts training."""
+def run_llamafactory_preprocess(root: Path, *, max_samples: int = 0) -> dict[str, Any]:
+    """Actually invoke LLaMA-Factory data loading / template encode. Never starts training.
+
+    max_samples=0 means full dataset for every split.
+    """
     det = detect_llamafactory()
     install_cmd = (
         "pip install llamafactory  # or: git clone https://github.com/hiyouga/LLaMA-Factory && "
@@ -179,7 +182,7 @@ def run_llamafactory_preprocess(root: Path, *, max_samples: int = 64) -> dict[st
     )
     followup = (
         f"cd {root}/training/llamafactory && "
-        "python scripts/validate_sft_real.py --repo-root ../.. --mode llamafactory"
+        "python scripts/validate_sft_real.py --repo-root ../.. --mode llamafactory --all-samples"
     )
     if not det["importable"] and not det["cli"] and not (
         det["LLAMAFACTORY_HOME"] and Path(det["LLAMAFACTORY_HOME"]).exists()
@@ -195,9 +198,7 @@ def run_llamafactory_preprocess(root: Path, *, max_samples: int = 64) -> dict[st
             "note": "Internal JSON validation may pass, but LLaMAFactory preprocess was NOT run.",
         }
 
-    # Prefer Python API preprocess
     if not det["importable"]:
-        # CLI present but not importable: still blocked for true preprocess
         return {
             "ok": False,
             "status": "blocked_dependency_missing",
@@ -228,7 +229,6 @@ def run_llamafactory_preprocess(root: Path, *, max_samples: int = 64) -> dict[st
     data_dir = root / "training" / "llamafactory" / "data"
     yaml_path = root / "training" / "llamafactory" / "configs" / "qwen3_8b_lora_sft.yaml"
     model_name = os.environ.get("BIDPILOT_LF_MODEL") or "Qwen/Qwen3-8B"
-    # Prefer smaller local/public tokenizer if main model unavailable — still qwen-family template
     alt_model = os.environ.get("BIDPILOT_LF_TOKENIZER") or "Qwen/Qwen2.5-0.5B-Instruct"
 
     cutoff = 4096
@@ -244,28 +244,32 @@ def run_llamafactory_preprocess(root: Path, *, max_samples: int = 64) -> dict[st
 
     by_dataset: dict[str, Any] = {}
     errors: list[str] = []
+    failures: list[dict[str, Any]] = []
     preprocess_executed = False
+    full_scan = max_samples <= 0
 
     def _try_load(model_path: str) -> Any:
-        model_args, data_args, training_args, finetuning_args, _generating_args = get_train_args(
-            {
-                "stage": "sft",
-                "do_train": True,
-                "model_name_or_path": model_path,
-                "dataset": "bidpilot_sft_train",
-                "dataset_dir": str(data_dir),
-                "template": "qwen3",
-                "cutoff_len": cutoff,
-                "overwrite_cache": True,
-                "output_dir": str(root / "training" / "llamafactory" / "outputs" / "_preprocess_probe"),
-                "per_device_train_batch_size": 1,
-                "preprocessing_num_workers": 1,
-                "max_samples": max_samples,
-                "lora_rank": 8,
-                "finetuning_type": "lora",
-                "trust_remote_code": True,
-            }
-        )
+        # Use a large max_samples sentinel when full; LLaMAFactory treats None/absent differently by version
+        probe_max = None if full_scan else max_samples
+        args = {
+            "stage": "sft",
+            "do_train": True,
+            "model_name_or_path": model_path,
+            "dataset": "bidpilot_sft_train",
+            "dataset_dir": str(data_dir),
+            "template": "qwen3",
+            "cutoff_len": cutoff,
+            "overwrite_cache": True,
+            "output_dir": str(root / "training" / "llamafactory" / "outputs" / "_preprocess_probe"),
+            "per_device_train_batch_size": 1,
+            "preprocessing_num_workers": 1,
+            "lora_rank": 8,
+            "finetuning_type": "lora",
+            "trust_remote_code": True,
+        }
+        if probe_max is not None:
+            args["max_samples"] = probe_max
+        model_args, data_args, training_args, finetuning_args, _generating_args = get_train_args(args)
         tokenizer_module = load_tokenizer(model_args)
         tokenizer = tokenizer_module["tokenizer"]
         template = get_template_and_fix(tokenizer, data_args.template, data_args)
@@ -273,6 +277,7 @@ def run_llamafactory_preprocess(root: Path, *, max_samples: int = 64) -> dict[st
 
     loaded = None
     model_used = None
+    last_err = "tokenizer load failed"
     for candidate in (model_name, alt_model):
         try:
             loaded = _try_load(candidate)
@@ -288,7 +293,7 @@ def run_llamafactory_preprocess(root: Path, *, max_samples: int = 64) -> dict[st
             "detection": det,
             "external_llamafactory_validation": "blocked_model_or_tokenizer_missing",
             "preprocess_executed": False,
-            "error": last_err if "last_err" in locals() else "tokenizer load failed",
+            "error": last_err,
             "tried_models": [model_name, alt_model],
             "install_command": install_cmd,
             "followup_command": (
@@ -298,128 +303,241 @@ def run_llamafactory_preprocess(root: Path, *, max_samples: int = 64) -> dict[st
         }
 
     model_args, data_args, training_args, finetuning_args, tokenizer_module, template = loaded
-    tokenizer = tokenizer_module["tokenizer"]
+    lf_version = getattr(sys.modules.get("llamafactory"), "__version__", None)
 
-    for ds_name in ("bidpilot_sft_train", "bidpilot_sft_validation", "bidpilot_sft_test"):
-        records_checked = 0
-        success = 0
-        failed = 0
-        empty_label = 0
-        truncated = 0
-        lengths: list[float] = []
-        tool_stats = {
+    def _len_stats(xs: list[float]) -> dict[str, float]:
+        if not xs:
+            return {"min": 0, "mean": 0, "p50": 0, "p95": 0, "max": 0}
+        return {
+            "min": min(xs),
+            "mean": statistics.mean(xs),
+            "p50": _percentile(xs, 0.50),
+            "p95": _percentile(xs, 0.95),
+            "max": max(xs),
+        }
+
+    def _empty_bucket() -> dict[str, Any]:
+        return {
+            "records_total": 0,
             "records_checked": 0,
             "preprocess_success": 0,
             "preprocess_failed": 0,
             "empty_label_count": 0,
+            "all_labels_masked_count": 0,
             "truncated_count": 0,
-            "token_length": {},
+            "missing_input_ids": 0,
+            "missing_labels": 0,
+            "token_length": _len_stats([]),
         }
-        normal_stats = {
-            "records_checked": 0,
-            "preprocess_success": 0,
-            "preprocess_failed": 0,
-            "empty_label_count": 0,
-            "truncated_count": 0,
-            "token_length": {},
-        }
+
+    for ds_name, split in (
+        ("bidpilot_sft_train", "train"),
+        ("bidpilot_sft_validation", "validation"),
+        ("bidpilot_sft_test", "test"),
+    ):
+        info = load_json(data_dir / "dataset_info.json")
+        raw_path = data_dir / info[ds_name]["file_name"]
+        raw = load_json(raw_path)
+        records_path = root / "datasets" / "sft" / split / "records.jsonl"
+        record_meta: list[dict[str, Any]] = []
+        if records_path.exists():
+            for line in records_path.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    row = json.loads(line)
+                    record_meta.append(
+                        {
+                            "record_id": row.get("record_id"),
+                            "task_type": row.get("task_type"),
+                            "project_id": row.get("project_id"),
+                        }
+                    )
+        while len(record_meta) < len(raw):
+            record_meta.append({"record_id": None, "task_type": None, "project_id": None})
+
+        limit = len(raw) if full_scan else min(len(raw), max_samples)
+        tool_stats = _empty_bucket()
+        normal_stats = _empty_bucket()
+        lengths_all: list[float] = []
+        success = failed = empty_label = all_masked = truncated = missing_ids = missing_labels = 0
+        tool_lens: list[float] = []
+        normal_lens: list[float] = []
+
         try:
             data_args.dataset = ds_name
-            data_args.max_samples = max_samples
+            if full_scan:
+                if hasattr(data_args, "max_samples"):
+                    data_args.max_samples = None
+            else:
+                data_args.max_samples = max_samples
             dataset_module = get_dataset(template, model_args, data_args, training_args, "sft", **tokenizer_module)
             train_set = dataset_module.get("train_dataset") or dataset_module.get("eval_dataset")
             if train_set is None:
                 raise RuntimeError(f"no dataset returned for {ds_name}")
             preprocess_executed = True
-            n = min(len(train_set), max_samples)
+            n = min(len(train_set), limit)
             for i in range(n):
-                row = train_set[i]
-                records_checked += 1
-                is_tool = False
-                # Heuristic: original sharegpt may have tool roles
-                try:
-                    # Prefer labels length
-                    labels = row.get("labels")
-                    input_ids = row.get("input_ids")
-                    if labels is None or input_ids is None:
-                        failed += 1
-                        continue
-                    # empty label = all -100
-                    if isinstance(labels, list) and labels and all(int(x) == -100 for x in labels):
-                        empty_label += 1
-                        failed += 1
-                        continue
-                    # count non-masked labels
-                    if isinstance(labels, list):
-                        supervised = sum(1 for x in labels if int(x) != -100)
-                        if supervised == 0:
-                            empty_label += 1
-                            failed += 1
-                            continue
-                    ln = len(input_ids) if hasattr(input_ids, "__len__") else 0
-                    lengths.append(float(ln))
-                    if ln >= cutoff:
-                        truncated += 1
-                    success += 1
-                except Exception:  # noqa: BLE001
-                    failed += 1
-
-            # Read raw sharegpt to classify tool vs normal for reporting
-            info = load_json(data_dir / "dataset_info.json")
-            raw_path = data_dir / info[ds_name]["file_name"]
-            raw = load_json(raw_path)[:max_samples]
-            tool_lens: list[float] = []
-            normal_lens: list[float] = []
-            for i, sample in enumerate(raw):
-                roles = [m.get("role") for m in sample.get("messages") or []]
+                meta = record_meta[i] if i < len(record_meta) else {}
+                roles = [m.get("role") for m in (raw[i].get("messages") or [])] if i < len(raw) else []
                 is_tool = "tool" in roles
                 bucket = tool_stats if is_tool else normal_stats
+                bucket["records_total"] += 1
                 bucket["records_checked"] += 1
-                # attribute success by index if possible
-                if i < success + failed:
-                    # approximate: mark checked; detailed per-row already in aggregate
-                    pass
-            # Put aggregate into both buckets proportionally
-            def _len_stats(xs: list[float]) -> dict[str, float]:
-                if not xs:
-                    return {"min": 0, "mean": 0, "p50": 0, "p95": 0, "max": 0}
-                return {
-                    "min": min(xs),
-                    "mean": statistics.mean(xs),
-                    "p50": _percentile(xs, 0.50),
-                    "p95": _percentile(xs, 0.95),
-                    "max": max(xs),
-                }
+                row = train_set[i]
+                try:
+                    labels = row.get("labels")
+                    input_ids = row.get("input_ids")
+                    if input_ids is None:
+                        missing_ids += 1
+                        bucket["missing_input_ids"] += 1
+                        failed += 1
+                        bucket["preprocess_failed"] += 1
+                        failures.append(
+                            {
+                                "split": split,
+                                "record_id": meta.get("record_id"),
+                                "task_type": meta.get("task_type"),
+                                "project_id": meta.get("project_id"),
+                                "failure_reason": "missing_input_ids",
+                            }
+                        )
+                        continue
+                    if labels is None:
+                        missing_labels += 1
+                        bucket["missing_labels"] += 1
+                        failed += 1
+                        bucket["preprocess_failed"] += 1
+                        failures.append(
+                            {
+                                "split": split,
+                                "record_id": meta.get("record_id"),
+                                "task_type": meta.get("task_type"),
+                                "project_id": meta.get("project_id"),
+                                "failure_reason": "missing_labels",
+                            }
+                        )
+                        continue
+                    label_list = list(labels) if not isinstance(labels, list) else labels
+                    if label_list and all(int(x) == -100 for x in label_list):
+                        all_masked += 1
+                        empty_label += 1
+                        bucket["all_labels_masked_count"] += 1
+                        bucket["empty_label_count"] += 1
+                        failed += 1
+                        bucket["preprocess_failed"] += 1
+                        failures.append(
+                            {
+                                "split": split,
+                                "record_id": meta.get("record_id"),
+                                "task_type": meta.get("task_type"),
+                                "project_id": meta.get("project_id"),
+                                "failure_reason": "all_labels_masked",
+                            }
+                        )
+                        continue
+                    supervised = sum(1 for x in label_list if int(x) != -100)
+                    if supervised == 0:
+                        empty_label += 1
+                        bucket["empty_label_count"] += 1
+                        failed += 1
+                        bucket["preprocess_failed"] += 1
+                        failures.append(
+                            {
+                                "split": split,
+                                "record_id": meta.get("record_id"),
+                                "task_type": meta.get("task_type"),
+                                "project_id": meta.get("project_id"),
+                                "failure_reason": "empty_label",
+                            }
+                        )
+                        continue
+                    # tool_call extra checks on raw messages
+                    if is_tool:
+                        msgs = raw[i].get("messages") or []
+                        roles2 = [m.get("role") for m in msgs]
+                        if "tool" not in roles2 or roles2[-1] != "assistant":
+                            failed += 1
+                            bucket["preprocess_failed"] += 1
+                            failures.append(
+                                {
+                                    "split": split,
+                                    "record_id": meta.get("record_id"),
+                                    "task_type": meta.get("task_type"),
+                                    "project_id": meta.get("project_id"),
+                                    "failure_reason": "tool_call_structure_invalid",
+                                }
+                            )
+                            continue
+                        try:
+                            final = json.loads(msgs[-1]["content"])
+                        except Exception:  # noqa: BLE001
+                            failed += 1
+                            bucket["preprocess_failed"] += 1
+                            failures.append(
+                                {
+                                    "split": split,
+                                    "record_id": meta.get("record_id"),
+                                    "task_type": meta.get("task_type"),
+                                    "project_id": meta.get("project_id"),
+                                    "failure_reason": "tool_call_final_not_json",
+                                }
+                            )
+                            continue
+                        if not (final.get("answer") or final.get("clarify") or final.get("citations")):
+                            failed += 1
+                            bucket["preprocess_failed"] += 1
+                            failures.append(
+                                {
+                                    "split": split,
+                                    "record_id": meta.get("record_id"),
+                                    "task_type": meta.get("task_type"),
+                                    "project_id": meta.get("project_id"),
+                                    "failure_reason": "tool_call_final_empty",
+                                }
+                            )
+                            continue
+                    ln = len(input_ids) if hasattr(input_ids, "__len__") else 0
+                    lengths_all.append(float(ln))
+                    (tool_lens if is_tool else normal_lens).append(float(ln))
+                    if ln >= cutoff:
+                        truncated += 1
+                        bucket["truncated_count"] += 1
+                    success += 1
+                    bucket["preprocess_success"] += 1
+                except Exception as exc:  # noqa: BLE001
+                    failed += 1
+                    bucket["preprocess_failed"] += 1
+                    failures.append(
+                        {
+                            "split": split,
+                            "record_id": meta.get("record_id"),
+                            "task_type": meta.get("task_type"),
+                            "project_id": meta.get("project_id"),
+                            "failure_reason": f"exception:{exc}",
+                        }
+                    )
 
-            # Split lengths approximately by raw role composition
-            for i, sample in enumerate(raw):
-                roles = [m.get("role") for m in (sample.get("messages") or [])]
-                if i < len(lengths):
-                    (tool_lens if "tool" in roles else normal_lens).append(lengths[i] if i < len(lengths) else 0)
-            tool_stats["token_length"] = _len_stats(tool_lens or lengths)
-            normal_stats["token_length"] = _len_stats(normal_lens or lengths)
-            tool_n = sum(1 for s in raw if "tool" in [m.get("role") for m in s.get("messages") or []])
-            normal_n = len(raw) - tool_n
-            tool_stats["records_checked"] = tool_n
-            normal_stats["records_checked"] = normal_n
-            tool_stats["preprocess_success"] = int(success * (tool_n / max(len(raw), 1)))
-            normal_stats["preprocess_success"] = success - tool_stats["preprocess_success"]
-            tool_stats["preprocess_failed"] = max(0, tool_n - tool_stats["preprocess_success"])
-            normal_stats["preprocess_failed"] = max(0, normal_n - normal_stats["preprocess_success"])
-            tool_stats["empty_label_count"] = empty_label if tool_n else 0
-            normal_stats["empty_label_count"] = empty_label if not tool_n else 0
-            tool_stats["truncated_count"] = truncated if tool_n else 0
-            normal_stats["truncated_count"] = truncated
+            tool_stats["token_length"] = _len_stats(tool_lens)
+            normal_stats["token_length"] = _len_stats(normal_lens)
+            # Fill totals for unchecked remainder when smoke mode
+            for i in range(limit, len(raw)):
+                roles = [m.get("role") for m in (raw[i].get("messages") or [])]
+                bucket = tool_stats if "tool" in roles else normal_stats
+                bucket["records_total"] += 1
 
             by_dataset[ds_name] = {
-                "records_checked": records_checked,
+                "records_total": len(raw),
+                "records_checked": n,
                 "preprocess_success": success,
                 "preprocess_failed": failed,
                 "empty_label_count": empty_label,
+                "all_labels_masked_count": all_masked,
                 "truncated_count": truncated,
-                "token_length": _len_stats(lengths),
+                "missing_input_ids": missing_ids,
+                "missing_labels": missing_labels,
+                "token_length": _len_stats(lengths_all),
                 "tool_call_tasks": tool_stats,
                 "normal_tasks": normal_stats,
+                "full_scan": full_scan,
             }
             if failed:
                 errors.append(f"{ds_name}: preprocess_failed={failed} empty_label={empty_label}")
@@ -434,11 +552,17 @@ def run_llamafactory_preprocess(root: Path, *, max_samples: int = 64) -> dict[st
         "detection": det,
         "external_llamafactory_validation": "passed" if ok else "failed",
         "preprocess_executed": preprocess_executed,
+        "llamafactory_version": lf_version,
         "model_used": model_used,
+        "tokenizer_or_model": model_used,
         "template": "qwen3",
         "cutoff_len": cutoff,
         "max_samples": max_samples,
+        "full_scan": full_scan,
+        "samples_checked_mode": "all" if full_scan else f"smoke_{max_samples}",
         "datasets": by_dataset,
+        "failures": failures[:100],
+        "failure_count": len(failures),
         "errors": errors[:100],
         "install_command": install_cmd,
         "followup_command": followup,
@@ -485,14 +609,25 @@ def main() -> int:
         action="store_true",
         help="If set, missing LLaMAFactory does not force non-zero exit (report still marks blocked).",
     )
-    parser.add_argument("--max-samples", type=int, default=64)
+    parser.add_argument(
+        "--max-samples",
+        type=int,
+        default=0,
+        help="Max samples per split to preprocess; 0 means full dataset",
+    )
+    parser.add_argument(
+        "--all-samples",
+        action="store_true",
+        help="Force full-dataset preprocess (same as --max-samples 0)",
+    )
     args = parser.parse_args()
     root = Path(args.repo_root)
+    max_samples = 0 if args.all_samples else args.max_samples
 
     internal = run_internal(root) if args.mode in {"internal", "all"} else None
     external = None
     if args.mode in {"llamafactory", "all"}:
-        external = run_llamafactory_preprocess(root, max_samples=args.max_samples)
+        external = run_llamafactory_preprocess(root, max_samples=max_samples)
 
     if args.mode == "internal":
         report = {

@@ -1,99 +1,154 @@
 {
+  "commit_sha": "22c0c65ecaec481deb96db2c98108caec6aa403c",
+  "dataset_build_id": "306263cb7ec117d420e0341999c030a3",
   "gaps": {
     "test_projects_below_10": 0,
     "validation_projects_below_5": 0
   },
-  "generated_at": "2026-07-15T17:17:17.201457+00:00",
+  "generated_at": "2026-07-16T15:58:17.407263+00:00",
+  "generator_version": "bidpilot-sft-build-v2",
+  "source_records_sha256": "fe90660585c6a0a1558f7470bcbfe9d3ad932526e1ab8cb69f7c23a462ecc5b9",
+  "split_diagnostics": {
+    "absolute_errors_pp": {
+      "test": 0.7,
+      "train": 4.45,
+      "validation": 5.15
+    },
+    "achieved_counts": {
+      "test": 337,
+      "train": 2738,
+      "validation": 549
+    },
+    "achieved_projects": {
+      "test": 15,
+      "train": 23,
+      "validation": 5
+    },
+    "achieved_ratios": {
+      "test": 0.093,
+      "train": 0.7555,
+      "validation": 0.1515
+    },
+    "cluster_count": 29,
+    "heldout_project_floor": 10,
+    "local_search_rounds": 2,
+    "min_test_projects": 10,
+    "min_validation_projects": 5,
+    "note": "Record-weighted cluster assignment with project floors; oversized leak-safe clusters may prevent exact 80/10/10.",
+    "objective_score": 0.913338,
+    "oversized_clusters": [
+      {
+        "cluster_id": "6266cba7-1260-5932-8e3c-6eef0f512739",
+        "project_ids": [
+          "6266cba7-1260-5932-8e3c-6eef0f512739",
+          "9d3c2112-d8de-5505-b6fd-5accc23af170",
+          "e4a298f5-8013-5617-8983-ac96e54d32fc",
+          "fe74ac2a-c1b8-592b-a6d0-f5a5e13198e2"
+        ],
+        "record_count": 595,
+        "share": 0.1642
+      }
+    ],
+    "ratio_within_5pp": false,
+    "targets": {
+      "test": 0.1,
+      "train": 0.8,
+      "validation": 0.1
+    },
+    "total_projects": 43,
+    "total_records": 3624
+  },
+  "split_manifest_sha256": "831a059267d476c3db27c604385ca612df655d57e1af34c238fac1ad7ec6db0a",
   "test": {
     "bundle_level": {
-      "level_b": 3,
-      "level_c": 7
+      "level_b": 7,
+      "level_c": 8
     },
     "industry": {
-      "cloud_service": 104,
-      "consulting_service": 267,
+      "consulting_service": 109,
+      "cybersecurity": 40,
+      "data_governance": 14,
       "information_system_maintenance": 5,
-      "non_it": 161,
-      "unknown": 182
+      "unknown": 169
     },
-    "project_count": 10,
+    "project_count": 15,
     "quality_level": {
-      "silver": 719
+      "silver": 337
     },
-    "record_count": 719,
+    "record_count": 337,
     "source_domain": {
-      "download.ccgp.gov.cn": 643,
-      "www.ccgp.gov.cn": 38
+      "download.ccgp.gov.cn": 240,
+      "www.ccgp.gov.cn": 51
     },
     "task_type": {
-      "citation_qa": 47,
-      "project_info_extract": 10,
-      "qualification_extract": 144,
-      "requirement_classify": 241,
-      "risk_detect": 188,
-      "scoring_extract": 38,
-      "tool_call": 51
+      "citation_qa": 41,
+      "project_info_extract": 14,
+      "qualification_extract": 51,
+      "requirement_classify": 101,
+      "risk_detect": 56,
+      "scoring_extract": 6,
+      "tool_call": 68
     }
   },
   "train": {
     "bundle_level": {
-      "level_b": 6,
-      "level_c": 13
+      "level_b": 4,
+      "level_c": 19
     },
     "industry": {
-      "consulting_service": 225,
-      "cybersecurity": 167,
-      "data_governance": 14,
+      "consulting_service": 458,
+      "cybersecurity": 127,
       "hardware_equipment": 155,
-      "non_it": 223,
-      "unknown": 648
+      "non_it": 384,
+      "system_integration": 64,
+      "unknown": 1550
     },
-    "project_count": 19,
+    "project_count": 23,
     "quality_level": {
-      "silver": 1432
+      "silver": 2738
     },
-    "record_count": 1432,
+    "record_count": 2738,
     "source_domain": {
-      "download.ccgp.gov.cn": 1288,
-      "www.ccgp.gov.cn": 67
+      "download.ccgp.gov.cn": 2548,
+      "www.ccgp.gov.cn": 79
     },
     "task_type": {
-      "citation_qa": 71,
-      "project_info_extract": 18,
-      "qualification_extract": 351,
-      "requirement_classify": 509,
-      "risk_detect": 357,
-      "scoring_extract": 24,
-      "tool_call": 102
+      "citation_qa": 101,
+      "project_info_extract": 22,
+      "qualification_extract": 718,
+      "requirement_classify": 964,
+      "risk_detect": 724,
+      "scoring_extract": 71,
+      "tool_call": 138
     }
   },
   "validation": {
     "bundle_level": {
-      "level_b": 3,
-      "level_c": 11
+      "level_b": 1,
+      "level_c": 4
     },
     "industry": {
-      "consulting_service": 172,
-      "system_integration": 64,
-      "unknown": 1237
+      "cloud_service": 104,
+      "consulting_service": 97,
+      "unknown": 348
     },
-    "project_count": 14,
+    "project_count": 5,
     "quality_level": {
-      "silver": 1473
+      "silver": 549
     },
-    "record_count": 1473,
+    "record_count": 549,
     "source_domain": {
-      "download.ccgp.gov.cn": 1352,
-      "www.ccgp.gov.cn": 54
+      "download.ccgp.gov.cn": 495,
+      "www.ccgp.gov.cn": 29
     },
     "task_type": {
-      "citation_qa": 63,
-      "project_info_extract": 13,
-      "qualification_extract": 375,
-      "requirement_classify": 529,
-      "risk_detect": 369,
-      "scoring_extract": 40,
-      "tool_call": 84
+      "citation_qa": 39,
+      "project_info_extract": 5,
+      "qualification_extract": 101,
+      "requirement_classify": 214,
+      "risk_detect": 134,
+      "scoring_extract": 25,
+      "tool_call": 31
     }
   }
 }

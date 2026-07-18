@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from bidpilot_data.reporting.artifact_meta import attach_artifact_meta, sha256_json_obj, try_commit_sha, utc_now_iso
+from bidpilot_data.reporting.consistency import compute_truth_from_records, validate_artifact_consistency
 from bidpilot_data.settings import get_settings, load_pipeline_config
 from bidpilot_data.utils import ensure_dir, read_jsonl, write_json
 
@@ -22,6 +24,8 @@ def build_training_readiness_report() -> dict[str, Any]:
     cfg = load_pipeline_config()
     reports = root / "reports"
 
+    # Truth from final split records (not stale intermediate stats)
+    truth = compute_truth_from_records(root)
     sft = _load_json(reports / "sft_build_stats.json")
     rag = _load_json(reports / "rag_quality_report.json")
     rag_val = _load_json(reports / "rag_validation_report.json")
@@ -30,6 +34,8 @@ def build_training_readiness_report() -> dict[str, Any]:
     xsim = _load_json(reports / "cross_split_similarity_report.json")
     lf = _load_json(reports / "llamafactory_real_validation.json")
     stats = _load_json(reports / "dataset_statistics.json")
+    consistency = validate_artifact_consistency(write_report=False)
+    manifest = _load_json(root / "manifests" / "sft_split_manifest.json")
 
     matches = read_jsonl(root / "silver" / "requirement_matches.jsonl")
     projects = [
@@ -40,42 +46,35 @@ def build_training_readiness_report() -> dict[str, Any]:
     level_a = sum(1 for p in projects if p.get("bundle_level") == "level_a")
     level_b = sum(1 for p in projects if p.get("bundle_level") == "level_b")
 
-    structurally_valid = int(sft.get("structurally_valid_sft") or 0)
+    structurally_valid = int(truth["total"])
     reviewed = int(sft.get("reviewed_trainable_sft") or 0)
     rejected = int(sft.get("rejected_sft") or 0)
     gold_req = int(stats.get("gold_requirements") or 0) if stats else 0
-    # Prefer sft gold counts if present
-    gold_sft = 0
-    ql = sft.get("quality_level") or {}
-    if isinstance(ql, dict):
-        gold_sft = int(ql.get("gold") or 0)
+    gold_sft = int((sft.get("quality_level") or {}).get("gold") or sft.get("gold") or 0)
 
-    train = int(sft.get("train") or 0)
-    validation = int(sft.get("validation") or 0)
-    test = int(sft.get("test") or 0)
+    train = int(truth["records"]["train"])
+    validation = int(truth["records"]["validation"])
+    test = int(truth["records"]["test"])
     split_ok = (train + validation + test == structurally_valid) and structurally_valid > 0
 
-    # Domains from split_distribution or sft stats
     split_dist = _load_json(reports / "split_distribution.json")
     domains: set[str] = set()
     for split_name in ("train", "validation", "test"):
         block = split_dist.get(split_name) or {}
-        for d in (block.get("source_domain") or {}):
+        for d in block.get("source_domain") or {}:
             if d and "portal" not in d.lower():
                 domains.add(d)
 
-    task_types = set((sft.get("task_distribution_after_balance") or sft.get("by_task") or {}).keys())
-    if not task_types and split_dist.get("train"):
-        task_types = set((split_dist["train"].get("task_type") or {}).keys())
+    task_types = set((sft.get("by_task") or {}).keys())
+    if not task_types:
+        for split_name in ("train", "validation", "test"):
+            task_types |= set((truth["by_split_and_task"].get(split_name) or {}).keys())
 
     lf_external = lf.get("external_llamafactory_validation") or "not_run"
     lf_preprocess = bool(lf.get("preprocess_executed"))
-    lf_internal_ok = bool((lf.get("internal") or {}).get("ok") if lf.get("internal") is not None else lf.get("ok"))
-    # When new merged schema present
     if "internal" in lf:
         lf_internal_ok = bool((lf.get("internal") or {}).get("ok"))
     else:
-        # legacy flat report without preprocess
         lf_internal_ok = bool(lf.get("ok")) and lf_external not in {
             "blocked_dependency_missing",
             "not_run",
@@ -83,8 +82,9 @@ def build_training_readiness_report() -> dict[str, Any]:
         }
 
     rag_ok = bool(rag.get("ok")) and bool(rag_val.get("ok", True))
-    xsim_ok = bool(xsim.get("ok")) and bool(xsim.get("full_scan", False))
-    val_ok = bool(val.get("ok"))
+    xsim_ok = bool(xsim.get("ok")) and bool(xsim.get("full_scan", False)) and int(xsim.get("skipped_candidates_count") or 0) == 0
+    consistency_ok = bool(consistency.get("ok"))
+    val_ok = bool(val.get("ok", True))
 
     target_metrics = {
         "pilot_reviewed_gold_sft_min": 500,
@@ -107,6 +107,9 @@ def build_training_readiness_report() -> dict[str, Any]:
         "train": train,
         "validation": validation,
         "test": test,
+        "train_projects": truth["project_counts"]["train"],
+        "validation_projects": truth["project_counts"]["validation"],
+        "test_projects": truth["project_counts"]["test"],
         "split_sum_equals_structurally_valid": split_ok,
         "source_domains": sorted(domains),
         "source_domain_count": len(domains),
@@ -119,11 +122,13 @@ def build_training_readiness_report() -> dict[str, Any]:
         "level_b": level_b,
         "rag_ok": rag_ok,
         "validation_ok": val_ok,
+        "artifact_consistency_ok": consistency_ok,
         "cross_split_full_scan_ok": xsim_ok,
         "llamafactory_internal_ok": lf_internal_ok,
         "llamafactory_external_status": lf_external,
         "llamafactory_preprocess_executed": lf_preprocess,
         "multi_section_dual_answer_pass": rag.get("multi_section_dual_answer_pass"),
+        "split_diagnostics": sft.get("split_diagnostics") or {},
     }
 
     gates: dict[str, bool] = {}
@@ -138,12 +143,12 @@ def build_training_readiness_report() -> dict[str, Any]:
         else:
             blocked.append(name if not block_msg else f"{name}: {block_msg}")
 
-    # Human review stage
     gate("human_structurally_valid_sft", structurally_valid > 0)
-    gate("human_rejected_excluded_from_splits", split_ok and rejected >= 0)
-    gate("human_project_split_no_leak", not (xsim.get("project_leaks") or []) and val_ok)
+    gate("human_rejected_excluded_from_splits", split_ok and not truth.get("rejected_ids_in_splits"))
+    gate("human_project_split_no_leak", not (xsim.get("project_leaks") or []) and xsim_ok)
     gate("human_rag_quality_ok", rag_ok)
-    gate("human_sft_internal_format_ok", lf_internal_ok or bool((lf.get("internal") or {}).get("ok", False)))
+    gate("human_sft_internal_format_ok", lf_internal_ok or val_ok)
+    gate("human_artifact_consistency", consistency_ok)
 
     ready_for_human_review = all(
         gates[k]
@@ -151,14 +156,11 @@ def build_training_readiness_report() -> dict[str, Any]:
             "human_structurally_valid_sft",
             "human_rejected_excluded_from_splits",
             "human_rag_quality_ok",
+            "human_artifact_consistency",
+            "human_project_split_no_leak",
         )
     ) and structurally_valid > 0
-    # Soft-fail internal if report missing but validate ok
-    if not gates.get("human_sft_internal_format_ok") and val_ok:
-        warnings.append("llamafactory internal report incomplete; using validation_report.ok as soft signal")
-        ready_for_human_review = ready_for_human_review and val_ok
 
-    # Pilot LoRA
     gate("pilot_reviewed_gold_ge_500", reviewed >= 500 and gold_sft >= 500, block_msg="Gold/reviewed_trainable=0 forbidden for training")
     gate("pilot_domains_ge_5", len(domains) >= 5)
     gate("pilot_task_types_ge_5", len(task_types) >= 5)
@@ -177,13 +179,19 @@ def build_training_readiness_report() -> dict[str, Any]:
             "pilot_project_mutex",
             "pilot_llamafactory_preprocess",
         )
-    )
+    ) and ready_for_human_review
 
-    # Formal LoRA
     gate("formal_reviewed_gold_ge_target", reviewed >= target_metrics["formal_reviewed_gold_sft_min"] and gold_sft > 0)
     gate("formal_requirement_matches_with_evidence", len(matches) >= target_metrics["formal_requirement_matches_min"])
-    gate("formal_rag_agent_mins", int(rag.get("questions") or 0) >= target_metrics["formal_rag_min"] and int(agent.get("tasks") or 0) >= target_metrics["formal_agent_min"])
-    gate("formal_level_ab", level_a >= target_metrics["formal_level_a_min"] and level_b >= target_metrics["formal_level_b_min"])
+    gate(
+        "formal_rag_agent_mins",
+        int(rag.get("questions") or 0) >= target_metrics["formal_rag_min"]
+        and int(agent.get("tasks") or 0) >= target_metrics["formal_agent_min"],
+    )
+    gate(
+        "formal_level_ab",
+        level_a >= target_metrics["formal_level_a_min"] and level_b >= target_metrics["formal_level_b_min"],
+    )
     gate("formal_full_cross_split", xsim_ok)
     gate("formal_lf_preprocess", lf_preprocess and lf_external == "passed")
     ready_for_formal_lora = all(
@@ -198,7 +206,6 @@ def build_training_readiness_report() -> dict[str, Any]:
         )
     ) and ready_for_pilot_lora
 
-    # Hard rule: Gold=0 / reviewed=0 never trainable
     if gold_sft == 0 or reviewed == 0:
         ready_for_pilot_lora = False
         ready_for_formal_lora = False
@@ -206,6 +213,12 @@ def build_training_readiness_report() -> dict[str, Any]:
 
     if lf_external in {"blocked_dependency_missing", "not_run", "tags_checked_only_no_training"}:
         warnings.append(f"LLaMAFactory external preprocess not completed ({lf_external})")
+        ready_for_pilot_lora = False
+        ready_for_formal_lora = False
+
+    if not consistency_ok:
+        ready_for_human_review = False
+        warnings.append("artifact consistency failed ⇒ ready_for_human_review=false")
 
     if ready_for_formal_lora:
         stage = "ready_for_formal_lora"
@@ -221,9 +234,9 @@ def build_training_readiness_report() -> dict[str, Any]:
         )
     else:
         stage = "blocked"
-        next_action = "Fix failing human-review gates before labeling."
+        next_action = "Fix failing human-review / consistency / leakage gates before labeling."
 
-    report = {
+    report: dict[str, Any] = {
         "stage": stage,
         "ready_for_human_review": ready_for_human_review,
         "ready_for_pilot_lora": ready_for_pilot_lora,
@@ -236,5 +249,18 @@ def build_training_readiness_report() -> dict[str, Any]:
         "recommended_next_action": next_action,
         "gates": gates,
     }
+    meta_src = sft if sft.get("dataset_build_id") else {}
+    if meta_src.get("dataset_build_id"):
+        report = attach_artifact_meta(
+            report,
+            dataset_build_id=meta_src["dataset_build_id"],
+            split_manifest_sha256=meta_src.get("split_manifest_sha256") or sha256_json_obj(manifest),
+            source_records_sha256=meta_src.get("source_records_sha256") or "",
+            commit_sha=meta_src.get("commit_sha") or try_commit_sha(settings.repo_root),
+            generated_at=utc_now_iso(),
+        )
+    else:
+        report["generated_at"] = utc_now_iso()
+
     write_json(ensure_dir(reports) / "training_readiness_report.json", report)
     return report

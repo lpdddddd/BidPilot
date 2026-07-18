@@ -8,6 +8,8 @@
     "level_c": 31
   },
   "chunks": 11005,
+  "commit_sha": "22c0c65ecaec481deb96db2c98108caec6aa403c",
+  "dataset_build_id": "306263cb7ec117d420e0341999c030a3",
   "disclosed_suppliers": 21,
   "discovered_projects": 14,
   "discovery_failures": 582,
@@ -101,7 +103,8 @@
     "sft_source_domains": 3,
     "with_tender_document": 57
   },
-  "generated_at": "2026-07-15T17:22:06.095095+00:00",
+  "generated_at": "2026-07-16T15:58:38.338705+00:00",
+  "generator_version": "bidpilot-sft-build-v2",
   "human_review_todo": {
     "matches_unknown": 0,
     "rag_pending": 215,
@@ -175,14 +178,16 @@
     "reviewed_trainable_sft": 0,
     "silver_candidate_sft": 3624,
     "structurally_valid_sft": 3624,
-    "test": 719,
-    "test_projects": 10,
-    "train": 1919,
-    "train_projects": 28,
-    "validation": 986,
+    "test": 337,
+    "test_projects": 15,
+    "train": 2738,
+    "train_projects": 23,
+    "validation": 549,
     "validation_projects": 5
   },
+  "source_records_sha256": "fe90660585c6a0a1558f7470bcbfe9d3ad932526e1ab8cb69f7c23a462ecc5b9",
   "sources": 205,
+  "split_manifest_sha256": "831a059267d476c3db27c604385ca612df655d57e1af34c238fac1ad7ec6db0a",
   "synthetic_forbidden": true,
   "targets": {
     "agent_tasks": {
@@ -264,6 +269,12 @@
     "splits": {
       "heldout_project_count": 10
     }
+  },
+  "training_readiness": {
+    "ready_for_formal_lora": false,
+    "ready_for_human_review": true,
+    "ready_for_pilot_lora": false,
+    "stage": "ready_for_human_review"
   },
   "validation_ok": true
 }

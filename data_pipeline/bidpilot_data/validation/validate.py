@@ -411,10 +411,32 @@ def validate_all(*, allow_demo_fixture: bool = False) -> dict[str, Any]:
 
     from bidpilot_data.sft.cross_split import analyze_cross_split_similarity
     from bidpilot_data.reporting.training_readiness import build_training_readiness_report
+    from bidpilot_data.reporting.consistency import validate_artifact_consistency
+    from bidpilot_data.reporting.artifact_meta import attach_artifact_meta
+    from bidpilot_data.utils import read_json as _read_json
 
     xsim = analyze_cross_split_similarity()
+    sft_meta = {}
+    sft_stats_path = datasets / "reports" / "sft_build_stats.json"
+    if sft_stats_path.exists():
+        sft_meta = _read_json(sft_stats_path)
+    if sft_meta.get("dataset_build_id"):
+        xsim = attach_artifact_meta(
+            xsim,
+            dataset_build_id=sft_meta["dataset_build_id"],
+            split_manifest_sha256=sft_meta.get("split_manifest_sha256") or "",
+            source_records_sha256=sft_meta.get("source_records_sha256") or "",
+            commit_sha=sft_meta.get("commit_sha"),
+        )
+        write_json(datasets / "reports" / "cross_split_similarity_report.json", xsim)
     if not xsim.get("full_scan"):
-        errors.append("cross_split report missing full_scan=true")
+        errors.append(
+            "cross_split full_scan=false "
+            f"(skipped_candidates={xsim.get('skipped_candidates_count')}; "
+            "formal data gate must fail)"
+        )
+    if int(xsim.get("skipped_candidates_count") or 0) > 0:
+        errors.append(f"cross_split skipped_candidates={xsim.get('skipped_candidates_count')}")
     if not xsim.get("ok"):
         errors.append(
             "cross-split full-scan gate failed: "
@@ -428,6 +450,10 @@ def validate_all(*, allow_demo_fixture: bool = False) -> dict[str, Any]:
         warnings.append(f"template_overlap={xsim.get('template_overlap')} (warning only)")
     if xsim.get("project_leaks"):
         errors.append(f"project leaks across splits: {xsim.get('project_leaks')}")
+
+    consistency = validate_artifact_consistency(write_report=True)
+    if not consistency.get("ok"):
+        errors.extend([f"artifact_consistency:{e}" for e in (consistency.get("errors") or [])[:80]])
 
     readiness = build_training_readiness_report()
     warnings.append(
@@ -489,6 +515,11 @@ def validate_all(*, allow_demo_fixture: bool = False) -> dict[str, Any]:
             "severe_business_overlap": xsim.get("severe_business_overlap"),
             "template_overlap": xsim.get("template_overlap"),
             "items_scanned": xsim.get("items_scanned"),
+            "skipped_candidates_count": xsim.get("skipped_candidates_count"),
+        },
+        "artifact_consistency": {
+            "ok": consistency.get("ok"),
+            "error_count": consistency.get("error_count"),
         },
         "training_readiness": {
             "stage": readiness.get("stage"),

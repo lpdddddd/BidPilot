@@ -1,4 +1,8 @@
 {
+  "artifact_consistency": {
+    "error_count": 0,
+    "ok": true
+  },
   "counts": {
     "chunks": 11005,
     "documents": 205,
@@ -7,9 +11,9 @@
     "matches": 0,
     "projects": 120,
     "rag_questions": 215,
-    "sft_test": 719,
-    "sft_train": 1919,
-    "sft_validation": 986,
+    "sft_test": 337,
+    "sft_train": 2738,
+    "sft_validation": 549,
     "silver_requirements": 20724,
     "unknown_matches": 0,
     "validation_projects": 5
@@ -19,6 +23,7 @@
     "items_scanned": 5620,
     "ok": true,
     "severe_business_overlap": 0,
+    "skipped_candidates_count": 0,
     "template_overlap": 0
   },
   "error_count": 0,

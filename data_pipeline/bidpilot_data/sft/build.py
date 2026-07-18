@@ -108,14 +108,19 @@ def _cluster_projects_by_shared_chunks(
     for group in buckets.values():
         if len(group) < 2:
             continue
-        for i in range(min(len(group), 40)):
-            for j in range(i + 1, min(len(group), 40)):
-                sh1, n1, p1 = group[i]
-                sh2, n2, p2 = group[j]
-                if p1 == p2:
-                    continue
-                if hamming64(sh1, sh2) <= 2:
-                    union(p1, p2)
+        # Secondary bucket by length prefix to avoid silent [:40] truncation
+        subs: dict[int, list[tuple[int, str, str]]] = {}
+        for sh, norm, pid in group:
+            subs.setdefault(len(norm) // 50, []).append((sh, norm, pid))
+        for sub in subs.values():
+            for i in range(len(sub)):
+                for j in range(i + 1, len(sub)):
+                    sh1, n1, p1 = sub[i]
+                    sh2, n2, p2 = sub[j]
+                    if p1 == p2:
+                        continue
+                    if hamming64(sh1, sh2) <= 2:
+                        union(p1, p2)
     return {p: find(p) for p in parent}
 
 
@@ -129,67 +134,45 @@ def _split_projects(
     min_validation: int = 5,
     min_test: int = 10,
     cluster_of: dict[str, str] | None = None,
+    test_r: float | None = None,
 ) -> DatasetSplitManifest:
-    """Project-level split with validation/test floors. Never sample-level random split.
+    """Compatibility wrapper: one synthetic record per project, cluster-weighted assign."""
+    from bidpilot_data.sft.split_assign import (
+        assign_clusters_weighted,
+        build_project_clusters,
+        expand_assignment_to_projects,
+        make_manifest,
+    )
 
-    When cluster_of is provided, all projects in a cluster stay in the same spit.
-    """
     ids = sorted(set(project_ids))
     cluster_of = cluster_of or {p: p for p in ids}
-    # Build atomic cluster units
-    clusters: dict[str, list[str]] = {}
-    for p in ids:
-        clusters.setdefault(cluster_of.get(p, p), []).append(p)
-    units = sorted(clusters.keys())
-    rng = random.Random(seed)
-    rng.shuffle(units)
-    n = len(units)
-    if n < min_validation + min_test + 1:
-        min_test = min(min_test, max(1, n // 3))
-        min_validation = min(min_validation, max(1, (n - min_test) // 3))
-    held_n = min(max(heldout, min_test), max(0, n - min_validation - 1))
-    held_units = units[:held_n]
-    remain = units[held_n:]
-    n_remain = len(remain)
-    n_val = max(min_validation, int(n_remain * val_r))
-    n_val = min(n_val, max(0, n_remain - 1))
-    n_train = max(0, n_remain - n_val)
-    ratio_train = int(n_remain * train_r)
-    if ratio_train >= 1 and n_remain - ratio_train >= min_validation:
-        n_train = ratio_train
-        n_val = n_remain - n_train
-    train_u = remain[:n_train]
-    val_u = remain[n_train:]
-    test_u = list(held_units)
-    while len(test_u) < min_test and train_u:
-        test_u.append(train_u.pop())
-    while len(val_u) < min_validation and train_u:
-        val_u.append(train_u.pop())
 
-    def expand(us: list[str]) -> list[str]:
-        out: list[str] = []
-        for u in us:
-            out.extend(clusters.get(u, [u]))
-        return sorted(set(out))
+    class _R:
+        def __init__(self, pid: str) -> None:
+            self.project_id = pid
+            self.task_type = type("T", (), {"value": "requirement_classify"})()
+            self.source_urls = []
 
-    train = expand(train_u)
-    val = expand(val_u)
-    test = expand(test_u)
-    held = expand(held_units)
-    return DatasetSplitManifest(
+    records = [_R(p) for p in ids]
+    clusters = build_project_clusters(project_ids=ids, cluster_of=cluster_of, records=records, projects={})
+    assignment, _diag = assign_clusters_weighted(
+        clusters,
         seed=seed,
-        created_at=datetime.now(timezone.utc),
-        train_project_ids=sorted(train),
-        validation_project_ids=sorted(val),
-        test_project_ids=sorted(test),
-        heldout_project_ids=sorted(held),
-        counts={
-            "train_projects": len(train),
-            "validation_projects": len(val),
-            "test_projects": len(test),
-            "total_projects": len(ids),
-            "leak_clusters": len(clusters),
-        },
+        train_r=train_r,
+        val_r=val_r,
+        test_r=float(test_r if test_r is not None else max(0.0, 1.0 - train_r - val_r)),
+        min_validation_projects=min_validation,
+        min_test_projects=min_test,
+        heldout_project_count=heldout,
+    )
+    train, val, test = expand_assignment_to_projects(clusters, assignment)
+    return make_manifest(
+        seed=seed,
+        train=train,
+        validation=val,
+        test=test,
+        heldout=test,
+        extra_counts={"leak_clusters": len(clusters)},
     )
 
 
@@ -672,52 +655,127 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
     ]
     rejected_sft = rejected_rows
 
-    # Project-level split ONLY on structurally valid records.
-    # Cluster projects that share identical source chunks so they cannot land in different splits.
+    # --- Stage: build leak-safe project clusters, weighted split, leak verify, atomic publish ---
+    from bidpilot_data.reporting.artifact_meta import (
+        attach_artifact_meta,
+        make_dataset_build_id,
+        sha256_json_obj,
+        sha256_jsonl_file,
+        try_commit_sha,
+        utc_now_iso,
+    )
+    from bidpilot_data.sft.cross_split import analyze_cross_split_similarity, collect_leaky_project_pairs
+    from bidpilot_data.sft.publish import (
+        BuildLockError,
+        cleanup_staging,
+        exclusive_build_lock,
+        make_staging_dir,
+        publish_staging_to_formal,
+        write_split_bundle,
+    )
+    from bidpilot_data.sft.split_assign import (
+        assign_clusters_weighted,
+        build_project_clusters,
+        expand_assignment_to_projects,
+        make_manifest,
+        merge_cluster_roots,
+    )
+
     project_ids = [r.project_id for r in structurally_valid if r.project_id and r.project_id != "unknown"]
     chunk_map = {c["chunk_id"]: c for c in read_jsonl(settings.datasets_root / "interim" / "chunks" / "chunks.jsonl")}
     cluster_of = _cluster_projects_by_shared_chunks(structurally_valid, chunk_map)
-    manifest = _split_projects(
-        project_ids,
-        seed=seed,
-        train_r=float(sft_cfg.get("train_ratio", 0.8)),
-        val_r=float(sft_cfg.get("validation_ratio", 0.1)),
-        heldout=int(cfg.get("splits", {}).get("heldout_project_count", 10)),
-        min_validation=int(split_cfg.get("min_validation_projects", 5)),
-        min_test=int(split_cfg.get("min_test_projects", 10)),
-        cluster_of=cluster_of,
-    )
-    train_set = set(manifest.train_project_ids)
-    val_set = set(manifest.validation_project_ids)
-    test_set = set(manifest.test_project_ids)
-    gold_test_projects = {
-        r.project_id for r in structurally_valid if r.quality_level == QualityLevel.gold and r.project_id in test_set
-    }
-    train_set -= gold_test_projects
-    manifest.train_project_ids = sorted(train_set)
 
+    train_r = float(sft_cfg.get("train_ratio", 0.8))
+    val_r = float(sft_cfg.get("validation_ratio", 0.1))
+    test_r = float(sft_cfg.get("test_ratio", 0.1))
+    min_validation = int(split_cfg.get("min_validation_projects", 5))
+    min_test = int(split_cfg.get("min_test_projects", 10))
+    heldout = int(cfg.get("splits", {}).get("heldout_project_count", 10))
+
+    split_diagnostics: dict[str, Any] = {}
+    xsim: dict[str, Any] = {}
+    train_set: set[str] = set()
+    val_set: set[str] = set()
+    test_set: set[str] = set()
     splits: dict[str, list[SFTRecord]] = {"train": [], "validation": [], "test": []}
-    for rec in structurally_valid:
-        if rec.project_id in train_set:
-            rec.split = SplitName.train
-            rec.is_test_project = False
-            splits["train"].append(rec)
-        elif rec.project_id in val_set:
-            rec.split = SplitName.validation
-            splits["validation"].append(rec)
-        else:
-            rec.split = SplitName.test
-            rec.is_test_project = rec.project_id in test_set
-            splits["test"].append(rec)
 
-    if {r.project_id for r in splits["train"]} & {r.project_id for r in splits["test"]}:
-        raise RuntimeError("train/test project leakage detected")
-    if {r.project_id for r in splits["train"]} & {r.project_id for r in splits["validation"]}:
-        raise RuntimeError("train/validation project leakage detected")
-    if len(splits["train"]) + len(splits["validation"]) + len(splits["test"]) != len(structurally_valid):
-        raise RuntimeError("split sum must equal structurally_valid_sft")
+    def _assign_from_clusters(c_of: dict[str, str]) -> tuple[set[str], set[str], set[str], dict[str, Any]]:
+        clusters = build_project_clusters(
+            project_ids=project_ids,
+            cluster_of=c_of,
+            records=structurally_valid,
+            projects=projects,
+        )
+        assignment, diag = assign_clusters_weighted(
+            clusters,
+            seed=seed,
+            train_r=train_r,
+            val_r=val_r,
+            test_r=test_r,
+            min_validation_projects=min_validation,
+            min_test_projects=min_test,
+            heldout_project_count=heldout,
+        )
+        tr, va, te = expand_assignment_to_projects(clusters, assignment)
+        return tr, va, te, diag
 
-    records = structurally_valid  # downstream stats/export use valid-only
+    def _materialize(tr: set[str], va: set[str], te: set[str]) -> dict[str, list[SFTRecord]]:
+        out: dict[str, list[SFTRecord]] = {"train": [], "validation": [], "test": []}
+        for rec in structurally_valid:
+            if rec.project_id in tr:
+                rec.split = SplitName.train
+                rec.is_test_project = False
+                out["train"].append(rec)
+            elif rec.project_id in va:
+                rec.split = SplitName.validation
+                rec.is_test_project = False
+                out["validation"].append(rec)
+            elif rec.project_id in te:
+                rec.split = SplitName.test
+                rec.is_test_project = True
+                out["test"].append(rec)
+            else:
+                # Orphan → train (must not silently invent test membership)
+                rec.split = SplitName.train
+                rec.is_test_project = False
+                out["train"].append(rec)
+                tr.add(rec.project_id)
+        return out
+
+    # Iteratively merge leak pairs into clusters and re-split (never dump all conflicts to train).
+    for attempt in range(8):
+        train_set, val_set, test_set, split_diagnostics = _assign_from_clusters(cluster_of)
+        # Protect gold-in-test carve: gold test projects must not also appear in train
+        gold_test_projects = {
+            r.project_id
+            for r in structurally_valid
+            if r.quality_level == QualityLevel.gold and r.project_id in test_set
+        }
+        train_set -= gold_test_projects
+        splits = _materialize(train_set, val_set, test_set)
+        if {r.project_id for r in splits["train"]} & {r.project_id for r in splits["test"]}:
+            raise RuntimeError("train/test project leakage detected")
+        if {r.project_id for r in splits["train"]} & {r.project_id for r in splits["validation"]}:
+            raise RuntimeError("train/validation project leakage detected")
+        if len(splits["train"]) + len(splits["validation"]) + len(splits["test"]) != len(structurally_valid):
+            raise RuntimeError("split sum must equal structurally_valid_sft")
+
+        probe = {
+            "train": [r.model_dump(mode="json") for r in splits["train"]],
+            "validation": [r.model_dump(mode="json") for r in splits["validation"]],
+            "test": [r.model_dump(mode="json") for r in splits["test"]],
+        }
+        xsim = analyze_cross_split_similarity(splits_override=probe, write_report=False)
+        if xsim.get("ok") and xsim.get("full_scan"):
+            break
+        pairs = collect_leaky_project_pairs(xsim)
+        if not pairs:
+            # full_scan false without project pairs — cannot fix by recluster
+            break
+        cluster_of = merge_cluster_roots(cluster_of, pairs)
+        split_diagnostics = {**split_diagnostics, "recluster_attempt": attempt + 1, "leak_pairs_merged": len(pairs)}
+
+    records = structurally_valid
     by_task = Counter(r.task_type.value for r in records)
     by_task_quality_level: dict[str, dict[str, int]] = {}
     by_task_review_status: dict[str, dict[str, int]] = {}
@@ -731,17 +789,14 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
             by_task_review_status[r.task_type.value][rs] = 0
         by_task_review_status[r.task_type.value][rs] += 1
 
-    # Consistency assertions (valid-only)
     for task, n in by_task.items():
         ql = by_task_quality_level.get(task, {})
         assert ql.get("gold", 0) + ql.get("silver", 0) == n, f"quality_level sum mismatch for {task}"
         rs = by_task_review_status.get(task, {})
         assert sum(rs.values()) == n, f"review_status sum mismatch for {task}"
-    assert len(splits["train"]) + len(splits["validation"]) + len(splits["test"]) == len(structurally_valid)
-    assert sum(by_task.values()) == len(structurally_valid)
 
-    domain_counter: Counter[str] = Counter()  # record_count (primary domain per record)
-    domain_ref_counter: Counter[str] = Counter()  # reference_count across all urls
+    domain_counter: Counter[str] = Counter()
+    domain_ref_counter: Counter[str] = Counter()
     level_counter: Counter[str] = Counter()
     for r in records:
         proj = projects.get(r.project_id) or {}
@@ -769,146 +824,19 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
         and '"status":"unknown"' in next((m.content for m in r.messages if m.role == "assistant"), "")
     )
 
-    stats = {
-        "candidate_raw": stats_filter["candidate_raw"],
-        "after_task_filters": raw_count,
-        "deduped": len(records),
-        "with_evidence": stats_filter["with_evidence"],
-        "filtered_no_evidence": stats_filter["filtered_no_evidence_match"],
-        "filters": stats_filter,
-        "total": len(records),
-        "structurally_valid_sft": len(structurally_valid),
-        "reviewed_trainable_sft": len(reviewed_trainable),
-        "silver_candidate_sft": len(silver_candidate),
-        "rejected_sft": len(rejected_sft),
-        "rejected_sft_reasons": dict(reject_reason_counts),
-        # Deprecated alias — do not treat as formally train-ready gold
-        "effective_trainable_deprecated_alias_of_structurally_valid": len(structurally_valid),
-        "train": len(splits["train"]),
-        "validation": len(splits["validation"]),
-        "test": len(splits["test"]),
-        "split_sum_equals_structurally_valid": (
-            len(splits["train"]) + len(splits["validation"]) + len(splits["test"]) == len(structurally_valid)
-        ),
-        "gold": sum(1 for r in records if r.quality_level == QualityLevel.gold),
-        "silver": sum(1 for r in records if r.quality_level == QualityLevel.silver),
-        "by_task": dict(by_task),
-        "by_task_quality_level": by_task_quality_level,
-        "by_task_review_status": by_task_review_status,
-        "train_projects": len(train_set),
-        "validation_projects": len(val_set),
-        "test_projects": len(test_set),
-        "source_domain_distribution": {
-            "record_count": dict(domain_counter),
-            "reference_count": dict(domain_ref_counter),
+    manifest = make_manifest(
+        seed=seed,
+        train=train_set,
+        validation=val_set,
+        test=test_set,
+        heldout=test_set,
+        extra_counts={
+            "leak_clusters": len(set(cluster_of.values())),
+            "split_ratio_within_5pp": 1 if split_diagnostics.get("ratio_within_5pp") else 0,
         },
-        "bundle_level_distribution": dict(level_counter),
-        "evidence_match_unknown_ratio": (em_unknown / em_total) if em_total else 0.0,
-        "preferred_target": sft_cfg.get("preferred_target"),
-        "gap_to_preferred": max(0, int(sft_cfg.get("preferred_target", 12500)) - len(records)),
-        "dedup": {
-            "exact_duplicates_removed": dedup_stats.exact_duplicates_removed,
-            "near_duplicates_removed": dedup_stats.near_duplicates_removed,
-            "cross_project_template_duplicates": dedup_stats.cross_project_template_duplicates,
-            "conflicting_gold_records": dedup_stats.conflicting_gold_records[:100],
-        },
-        "balance": balance_report,
-        "dry_run": dry_run,
-        "note": "reviewed_trainable_sft must be gold+reviewed before formal LoRA",
-    }
-
-    task_distribution = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "before_balance": dict(before_balance_counts),
-        "after_balance": dict(by_task),
-        "by_task": dict(by_task),
-        "by_task_quality_level": by_task_quality_level,
-        "by_task_review_status": by_task_review_status,
-        "by_split_and_task": by_split_and_task,
-        "task_gaps": balance_report.get("task_gaps") or {},
-        "dropped_by_balance": balance_report.get("dropped_by_balance") or {},
-        "bundle_level_distribution": dict(level_counter),
-        "source_domain_distribution": {
-            "record_count": dict(domain_counter),
-            "reference_count": dict(domain_ref_counter),
-        },
-        "structurally_valid_sft": len(structurally_valid),
-        "reviewed_trainable_sft": len(reviewed_trainable),
-        "silver_candidate_sft": len(silver_candidate),
-        "rejected_sft": len(rejected_sft),
-    }
-
-    # Repair cross-split severe leaks: collapse multi-split leak components into train.
-    from bidpilot_data.sft.cross_split import (
-        analyze_cross_split_similarity,
-        coalesce_projects_to_split,
-        collect_leaky_project_pairs,
     )
 
-    moved_n = 0
-
-    def _reassign() -> None:
-        nonlocal splits
-        splits = {"train": [], "validation": [], "test": []}
-        for rec in structurally_valid:
-            if rec.project_id in train_set:
-                rec.split = SplitName.train
-                rec.is_test_project = False
-                splits["train"].append(rec)
-            elif rec.project_id in val_set:
-                rec.split = SplitName.validation
-                splits["validation"].append(rec)
-            else:
-                rec.split = SplitName.test
-                rec.is_test_project = True
-                splits["test"].append(rec)
-        if not dry_run:
-            for name, items in splits.items():
-                write_jsonl(ensure_dir(settings.datasets_root / "sft" / name) / "records.jsonl", items)
-
-    for _ in range(6):
-        _reassign()
-        x = analyze_cross_split_similarity()
-        if x.get("ok"):
-            break
-        pairs = collect_leaky_project_pairs(x)
-        if not pairs:
-            break
-        train_set, val_set, test_set, moved2 = coalesce_projects_to_split(
-            train=set(train_set),
-            validation=set(val_set),
-            test=set(test_set),
-            leak_pairs=pairs,
-        )
-        moved_n += moved2
-
-    _reassign()
-    analyze_cross_split_similarity()
-    manifest.train_project_ids = sorted(train_set)
-    manifest.validation_project_ids = sorted(val_set)
-    manifest.test_project_ids = sorted(test_set)
-    manifest.counts = {
-        **(manifest.counts or {}),
-        "train_projects": len(train_set),
-        "validation_projects": len(val_set),
-        "test_projects": len(test_set),
-        "leak_projects_moved": moved_n,
-    }
-    stats["train"] = len(splits["train"])
-    stats["validation"] = len(splits["validation"])
-    stats["test"] = len(splits["test"])
-    stats["train_projects"] = len(train_set)
-    stats["validation_projects"] = len(val_set)
-    stats["test_projects"] = len(test_set)
-    stats["split_sum_equals_structurally_valid"] = (
-        len(splits["train"]) + len(splits["validation"]) + len(splits["test"]) == len(structurally_valid)
-    )
-    by_split_and_task = {
-        name: dict(Counter(r.task_type.value for r in items)) for name, items in splits.items()
-    }
-
-    # Per-split distribution report
-    def _split_stats(name: str, items: list[SFTRecord]) -> dict[str, Any]:
+    def _split_stats(items: list[SFTRecord]) -> dict[str, Any]:
         pids = {r.project_id for r in items}
         return {
             "project_count": len(pids),
@@ -930,19 +858,112 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
             "quality_level": dict(Counter(r.quality_level.value for r in items)),
         }
 
+    generated_at = utc_now_iso()
+    commit_sha = try_commit_sha(settings.repo_root)
+
+    # Provisional hashes from in-memory content for build_id (stable for same records/manifest)
+    provisional_source_sha = sha256_json_obj(
+        {
+            "train": [r.record_id for r in splits["train"]],
+            "validation": [r.record_id for r in splits["validation"]],
+            "test": [r.record_id for r in splits["test"]],
+        }
+    )
+    manifest_sha = sha256_json_obj(manifest.model_dump(mode="json"))
+    dataset_build_id = make_dataset_build_id(
+        seed=seed, source_records_sha256=provisional_source_sha, commit_sha=commit_sha
+    )
+
+    stats = {
+        "candidate_raw": stats_filter["candidate_raw"],
+        "after_task_filters": raw_count,
+        "deduped": len(records),
+        "with_evidence": stats_filter["with_evidence"],
+        "filtered_no_evidence": stats_filter["filtered_no_evidence_match"],
+        "filters": stats_filter,
+        "total": len(records),
+        "structurally_valid_sft": len(structurally_valid),
+        "reviewed_trainable_sft": len(reviewed_trainable),
+        "silver_candidate_sft": len(silver_candidate),
+        "rejected_sft": len(rejected_sft),
+        "rejected_sft_reasons": dict(reject_reason_counts),
+        "effective_trainable_deprecated_alias_of_structurally_valid": len(structurally_valid),
+        "train": len(splits["train"]),
+        "validation": len(splits["validation"]),
+        "test": len(splits["test"]),
+        "split_sum_equals_structurally_valid": (
+            len(splits["train"]) + len(splits["validation"]) + len(splits["test"]) == len(structurally_valid)
+        ),
+        "gold": sum(1 for r in records if r.quality_level == QualityLevel.gold),
+        "silver": sum(1 for r in records if r.quality_level == QualityLevel.silver),
+        "quality_level": {
+            "gold": sum(1 for r in records if r.quality_level == QualityLevel.gold),
+            "silver": sum(1 for r in records if r.quality_level == QualityLevel.silver),
+        },
+        "by_task": dict(by_task),
+        "by_task_quality_level": by_task_quality_level,
+        "by_task_review_status": by_task_review_status,
+        "train_projects": len(train_set),
+        "validation_projects": len(val_set),
+        "test_projects": len(test_set),
+        "source_domain_distribution": {
+            "record_count": dict(domain_counter),
+            "reference_count": dict(domain_ref_counter),
+        },
+        "bundle_level_distribution": dict(level_counter),
+        "evidence_match_unknown_ratio": (em_unknown / em_total) if em_total else 0.0,
+        "preferred_target": sft_cfg.get("preferred_target"),
+        "gap_to_preferred": max(0, int(sft_cfg.get("preferred_target", 12500)) - len(records)),
+        "dedup": {
+            "exact_duplicates_removed": dedup_stats.exact_duplicates_removed,
+            "near_duplicates_removed": dedup_stats.near_duplicates_removed,
+            "cross_project_template_duplicates": dedup_stats.cross_project_template_duplicates,
+            "conflicting_gold_records": dedup_stats.conflicting_gold_records[:100],
+        },
+        "balance": balance_report,
+        "split_diagnostics": split_diagnostics,
+        "cross_split_similarity": {
+            "ok": xsim.get("ok"),
+            "full_scan": xsim.get("full_scan"),
+            "fail_count": xsim.get("fail_count"),
+            "skipped_candidates_count": xsim.get("skipped_candidates_count"),
+        },
+        "dry_run": dry_run,
+        "note": "reviewed_trainable_sft must be gold+reviewed before formal LoRA",
+    }
+
+    task_distribution = {
+        "before_balance": dict(before_balance_counts),
+        "after_balance": dict(by_task),
+        "by_task": dict(by_task),
+        "by_task_quality_level": by_task_quality_level,
+        "by_task_review_status": by_task_review_status,
+        "by_split_and_task": by_split_and_task,
+        "task_gaps": balance_report.get("task_gaps") or {},
+        "dropped_by_balance": balance_report.get("dropped_by_balance") or {},
+        "bundle_level_distribution": dict(level_counter),
+        "source_domain_distribution": {
+            "record_count": dict(domain_counter),
+            "reference_count": dict(domain_ref_counter),
+        },
+        "structurally_valid_sft": len(structurally_valid),
+        "reviewed_trainable_sft": len(reviewed_trainable),
+        "silver_candidate_sft": len(silver_candidate),
+        "rejected_sft": len(rejected_sft),
+    }
+
     split_distribution = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "train": _split_stats("train", splits["train"]),
-        "validation": _split_stats("validation", splits["validation"]),
-        "test": _split_stats("test", splits["test"]),
+        "train": _split_stats(splits["train"]),
+        "validation": _split_stats(splits["validation"]),
+        "test": _split_stats(splits["test"]),
         "gaps": {
             "validation_projects_below_5": max(0, 5 - len(val_set)),
             "test_projects_below_10": max(0, 10 - len(test_set)),
         },
+        "split_diagnostics": split_diagnostics,
     }
 
     dedup_report = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
         "exact_duplicates_removed": dedup_stats.exact_duplicates_removed,
         "near_duplicates_removed": dedup_stats.near_duplicates_removed,
         "cross_project_template_duplicates": dedup_stats.cross_project_template_duplicates,
@@ -950,33 +971,99 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
         "method": "exact_sha1 + simhash64 LSH bands + rapidfuzz token_set_ratio",
     }
 
-    if not dry_run:
-        src = ensure_dir(settings.datasets_root / "sft" / "source")
-        write_jsonl(src / "all.jsonl", structurally_valid)
-        write_jsonl(src / "structurally_valid.jsonl", structurally_valid)
-        write_jsonl(src / "reviewed_trainable.jsonl", reviewed_trainable)
-        write_jsonl(src / "silver_candidate.jsonl", silver_candidate)
-        write_jsonl(src / "effective.jsonl", structurally_valid)
-        write_jsonl(ensure_dir(settings.datasets_root / "rejected") / "sft.jsonl", rejected_sft)
-        if dedup_stats.conflicting_gold_records:
-            write_json(
-                ensure_dir(settings.datasets_root / "review" / "pending") / "conflicting_gold_sft.json",
-                dedup_stats.conflicting_gold_records,
-            )
-        for name, items in splits.items():
-            payload = [{"messages": [m.model_dump() for m in r.messages]} for r in items]
-            out_dir = ensure_dir(settings.datasets_root / "sft" / name)
-            write_json(out_dir / "sharegpt.json", payload)
-            write_jsonl(out_dir / "records.jsonl", items)
-        write_json(settings.datasets_root / "manifests" / "sft_split_manifest.json", manifest)
-        write_json(settings.datasets_root / "reports" / "sft_build_stats.json", stats)
-        write_json(settings.datasets_root / "reports" / "task_distribution.json", task_distribution)
-        write_json(settings.datasets_root / "reports" / "dedup_report.json", dedup_report)
-        write_json(settings.datasets_root / "reports" / "split_distribution.json", split_distribution)
-        from bidpilot_data.sft.cross_split import analyze_cross_split_similarity
+    meta_kwargs = {
+        "dataset_build_id": dataset_build_id,
+        "split_manifest_sha256": manifest_sha,
+        "source_records_sha256": provisional_source_sha,
+        "commit_sha": commit_sha,
+        "generated_at": generated_at,
+    }
+    stats = attach_artifact_meta(stats, **meta_kwargs)
+    task_distribution = attach_artifact_meta(task_distribution, **meta_kwargs)
+    split_distribution = attach_artifact_meta(split_distribution, **meta_kwargs)
+    dedup_report = attach_artifact_meta(dedup_report, **meta_kwargs)
+    xsim = attach_artifact_meta(xsim, **meta_kwargs)
 
-        stats["cross_split_similarity"] = analyze_cross_split_similarity()
-        _update_dataset_info(settings, stats)
+    if dry_run:
+        log_stats(
+            log,
+            "build_sft",
+            {
+                "total": stats["total"],
+                "train": stats["train"],
+                "validation": stats["validation"],
+                "test": stats["test"],
+                "dry_run": True,
+            },
+        )
+        return stats
+
+    lock_path = settings.datasets_root / "reports" / "checkpoints" / "sft_build.lock"
+    staging = None
+    try:
+        with exclusive_build_lock(lock_path):
+            staging = make_staging_dir(settings.datasets_root)
+            write_split_bundle(
+                staging,
+                splits=splits,
+                rejected=rejected_sft,
+                source_bundles={
+                    "all": structurally_valid,
+                    "structurally_valid": structurally_valid,
+                    "reviewed_trainable": reviewed_trainable,
+                    "silver_candidate": silver_candidate,
+                    "effective": structurally_valid,
+                },
+            )
+            if dedup_stats.conflicting_gold_records:
+                write_json(
+                    ensure_dir(staging / "review" / "pending") / "conflicting_gold_sft.json",
+                    dedup_stats.conflicting_gold_records,
+                )
+
+            # Finalize cross_split against staged records (still not formal)
+            staged_probe = {
+                name: [r.model_dump(mode="json") for r in items] for name, items in splits.items()
+            }
+            xsim_final = analyze_cross_split_similarity(splits_override=staged_probe, write_report=False)
+            xsim_final = attach_artifact_meta(xsim_final, **meta_kwargs)
+            stats["cross_split_similarity"] = {
+                "ok": xsim_final.get("ok"),
+                "full_scan": xsim_final.get("full_scan"),
+                "fail_count": xsim_final.get("fail_count"),
+                "skipped_candidates_count": xsim_final.get("skipped_candidates_count"),
+                "achieved_ratios": split_diagnostics.get("achieved_ratios"),
+                "absolute_errors_pp": split_diagnostics.get("absolute_errors_pp"),
+                "oversized_clusters": split_diagnostics.get("oversized_clusters"),
+            }
+
+            reports_payload = {
+                "sft_build_stats.json": stats,
+                "task_distribution.json": task_distribution,
+                "split_distribution.json": split_distribution,
+                "dedup_report.json": dedup_report,
+                "cross_split_similarity_report.json": xsim_final,
+            }
+            publish_staging_to_formal(
+                staging=staging,
+                datasets_root=settings.datasets_root,
+                reports=reports_payload,
+                manifest=manifest,
+                llamafactory_data_dir=settings.repo_root / "training" / "llamafactory" / "data",
+            )
+            # Refresh live file hashes after publish (informational; build_id stays stable)
+            live_source = {
+                "train": sha256_jsonl_file(settings.datasets_root / "sft" / "train" / "records.jsonl"),
+                "validation": sha256_jsonl_file(settings.datasets_root / "sft" / "validation" / "records.jsonl"),
+                "test": sha256_jsonl_file(settings.datasets_root / "sft" / "test" / "records.jsonl"),
+            }
+            stats["live_source_records_sha256"] = live_source
+            write_json(settings.datasets_root / "reports" / "sft_build_stats.json", stats)
+    except BuildLockError:
+        raise
+    finally:
+        if staging is not None:
+            cleanup_staging(staging)
 
     log_stats(
         log,
@@ -988,12 +1075,14 @@ def build_sft_dataset(*, dry_run: bool = False) -> dict[str, Any]:
             "train": stats["train"],
             "validation": stats["validation"],
             "test": stats["test"],
+            "ratios": split_diagnostics.get("achieved_ratios"),
         },
     )
     return stats
 
 
 def _update_dataset_info(settings: Any, stats: dict[str, Any]) -> None:
+    """Legacy helper retained for imports; publish path now updates dataset_info atomically."""
     info_path = settings.repo_root / "training" / "llamafactory" / "data" / "dataset_info.json"
     info = {}
     if info_path.exists():

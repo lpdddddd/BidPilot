@@ -1,9 +1,14 @@
-"""Full-scan cross-split leakage detection (candidate recall + precise confirm)."""
+"""Full-scan cross-split leakage detection (candidate recall + precise confirm).
+
+full_scan=true means every candidate that must be checked was processed — not merely
+that every record was indexed. Silent bucket truncation is forbidden.
+"""
 
 from __future__ import annotations
 
 import hashlib
 import re
+import time
 from collections import Counter, defaultdict
 from typing import Any
 
@@ -45,7 +50,6 @@ TEMPLATE_MARKERS = (
     "行业行政主管部门颁发的荣誉证书",
 )
 
-# Strong project-specific / scoring / technical entities (not generic law boilerplate).
 BUSINESS_MARKERS = (
     "评分表",
     "评分因素",
@@ -86,17 +90,21 @@ STRONG_TEMPLATE_MARKERS = (
     "失信被执行人",
 )
 
+# Direct pair budget per secondary bucket; above this we sub-bucket further or skip.
+MAX_DIRECT_BUCKET = 300
+MAX_SECONDARY_BUCKET = 250
+MAX_NGRAM_DF = 100
+PAIRWISE_BUDGET = 5_000_000
+
 
 def _compact(text: str) -> str:
     return re.sub(r"\s+", "", text or "")
 
 
 def strip_template_boilerplate(text: str) -> str:
-    """Remove common legal/portal boilerplate spans; residual used for business overlap."""
     t = text or ""
     for m in TEMPLATE_MARKERS:
         t = t.replace(m, " ")
-    # Strip long GDCA / portal instruction blocks
     t = re.sub(r"温馨提示[\s\S]{0,800}", " ", t)
     t = re.sub(r"https?://\S+", " ", t)
     return re.sub(r"\s+", " ", t).strip()
@@ -124,7 +132,6 @@ def classify_overlap(
     sim: float,
     exact: bool,
 ) -> tuple[str, str]:
-    """Return (kind, reason)."""
     text_l = left.get("text") or ""
     text_r = right.get("text") or ""
     biz_l = _business_entity_hits(text_l)
@@ -146,7 +153,6 @@ def classify_overlap(
             return "same_project_or_document", "identical_text_same_project_or_document"
         if left.get("kind") == "sft_qa" or right.get("kind") == "sft_qa":
             return "severe_business_overlap", "identical_sft_user_assistant_across_splits"
-        # Portal / agency boilerplate across distinct projects
         if (portal_template or (tmpl_l >= 2 and tmpl_r >= 2)) and biz_l + biz_r <= 1:
             return "template_overlap", "exact_boilerplate_low_business_residue"
         if biz_l >= 2 and biz_r >= 2 and not residual_short:
@@ -160,17 +166,14 @@ def classify_overlap(
     if same_project or same_doc:
         return "same_project_or_document", "shared_project_or_document_across_splits"
 
-    # SFT QA: only exact / near-exact identical prompts+answers are hard fails
     if left.get("kind") == "sft_qa" or right.get("kind") == "sft_qa":
         if sim >= 99.5:
             return "severe_business_overlap", "near_duplicate_sft_qa_across_splits"
         return "normal", "sft_qa_similar_but_not_identical"
 
-    # Dominantly portal template → template_overlap even if fuzzy residual high (agency boilerplate body)
     if portal_template and biz_l + biz_r <= 1:
         return "template_overlap", "shared_strong_portal_boilerplate"
 
-    # Business scoring / tech near-dup cannot be template-exempted
     if sim >= 95 and biz_l >= 2 and biz_r >= 2 and residual_sim >= 85 and not residual_short:
         return "severe_business_overlap", "high_residual_similarity_with_business_entities"
 
@@ -193,7 +196,6 @@ def _collect_split_items(
     items: list[dict[str, Any]] = []
     seen_chunk: set[str] = set()
     for r in records:
-        # SFT QA fingerprint item
         msgs = r.get("messages") or []
         user = next((m.get("content") for m in msgs if m.get("role") == "user"), "")
         asst = ""
@@ -240,45 +242,130 @@ def _collect_split_items(
     return items
 
 
-def _build_indexes(items: list[dict[str, Any]]) -> tuple[dict[str, list[int]], dict[tuple[int, int], list[int]], dict[str, list[int]]]:
-    """exact_hash -> idxs; (band, band_val) -> idxs; ngram -> idxs."""
+def _length_bin(n: int) -> int:
+    if n < 80:
+        return 0
+    if n < 200:
+        return 1
+    if n < 500:
+        return 2
+    if n < 900:
+        return 3
+    return 4
+
+
+def _build_indexes(
+    items: list[dict[str, Any]],
+) -> tuple[dict[str, list[int]], dict[tuple[int, int], list[int]], dict[str, list[int]], dict[str, Any]]:
     exact: dict[str, list[int]] = defaultdict(list)
     bands: dict[tuple[int, int], list[int]] = defaultdict(list)
-    ngrams: dict[str, list[int]] = defaultdict(list)
+    gram_df: Counter[str] = Counter()
+    item_grams: list[list[str]] = []
+
     for i, it in enumerate(items):
-        norm = normalize_user_text(it.get("text") or "")
+        raw = it.get("text") or ""
+        residual = strip_template_boilerplate(raw)
+        norm = normalize_user_text(residual if len(_compact(residual)) >= 40 else raw)
         if not norm:
+            item_grams.append([])
             continue
         h = hashlib.sha1(norm.encode("utf-8")).hexdigest()
         it["_norm"] = norm
         it["_hash"] = h
         it["_simhash"] = simhash64(norm)
+        it["_len_bin"] = _length_bin(len(norm))
+        it["_task"] = it.get("task_type") or "unknown"
         exact[h].append(i)
         sh = it["_simhash"]
         for b in range(4):
             bands[(b, (sh >> (b * 16)) & 0xFFFF)].append(i)
-        # char bigrams sample for inverted recall
+        # Index ALL character grams for this item (DF counted in pass 2)
         chars = re.findall(r"[\u4e00-\u9fff]{2}|[a-z0-9]{3,}", norm)
-        for g in chars[:40]:
+        # Unique preserve order
+        seen: set[str] = set()
+        grams: list[str] = []
+        for g in chars:
+            if g in seen:
+                continue
+            seen.add(g)
+            grams.append(g)
+        item_grams.append(grams)
+        for g in grams:
+            gram_df[g] += 1
+
+    ngrams: dict[str, list[int]] = defaultdict(list)
+    for i, grams in enumerate(item_grams):
+        # Keep informative grams only; never index ultra-common boilerplate grams as candidates
+        useful = [g for g in grams if 2 <= gram_df[g] <= MAX_NGRAM_DF]
+        if not useful and grams:
+            useful = sorted(grams, key=lambda g: (gram_df[g], g))[:40]
+        for g in useful:
             ngrams[g].append(i)
-    return exact, bands, ngrams
+
+    meta = {
+        "grams_total_types": len(gram_df),
+        "grams_indexed_types": len(ngrams),
+    }
+    return exact, bands, ngrams, meta
 
 
-def analyze_cross_split_similarity(*, threshold: int = 95, max_pairs_in_report: int = 200) -> dict[str, Any]:
+def _cross_split_pairs(
+    idxs: list[int],
+    all_items: list[dict[str, Any]],
+    split_pairs: tuple[tuple[str, str], ...],
+) -> list[tuple[int, int]]:
+    by_split: dict[str, list[int]] = defaultdict(list)
+    for i in idxs:
+        by_split[all_items[i]["split"]].append(i)
+    out: list[tuple[int, int]] = []
+    for a, b in split_pairs:
+        la, lb = by_split.get(a, []), by_split.get(b, [])
+        for i in la:
+            for j in lb:
+                out.append((min(i, j), max(i, j)))
+    return out
+
+
+def _secondary_subbuckets(idxs: list[int], all_items: list[dict[str, Any]]) -> dict[tuple[Any, ...], list[int]]:
+    """Sub-bucket high-frequency SimHash/n-gram buckets by length + task + extra hash bits."""
+    subs: dict[tuple[Any, ...], list[int]] = defaultdict(list)
+    for i in idxs:
+        it = all_items[i]
+        sh = int(it.get("_simhash") or 0)
+        # Extra bands from middle bits
+        extra = ((sh >> 8) & 0xFF, (sh >> 24) & 0xFF)
+        key = (it.get("_len_bin"), it.get("_task"), extra[0], extra[1])
+        subs[key].append(i)
+    return subs
+
+
+def analyze_cross_split_similarity(
+    *,
+    threshold: int = 95,
+    max_pairs_in_report: int = 200,
+    splits_override: dict[str, list[dict[str, Any]]] | None = None,
+    write_report: bool = True,
+) -> dict[str, Any]:
     """Full-scan train/validation/test leakage with candidate recall + RapidFuzz confirm."""
+    t0 = time.time()
     settings = get_settings()
     root = settings.datasets_root
     chunks = {c["chunk_id"]: c for c in read_jsonl(root / "interim" / "chunks" / "chunks.jsonl")}
     docs = {d["document_id"]: d for d in read_jsonl(root / "manifests" / "documents.jsonl")}
-    splits = {
-        "train": read_jsonl(root / "sft" / "train" / "records.jsonl"),
-        "validation": read_jsonl(root / "sft" / "validation" / "records.jsonl"),
-        "test": read_jsonl(root / "sft" / "test" / "records.jsonl"),
-    }
+    if splits_override is not None:
+        splits = splits_override
+    else:
+        splits = {
+            "train": read_jsonl(root / "sft" / "train" / "records.jsonl"),
+            "validation": read_jsonl(root / "sft" / "validation" / "records.jsonl"),
+            "test": read_jsonl(root / "sft" / "test" / "records.jsonl"),
+        }
 
     split_stats: dict[str, Any] = {}
     all_items: list[dict[str, Any]] = []
+    records_indexed = 0
     for name, rows in splits.items():
+        records_indexed += len(rows)
         items = _collect_split_items(rows, split=name, chunks=chunks, docs=docs)
         all_items.extend(items)
         split_stats[name] = {
@@ -289,58 +376,182 @@ def analyze_cross_split_similarity(*, threshold: int = 95, max_pairs_in_report: 
             "items": len(items),
         }
 
-    exact_idx, band_idx, ngram_idx = _build_indexes(all_items)
+    exact_idx, band_idx, ngram_idx, gram_meta = _build_indexes(all_items)
+    chunks_indexed = sum(1 for it in all_items if it.get("kind") == "chunk")
 
-    # Candidate pairs across splits only
     split_pairs = (("train", "validation"), ("train", "test"), ("validation", "test"))
     candidate_keys: set[tuple[int, int]] = set()
+    exact_candidates = 0
+    simhash_candidates = 0
+    ngram_candidates = 0
+    skipped_candidates: list[dict[str, Any]] = []
+    high_frequency_buckets = 0
+    max_bucket_size = 0
+    pairwise_spent = 0
 
-    # Exact hash collisions across splits
+    # Exact hash — FULL, never truncated
     for _h, idxs in exact_idx.items():
         if len(idxs) < 2:
             continue
-        by_split: dict[str, list[int]] = defaultdict(list)
-        for i in idxs:
-            by_split[all_items[i]["split"]].append(i)
-        for a, b in split_pairs:
-            for i in by_split.get(a, []):
-                for j in by_split.get(b, []):
-                    candidate_keys.add((min(i, j), max(i, j)))
+        max_bucket_size = max(max_bucket_size, len(idxs))
+        pairs = _cross_split_pairs(idxs, all_items, split_pairs)
+        exact_candidates += len(pairs)
+        for p in pairs:
+            candidate_keys.add(p)
 
-    # SimHash band collisions
+    # SimHash bands — no silent [:80]; secondary bucket oversized groups
     for _key, idxs in band_idx.items():
         if len(idxs) < 2:
             continue
-        by_split = defaultdict(list)
-        for i in idxs:
-            by_split[all_items[i]["split"]].append(i)
-        for a, b in split_pairs:
-            la, lb = by_split.get(a, []), by_split.get(b, [])
-            # Cap per-bucket fanout
-            for i in la[:80]:
-                for j in lb[:80]:
-                    if hamming64(all_items[i].get("_simhash", 0), all_items[j].get("_simhash", 0)) <= 3:
-                        candidate_keys.add((min(i, j), max(i, j)))
+        max_bucket_size = max(max_bucket_size, len(idxs))
+        if len(idxs) > MAX_DIRECT_BUCKET:
+            high_frequency_buckets += 1
+            subs = _secondary_subbuckets(idxs, all_items)
+            for sk, sub in subs.items():
+                if len(sub) < 2:
+                    continue
+                if len(sub) > MAX_SECONDARY_BUCKET:
+                    # tertiary: residual-text hash prefix
+                    tertiary: dict[str, list[int]] = defaultdict(list)
+                    for i in sub:
+                        norm = all_items[i].get("_norm") or ""
+                        tertiary[hashlib.sha1(norm.encode("utf-8")).hexdigest()[:6]].append(i)
+                    for tidxs in tertiary.values():
+                        if len(tidxs) < 2:
+                            continue
+                        if len(tidxs) > MAX_SECONDARY_BUCKET:
+                            est = 0
+                            by_split: dict[str, int] = defaultdict(int)
+                            for i in tidxs:
+                                by_split[all_items[i]["split"]] += 1
+                            for a, b in split_pairs:
+                                est += by_split.get(a, 0) * by_split.get(b, 0)
+                            skipped_candidates.append(
+                                {
+                                    "source": "simhash_tertiary",
+                                    "bucket_size": len(tidxs),
+                                    "estimated_pairs": est,
+                                    "reason": "bucket_exceeds_secondary_limit_after_rehash",
+                                    "subkey": sk,
+                                }
+                            )
+                            continue
+                        pairs = _cross_split_pairs(tidxs, all_items, split_pairs)
+                        # Filter by hamming
+                        kept = []
+                        for i, j in pairs:
+                            if hamming64(all_items[i].get("_simhash", 0), all_items[j].get("_simhash", 0)) <= 3:
+                                kept.append((i, j))
+                        pairwise_spent += len(pairs)
+                        simhash_candidates += len(kept)
+                        candidate_keys.update(kept)
+                    continue
+                pairs = _cross_split_pairs(sub, all_items, split_pairs)
+                pairwise_spent += len(pairs)
+                if pairwise_spent > PAIRWISE_BUDGET:
+                    skipped_candidates.append(
+                        {
+                            "source": "simhash_secondary",
+                            "bucket_size": len(sub),
+                            "estimated_pairs": len(pairs),
+                            "reason": "pairwise_budget_exhausted",
+                        }
+                    )
+                    continue
+                kept = [
+                    (i, j)
+                    for i, j in pairs
+                    if hamming64(all_items[i].get("_simhash", 0), all_items[j].get("_simhash", 0)) <= 3
+                ]
+                simhash_candidates += len(kept)
+                candidate_keys.update(kept)
+            continue
 
-    # N-gram inverted recall: items sharing >= 3 rare-ish grams
+        pairs = _cross_split_pairs(idxs, all_items, split_pairs)
+        pairwise_spent += len(pairs)
+        kept = [
+            (i, j)
+            for i, j in pairs
+            if hamming64(all_items[i].get("_simhash", 0), all_items[j].get("_simhash", 0)) <= 3
+        ]
+        simhash_candidates += len(kept)
+        candidate_keys.update(kept)
+
+    # N-gram inverted recall — no [:40] fanout truncation; common grams excluded at index time
     co_count: dict[tuple[int, int], int] = defaultdict(int)
     for _g, idxs in ngram_idx.items():
-        if len(idxs) < 2 or len(idxs) > 200:
+        if len(idxs) < 2:
             continue
-        by_split = defaultdict(list)
-        for i in idxs:
-            by_split[all_items[i]["split"]].append(i)
-        for a, b in split_pairs:
-            la, lb = by_split.get(a, [])[:40], by_split.get(b, [])[:40]
-            for i in la:
-                for j in lb:
-                    key = (min(i, j), max(i, j))
-                    co_count[key] += 1
-                    if co_count[key] >= 3:
-                        candidate_keys.add(key)
+        max_bucket_size = max(max_bucket_size, len(idxs))
+        if len(idxs) > MAX_DIRECT_BUCKET:
+            high_frequency_buckets += 1
+            work_lists = list(_secondary_subbuckets(idxs, all_items).values())
+        elif len(idxs) > 80:
+            work_lists = list(_secondary_subbuckets(idxs, all_items).values())
+        else:
+            work_lists = [idxs]
+        for work in work_lists:
+            if len(work) < 2:
+                continue
+            if len(work) > MAX_SECONDARY_BUCKET:
+                # Tertiary residual-hash bucketing instead of silent truncation
+                tertiary: dict[str, list[int]] = defaultdict(list)
+                for i in work:
+                    norm = all_items[i].get("_norm") or ""
+                    tertiary[hashlib.sha1(norm.encode("utf-8")).hexdigest()[:8]].append(i)
+                for tidxs in tertiary.values():
+                    if len(tidxs) < 2:
+                        continue
+                    if len(tidxs) > MAX_SECONDARY_BUCKET:
+                        by_split_n = defaultdict(int)
+                        for i in tidxs:
+                            by_split_n[all_items[i]["split"]] += 1
+                        est = sum(by_split_n.get(a, 0) * by_split_n.get(b, 0) for a, b in split_pairs)
+                        if est == 0:
+                            continue
+                        skipped_candidates.append(
+                            {
+                                "source": "ngram",
+                                "bucket_size": len(tidxs),
+                                "estimated_pairs": est,
+                                "reason": "ngram_bucket_too_large_after_tertiary",
+                            }
+                        )
+                        continue
+                    pairs = _cross_split_pairs(tidxs, all_items, split_pairs)
+                    pairwise_spent += len(pairs)
+                    for i, j in pairs:
+                        key = (i, j)
+                        co_count[key] += 1
+                        if co_count[key] >= 3:
+                            if key not in candidate_keys:
+                                ngram_candidates += 1
+                            candidate_keys.add(key)
+                continue
+            pairs = _cross_split_pairs(work, all_items, split_pairs)
+            pairwise_spent += len(pairs)
+            if pairwise_spent > PAIRWISE_BUDGET:
+                skipped_candidates.append(
+                    {
+                        "source": "ngram",
+                        "bucket_size": len(work),
+                        "estimated_pairs": len(pairs),
+                        "reason": "pairwise_budget_exhausted",
+                    }
+                )
+                continue
+            for i, j in pairs:
+                key = (i, j)
+                co_count[key] += 1
+                if co_count[key] >= 3:
+                    if key not in candidate_keys:
+                        ngram_candidates += 1
+                    candidate_keys.add(key)
 
-    # Precise confirm
-    pairs: list[dict[str, Any]] = []
+    before_dedupe = exact_candidates + simhash_candidates + ngram_candidates
+    candidates_deduplicated = len(candidate_keys)
+
+    pairs_out: list[dict[str, Any]] = []
     kind_counts: Counter[str] = Counter()
     precise_compared = 0
     for i, j in sorted(candidate_keys):
@@ -360,7 +571,7 @@ def analyze_cross_split_similarity(*, threshold: int = 95, max_pairs_in_report: 
         if kind == "normal":
             continue
         kind_counts[kind] += 1
-        pairs.append(
+        pairs_out.append(
             {
                 "similarity": sim,
                 "kind": kind,
@@ -389,22 +600,13 @@ def analyze_cross_split_similarity(*, threshold: int = 95, max_pairs_in_report: 
             }
         )
 
-    severe = (
-        kind_counts.get("severe_business_overlap", 0)
-        + kind_counts.get("same_project_or_document", 0)
-        + kind_counts.get("exact_duplicate", 0)
-    )
-    # exact_duplicate across different projects with template-only may be counted in exact_duplicate
-    # Recompute fail set: same_project, same_doc, severe_business, and exact non-template
     fail_n = 0
-    for p in pairs:
+    for p in pairs_out:
         if p["kind"] in {"same_project_or_document", "severe_business_overlap"}:
             fail_n += 1
         elif p["kind"] == "exact_duplicate" and "boilerplate" not in (p.get("reason") or ""):
-            # template exact uses template_overlap; remaining exact_duplicate fails gate
             fail_n += 1
 
-    # Project-level mutual exclusion (hard fail)
     proj_sets = {k: {r.get("project_id") for r in v if r.get("project_id")} for k, v in splits.items()}
     project_leaks = []
     for a, b in split_pairs:
@@ -413,15 +615,32 @@ def analyze_cross_split_similarity(*, threshold: int = 95, max_pairs_in_report: 
             project_leaks.append({"splits": f"{a}/{b}", "count": len(inter), "sample": sorted(inter)[:5]})
             fail_n += len(inter)
 
+    full_scan = len(skipped_candidates) == 0
+    ok = fail_n == 0 and not project_leaks and full_scan
+
     report = {
-        "full_scan": True,
+        "full_scan": full_scan,
         "threshold": threshold,
         "split_stats": split_stats,
+        "records_indexed": records_indexed,
+        "chunks_indexed": chunks_indexed,
         "chunks_scanned": sum(s["chunks"] for s in split_stats.values()),
         "items_scanned": len(all_items),
-        "candidate_pairs": len(candidate_keys),
+        "exact_candidates": exact_candidates,
+        "simhash_candidates": simhash_candidates,
+        "ngram_candidates": ngram_candidates,
+        "candidates_before_dedupe_estimate": before_dedupe,
+        "candidates_deduplicated": candidates_deduplicated,
+        "candidate_pairs": candidates_deduplicated,
         "precise_comparisons": precise_compared,
-        "pair_count": len(pairs),
+        "skipped_candidates": skipped_candidates[:50],
+        "skipped_candidates_count": len(skipped_candidates),
+        "high_frequency_buckets": high_frequency_buckets,
+        "max_bucket_size": max_bucket_size,
+        "pairwise_comparisons_budget": PAIRWISE_BUDGET,
+        "pairwise_spent": pairwise_spent,
+        "gram_index": gram_meta,
+        "pair_count": len(pairs_out),
         "kind_counts": dict(kind_counts),
         "exact_duplicate": kind_counts.get("exact_duplicate", 0),
         "same_project_or_document": kind_counts.get("same_project_or_document", 0),
@@ -430,15 +649,18 @@ def analyze_cross_split_similarity(*, threshold: int = 95, max_pairs_in_report: 
         "severe_train_test_near_duplicates": kind_counts.get("severe_business_overlap", 0)
         + kind_counts.get("same_project_or_document", 0),
         "project_leaks": project_leaks,
-        "pairs": pairs[:max_pairs_in_report],
-        "ok": fail_n == 0 and not project_leaks,
+        "pairs": pairs_out[:max_pairs_in_report],
+        "ok": ok,
         "fail_count": fail_n,
+        "scan_duration_seconds": round(time.time() - t0, 3),
         "note": (
-            "full_scan candidate recall via exact-hash + SimHash LSH + n-gram co-occurrence; "
-            "template_overlap requires low residual similarity after boilerplate strip and low business entities."
+            "full_scan requires every candidate set to be processed without skips; "
+            "high-frequency buckets are re-bucketed (length/task/hash) instead of silent truncation; "
+            "template_overlap requires low residual similarity after boilerplate strip."
         ),
     }
-    write_json(ensure_dir(root / "reports") / "cross_split_similarity_report.json", report)
+    if write_report:
+        write_json(ensure_dir(root / "reports") / "cross_split_similarity_report.json", report)
     return report
 
 
@@ -471,7 +693,11 @@ def coalesce_projects_to_split(
     test: set[str],
     leak_pairs: list[tuple[str, str]],
 ) -> tuple[set[str], set[str], set[str], int]:
-    """Move projects so each leaky connected component lives in one split."""
+    """Deprecated path retained for tests: prefer re-clustering + re-split instead.
+
+    When a multi-split component is found, destination is majority-record split,
+    never unconditionally train. Floors are best-effort only.
+    """
     parent: dict[str, str] = {}
 
     def find(x: str) -> str:
@@ -501,18 +727,16 @@ def coalesce_projects_to_split(
     for members in comps.values():
         if len(members) < 2:
             continue
-        # Always collapse multi-split components into train to avoid floor/oscillation
-        # (train absorbs near-duplicate projects; validation/test keep unique clusters).
         scores = {
             "train": sum(1 for m in members if m in train),
             "validation": sum(1 for m in members if m in validation),
             "test": sum(1 for m in members if m in test),
         }
         occupied = [k for k, v in scores.items() if v > 0]
-        if len(occupied) >= 2:
-            dest = "train"
-        else:
-            dest = occupied[0] if occupied else "train"
+        if len(occupied) < 2:
+            continue
+        # Majority member count; ties → lexicographic among occupied (deterministic, not always train)
+        dest = sorted(occupied, key=lambda k: (-scores[k], k))[0]
         for m in members:
             cur = "train" if m in train else "validation" if m in validation else "test"
             if cur == dest:

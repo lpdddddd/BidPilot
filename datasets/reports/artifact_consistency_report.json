@@ -1,0 +1,62 @@
+{
+  "build_ids": {
+    "cross_split_similarity_report": "306263cb7ec117d420e0341999c030a3",
+    "dataset_statistics": "306263cb7ec117d420e0341999c030a3",
+    "sft_build_stats": "306263cb7ec117d420e0341999c030a3",
+    "split_distribution": "306263cb7ec117d420e0341999c030a3",
+    "task_distribution": "306263cb7ec117d420e0341999c030a3",
+    "training_readiness_report": "306263cb7ec117d420e0341999c030a3"
+  },
+  "error_count": 0,
+  "errors": [],
+  "ok": true,
+  "source_records_sha256_live": {
+    "test": "8f3eef21579ca65efc9d68dcab57cfde37bbd432293b539a8ebe20023543da06",
+    "train": "377c5749ba86ad5a3ffd0b2208df80d369c513a8dc2b80f2f23a7f5c56007f57",
+    "validation": "990ff4193301b5bfad97498d4a3e99b45f8a03c86df86257f50d2ea009dd7595"
+  },
+  "truth": {
+    "by_split_and_task": {
+      "test": {
+        "citation_qa": 41,
+        "project_info_extract": 14,
+        "qualification_extract": 51,
+        "requirement_classify": 101,
+        "risk_detect": 56,
+        "scoring_extract": 6,
+        "tool_call": 68
+      },
+      "train": {
+        "citation_qa": 101,
+        "project_info_extract": 22,
+        "qualification_extract": 718,
+        "requirement_classify": 964,
+        "risk_detect": 724,
+        "scoring_extract": 71,
+        "tool_call": 138
+      },
+      "validation": {
+        "citation_qa": 39,
+        "project_info_extract": 5,
+        "qualification_extract": 101,
+        "requirement_classify": 214,
+        "risk_detect": 134,
+        "scoring_extract": 25,
+        "tool_call": 31
+      }
+    },
+    "project_counts": {
+      "test": 15,
+      "train": 23,
+      "validation": 5
+    },
+    "records": {
+      "test": 337,
+      "train": 2738,
+      "validation": 549
+    },
+    "total": 3624
+  },
+  "warning_count": 0,
+  "warnings": []
+}

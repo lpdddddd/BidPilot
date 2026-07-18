@@ -1,76 +1,76 @@
 {
   "bidpilot_sample_sharegpt": {
+    "columns": {
+      "messages": "messages"
+    },
     "file_name": "sample_sharegpt.json",
     "formatting": "sharegpt",
-    "columns": {
-      "messages": "messages"
-    },
     "tags": {
-      "role_tag": "role",
-      "content_tag": "content",
-      "user_tag": "user",
       "assistant_tag": "assistant",
-      "system_tag": "system"
-    }
-  },
-  "bidpilot_sft_train": {
-    "file_name": "bidpilot_sft_train.json",
-    "formatting": "sharegpt",
-    "columns": {
-      "messages": "messages"
-    },
-    "tags": {
-      "role_tag": "role",
       "content_tag": "content",
-      "user_tag": "user",
-      "assistant_tag": "assistant",
+      "role_tag": "role",
       "system_tag": "system",
-      "tool_tag": "tool"
-    }
-  },
-  "bidpilot_sft_validation": {
-    "file_name": "bidpilot_sft_validation.json",
-    "formatting": "sharegpt",
-    "columns": {
-      "messages": "messages"
-    },
-    "tags": {
-      "role_tag": "role",
-      "content_tag": "content",
-      "user_tag": "user",
-      "assistant_tag": "assistant",
-      "system_tag": "system",
-      "tool_tag": "tool"
+      "user_tag": "user"
     }
   },
   "bidpilot_sft_test": {
-    "file_name": "bidpilot_sft_test.json",
-    "formatting": "sharegpt",
     "columns": {
       "messages": "messages"
     },
+    "file_name": "bidpilot_sft_test.json",
+    "formatting": "sharegpt",
     "tags": {
-      "role_tag": "role",
-      "content_tag": "content",
-      "user_tag": "user",
       "assistant_tag": "assistant",
+      "content_tag": "content",
+      "role_tag": "role",
       "system_tag": "system",
-      "tool_tag": "tool"
+      "tool_tag": "tool",
+      "user_tag": "user"
+    }
+  },
+  "bidpilot_sft_train": {
+    "columns": {
+      "messages": "messages"
+    },
+    "file_name": "bidpilot_sft_train.json",
+    "formatting": "sharegpt",
+    "tags": {
+      "assistant_tag": "assistant",
+      "content_tag": "content",
+      "role_tag": "role",
+      "system_tag": "system",
+      "tool_tag": "tool",
+      "user_tag": "user"
     }
   },
   "bidpilot_sft_train_qwen3": {
-    "file_name": "bidpilot_sft_train.json",
-    "formatting": "sharegpt",
     "columns": {
       "messages": "messages"
     },
+    "file_name": "bidpilot_sft_train.json",
+    "formatting": "sharegpt",
     "tags": {
-      "role_tag": "role",
-      "content_tag": "content",
-      "user_tag": "user",
       "assistant_tag": "assistant",
+      "content_tag": "content",
+      "role_tag": "role",
       "system_tag": "system",
-      "tool_tag": "tool"
+      "tool_tag": "tool",
+      "user_tag": "user"
+    }
+  },
+  "bidpilot_sft_validation": {
+    "columns": {
+      "messages": "messages"
+    },
+    "file_name": "bidpilot_sft_validation.json",
+    "formatting": "sharegpt",
+    "tags": {
+      "assistant_tag": "assistant",
+      "content_tag": "content",
+      "role_tag": "role",
+      "system_tag": "system",
+      "tool_tag": "tool",
+      "user_tag": "user"
     }
   }
 }

@@ -74,6 +74,7 @@ datasets/fixtures/**
 !datasets/reports/cross_split_similarity_report.json
 !datasets/reports/llamafactory_real_validation.json
 !datasets/reports/training_readiness_report.json
+!datasets/reports/artifact_consistency_report.json
 training/llamafactory/outputs/*
 !training/llamafactory/outputs/.gitkeep
 training/llamafactory/data/bidpilot_sft_*.json

@@ -1,8 +1,13 @@
 {
+  "commit_sha": "22c0c65ecaec481deb96db2c98108caec6aa403c",
   "conflicting_gold_records": [],
   "cross_project_template_duplicates": 681,
+  "dataset_build_id": "306263cb7ec117d420e0341999c030a3",
   "exact_duplicates_removed": 6257,
-  "generated_at": "2026-07-15T17:17:17.210327+00:00",
+  "generated_at": "2026-07-16T15:58:17.407263+00:00",
+  "generator_version": "bidpilot-sft-build-v2",
   "method": "exact_sha1 + simhash64 LSH bands + rapidfuzz token_set_ratio",
-  "near_duplicates_removed": 1076
+  "near_duplicates_removed": 1076,
+  "source_records_sha256": "fe90660585c6a0a1558f7470bcbfe9d3ad932526e1ab8cb69f7c23a462ecc5b9",
+  "split_manifest_sha256": "831a059267d476c3db27c604385ca612df655d57e1af34c238fac1ad7ec6db0a"
 }

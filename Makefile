@@ -8,7 +8,7 @@ PIP ?= pip
 
 PIPELINE_DIR := $(ROOT_DIR)/data_pipeline
 
-.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft validate-sft-sample validate-sft-real validate-sft-internal validate-sft-llamafactory dataset-install dataset-test dataset-bootstrap dataset-download dataset-parse dataset-label dataset-review-export dataset-review-priority dataset-validate dataset-build-rag dataset-build-agent dataset-build-sft dataset-report dataset-demo
+.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft validate-sft-sample validate-sft-real validate-sft-internal validate-sft-llamafactory validate-sft-smoke dataset-install dataset-test dataset-bootstrap dataset-download dataset-parse dataset-label dataset-review-export dataset-review-priority dataset-validate dataset-build-rag dataset-build-agent dataset-build-sft dataset-report dataset-demo
 
 help:
 	@echo "BidPilot development commands"
@@ -90,13 +90,17 @@ validate-sft-internal:
 	$(PYTHON) $(ROOT_DIR)/training/llamafactory/scripts/validate_sft_real.py \
 		--repo-root $(ROOT_DIR) --mode internal
 
+validate-sft-smoke:
+	$(PYTHON) $(ROOT_DIR)/training/llamafactory/scripts/validate_sft_real.py \
+		--repo-root $(ROOT_DIR) --mode all --max-samples 64
+
 validate-sft-llamafactory:
 	$(PYTHON) $(ROOT_DIR)/training/llamafactory/scripts/validate_sft_real.py \
-		--repo-root $(ROOT_DIR) --mode llamafactory
+		--repo-root $(ROOT_DIR) --mode llamafactory --all-samples
 
 validate-sft-real:
 	$(PYTHON) $(ROOT_DIR)/training/llamafactory/scripts/validate_sft_real.py \
-		--repo-root $(ROOT_DIR) --mode all
+		--repo-root $(ROOT_DIR) --mode all --all-samples
 
 validate-sft: validate-sft-real
 

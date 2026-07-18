@@ -131,6 +131,37 @@
     }
   },
   "candidate_raw": 37393,
+  "commit_sha": "22c0c65ecaec481deb96db2c98108caec6aa403c",
+  "cross_split_similarity": {
+    "absolute_errors_pp": {
+      "test": 0.7,
+      "train": 4.45,
+      "validation": 5.15
+    },
+    "achieved_ratios": {
+      "test": 0.093,
+      "train": 0.7555,
+      "validation": 0.1515
+    },
+    "fail_count": 0,
+    "full_scan": true,
+    "ok": true,
+    "oversized_clusters": [
+      {
+        "cluster_id": "6266cba7-1260-5932-8e3c-6eef0f512739",
+        "project_ids": [
+          "6266cba7-1260-5932-8e3c-6eef0f512739",
+          "9d3c2112-d8de-5505-b6fd-5accc23af170",
+          "e4a298f5-8013-5617-8983-ac96e54d32fc",
+          "fe74ac2a-c1b8-592b-a6d0-f5a5e13198e2"
+        ],
+        "record_count": 595,
+        "share": 0.1642
+      }
+    ],
+    "skipped_candidates_count": 0
+  },
+  "dataset_build_id": "306263cb7ec117d420e0341999c030a3",
   "dedup": {
     "conflicting_gold_records": [],
     "cross_project_template_duplicates": 681,
@@ -156,9 +187,20 @@
     "without_evidence_kept": 32
   },
   "gap_to_preferred": 8876,
+  "generated_at": "2026-07-16T15:58:17.407263+00:00",
+  "generator_version": "bidpilot-sft-build-v2",
   "gold": 0,
+  "live_source_records_sha256": {
+    "test": "8f3eef21579ca65efc9d68dcab57cfde37bbd432293b539a8ebe20023543da06",
+    "train": "377c5749ba86ad5a3ffd0b2208df80d369c513a8dc2b80f2f23a7f5c56007f57",
+    "validation": "990ff4193301b5bfad97498d4a3e99b45f8a03c86df86257f50d2ea009dd7595"
+  },
   "note": "reviewed_trainable_sft must be gold+reviewed before formal LoRA",
   "preferred_target": 12500,
+  "quality_level": {
+    "gold": 0,
+    "silver": 3624
+  },
   "rejected_sft": 32,
   "rejected_sft_reasons": {
     "missing_source": 32
@@ -176,14 +218,66 @@
       "www.ccgp.gov.cn": 159
     }
   },
+  "source_records_sha256": "fe90660585c6a0a1558f7470bcbfe9d3ad932526e1ab8cb69f7c23a462ecc5b9",
+  "split_diagnostics": {
+    "absolute_errors_pp": {
+      "test": 0.7,
+      "train": 4.45,
+      "validation": 5.15
+    },
+    "achieved_counts": {
+      "test": 337,
+      "train": 2738,
+      "validation": 549
+    },
+    "achieved_projects": {
+      "test": 15,
+      "train": 23,
+      "validation": 5
+    },
+    "achieved_ratios": {
+      "test": 0.093,
+      "train": 0.7555,
+      "validation": 0.1515
+    },
+    "cluster_count": 29,
+    "heldout_project_floor": 10,
+    "local_search_rounds": 2,
+    "min_test_projects": 10,
+    "min_validation_projects": 5,
+    "note": "Record-weighted cluster assignment with project floors; oversized leak-safe clusters may prevent exact 80/10/10.",
+    "objective_score": 0.913338,
+    "oversized_clusters": [
+      {
+        "cluster_id": "6266cba7-1260-5932-8e3c-6eef0f512739",
+        "project_ids": [
+          "6266cba7-1260-5932-8e3c-6eef0f512739",
+          "9d3c2112-d8de-5505-b6fd-5accc23af170",
+          "e4a298f5-8013-5617-8983-ac96e54d32fc",
+          "fe74ac2a-c1b8-592b-a6d0-f5a5e13198e2"
+        ],
+        "record_count": 595,
+        "share": 0.1642
+      }
+    ],
+    "ratio_within_5pp": false,
+    "targets": {
+      "test": 0.1,
+      "train": 0.8,
+      "validation": 0.1
+    },
+    "total_projects": 43,
+    "total_records": 3624
+  },
+  "split_manifest_sha256": "831a059267d476c3db27c604385ca612df655d57e1af34c238fac1ad7ec6db0a",
   "split_sum_equals_structurally_valid": true,
   "structurally_valid_sft": 3624,
-  "test": 719,
-  "test_projects": 10,
+  "test": 337,
+  "test_projects": 15,
   "total": 3624,
-  "train": 1919,
-  "train_projects": 20,
-  "validation": 986,
-  "validation_projects": 13,
+  "train": 2738,
+  "train_projects": 23,
+  "validation": 549,
+  "validation_projects": 5,
   "with_evidence": 34293
 }

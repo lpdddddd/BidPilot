@@ -23,31 +23,31 @@
   },
   "by_split_and_task": {
     "test": {
-      "citation_qa": 48,
-      "project_info_extract": 10,
-      "qualification_extract": 190,
-      "requirement_classify": 285,
-      "risk_detect": 212,
-      "scoring_extract": 45,
-      "tool_call": 54
+      "citation_qa": 41,
+      "project_info_extract": 14,
+      "qualification_extract": 51,
+      "requirement_classify": 101,
+      "risk_detect": 56,
+      "scoring_extract": 6,
+      "tool_call": 68
     },
     "train": {
-      "citation_qa": 71,
-      "project_info_extract": 19,
-      "qualification_extract": 351,
-      "requirement_classify": 509,
-      "risk_detect": 357,
-      "scoring_extract": 24,
-      "tool_call": 106
+      "citation_qa": 101,
+      "project_info_extract": 22,
+      "qualification_extract": 718,
+      "requirement_classify": 964,
+      "risk_detect": 724,
+      "scoring_extract": 71,
+      "tool_call": 138
     },
     "validation": {
-      "citation_qa": 62,
-      "project_info_extract": 12,
-      "qualification_extract": 329,
-      "requirement_classify": 485,
-      "risk_detect": 345,
-      "scoring_extract": 33,
-      "tool_call": 77
+      "citation_qa": 39,
+      "project_info_extract": 5,
+      "qualification_extract": 101,
+      "requirement_classify": 214,
+      "risk_detect": 134,
+      "scoring_extract": 25,
+      "tool_call": 31
     }
   },
   "by_task": {
@@ -126,11 +126,14 @@
       "reviewed": 0
     }
   },
+  "commit_sha": "22c0c65ecaec481deb96db2c98108caec6aa403c",
+  "dataset_build_id": "306263cb7ec117d420e0341999c030a3",
   "dropped_by_balance": {
     "requirement_classify": 13540,
     "risk_detect": 9796
   },
-  "generated_at": "2026-07-15T17:13:34.112656+00:00",
+  "generated_at": "2026-07-16T15:58:17.407263+00:00",
+  "generator_version": "bidpilot-sft-build-v2",
   "rejected_sft": 32,
   "reviewed_trainable_sft": 0,
   "silver_candidate_sft": 3624,
@@ -144,6 +147,8 @@
       "www.ccgp.gov.cn": 159
     }
   },
+  "source_records_sha256": "fe90660585c6a0a1558f7470bcbfe9d3ad932526e1ab8cb69f7c23a462ecc5b9",
+  "split_manifest_sha256": "831a059267d476c3db27c604385ca612df655d57e1af34c238fac1ad7ec6db0a",
   "structurally_valid_sft": 3624,
   "task_gaps": {
     "citation_qa": {

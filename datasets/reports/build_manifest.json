@@ -76,7 +76,7 @@
     "sft_source_domains": 3,
     "with_tender_document": 57
   },
-  "generated_at": "2026-07-15T17:22:06.095095+00:00",
+  "generated_at": "2026-07-16T15:58:38.338705+00:00",
   "training_readiness": {
     "ready_for_formal_lora": false,
     "ready_for_human_review": true,

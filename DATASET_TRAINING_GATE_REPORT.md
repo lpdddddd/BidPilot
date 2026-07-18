@@ -1,195 +1,167 @@
-# BidPilot Dataset Training Gate Report
+# BidPilot Dataset Training Gate Report (Split / Consistency Round)
 
-Generated at: `2026-07-16`  
-Baseline commit: `99ab680935a8bdab0e76b1e9ce43b1d97c08d3dc`  
-LoRA/QLoRA: **not started**. Silver→Gold auto-promotion: **forbidden / not done**. Human review fields: **not auto-filled**.
-
-## Verdict
-
-| Gate | Status |
-| --- | --- |
-| Enter human review | **YES** (`ready_for_human_review=true`) |
-| Pilot LoRA (experimental) | **NO** (`reviewed_trainable_sft=0`, Gold=0, LF preprocess blocked) |
-| Formal LoRA | **NO** |
-
----
+**Baseline commit:** `22c0c65ecaec481deb96db2c98108caec6aa403c`  
+**Generator:** `bidpilot-sft-build-v2`  
+**dataset_build_id:** `306263cb7ec117d420e0341999c030a3`  
+**Generated from formal artifacts after rebuild (no fiction, no Gold auto-fill, no LoRA launch).**
 
 ## 1. Modified files
 
-### New
-- `data_pipeline/bidpilot_data/sft/cross_split.py` — rewritten full-scan leak detector + coalesce helpers
-- `data_pipeline/bidpilot_data/reporting/training_readiness.py` — tiered gate report
-- `data_pipeline/tests/test_training_gates.py`
-- `datasets/reports/training_readiness_report.json`
-- `DATASET_TRAINING_GATE_REPORT.md` (this file)
+| Path | Change |
+| --- | --- |
+| `data_pipeline/bidpilot_data/sft/split_assign.py` | **New** — record-weighted cluster assignment (80/10/10), deterministic seed, floors, ratio repair |
+| `data_pipeline/bidpilot_data/sft/publish.py` | **New** — exclusive build lock + staging → atomic publish |
+| `data_pipeline/bidpilot_data/sft/build.py` | Cluster → weighted split → leak recluster (no train-dump) → stage → publish; unified reports |
+| `data_pipeline/bidpilot_data/sft/cross_split.py` | Remove silent `[:80]/[:40]` truncation; secondary/tertiary buckets; skip ⇒ `full_scan=false` |
+| `data_pipeline/bidpilot_data/reporting/artifact_meta.py` | **New** — `dataset_build_id` / hashes / generator version |
+| `data_pipeline/bidpilot_data/reporting/consistency.py` | **New** — artifact consistency validator |
+| `data_pipeline/bidpilot_data/reporting/training_readiness.py` | Truth from final records; consistency required for human gate |
+| `data_pipeline/bidpilot_data/reporting/stats.py` | Stamp `dataset_statistics` with same build_id |
+| `data_pipeline/bidpilot_data/validation/validate.py` | Wire consistency + full_scan/skipped gates; re-stamp cross_split meta |
+| `training/llamafactory/scripts/validate_sft_real.py` | Full-sample default (`--max-samples 0` / `--all-samples`); per-record tool/normal stats |
+| `Makefile` | `validate-sft-smoke`, full-sample `validate-sft-real` / `validate-sft-llamafactory` |
+| `data_pipeline/tests/test_split_consistency.py` | **New** — split/consistency/full-scan/lock/LF blocked tests |
+| `.gitignore` | Allow `artifact_consistency_report.json` |
 
-### Updated
-- `training/llamafactory/scripts/validate_sft_real.py` — internal + real LF preprocess modes
-- `data_pipeline/bidpilot_data/rag_eval/build.py` — multi_section dual source/answer gates + metrics
-- `data_pipeline/bidpilot_data/sft/build.py` — project clusters + train-preferring leak coalesce
-- `data_pipeline/bidpilot_data/validation/validate.py` — full_scan gate + dual multi_section + readiness
-- `data_pipeline/bidpilot_data/reporting/stats.py` — emits readiness
-- `Makefile` — `validate-sft-internal` / `validate-sft-llamafactory` / `validate-sft-real`
-- `.gitignore` — allowlist `training_readiness_report.json`
-- Regenerated reports under `datasets/reports/*` and `DATASET_BUILD_REPORT.md`
+## 2. Fixes by problem area
 
----
+### A. SFT split ratios
+- Atomic unit = leak-safe **project cluster** (shared/near-dup chunks), never split across train/val/test.
+- Assignment optimizes **record counts** toward 80/10/10 with project floors (val≥5, test≥10).
+- Removed unconditional “move all leak conflicts into train”.
+- On leak failure: merge pairs into clusters and **re-split**, do not mutate formal reports mid-loop.
+- Seed=42 reproducible.
 
-## 2. Fix summary (by problem)
+**Achieved (formal records):**
 
-### A. Full-scan cross-split leakage
-- Removed 400-chunk sampling; scans **all** train/validation/test records + source chunks (+ SFT QA fingerprints).
-- Candidate recall: exact SHA1 + SimHash LSH + char n-gram co-occurrence; RapidFuzz confirm.
-- Classes: `exact_duplicate` / `same_project_or_document` / `template_overlap` / `severe_business_overlap`.
-- Template cannot bypass strong scoring/technical residual overlap.
-- SFT split repair collapses leaky project components into **train** to eliminate oscillation.
-- Wired into `validate all` (`full_scan=true` required; severe fail ⇒ error).
+| Split | Records | Ratio | Projects | Abs error vs target |
+| --- | ---: | ---: | ---: | ---: |
+| train | 2738 | 75.55% | 23 | 4.45 pp |
+| validation | 549 | 15.15% | 5 | 5.15 pp |
+| test | 337 | 9.30% | 15 | 0.70 pp |
 
-### B. Real LLaMAFactory preprocess
-- Modes: `internal` | `llamafactory` | `all`.
-- Detects import / `LLAMAFACTORY_HOME` / `llamafactory-cli`.
-- On missing: `blocked_dependency_missing`, `preprocess_executed=false`, **non-zero exit** unless `--allow-missing-llamafactory`.
-- Never claims “LF validation passed” without preprocess.
+**Why not exact 80/10/10:** one oversized leak-safe cluster (4 projects, **595** records, **16.42%** share) cannot be split. Validation is pinned at the 5-project floor with medium-sized clusters, so val sits just over the 5 pp band. Documented in `sft_build_stats.split_diagnostics` (`ratio_within_5pp=false`, `oversized_clusters`).
 
-### C. RAG multi_section
-- Requires two distinct chunks, different section paths, **both** `source_url`s, pages, quotes.
-- Per-part answer support (`answer_part_i` ↔ `quote_i`).
-- Quality report counters + fail IDs; validator fails on dual-evidence breach.
+### B. Report consistency
+- Single source of truth = final `datasets/sft/{train,validation,test}/records.jsonl`.
+- Manifest + ShareGPT + LF JSON + all SFT reports written only after split is final (staging publish).
+- Shared `dataset_build_id` / `split_manifest_sha256` / `source_records_sha256`.
+- `validate_artifact_consistency` hard-fails `validate all` on count/project/task/quality/manifest/LF/rejected/build_id mismatches.
 
-### D. Training readiness tiers
-- Output: `datasets/reports/training_readiness_report.json`.
-- Gold=0 / `reviewed_trainable_sft=0` forcibly closes pilot & formal LoRA.
+### C. Cross-split full scan
+- Exact hash: uncapped.
+- SimHash / n-gram: secondary (length/task/hash) + tertiary residual hash; **no silent fanout caps**.
+- `skipped_candidates_count>0` ⇒ `full_scan=false` ⇒ gate fail.
+- Current formal scan: `full_scan=true`, `skipped=0`, `ok=true`, `records_indexed=3624`, `chunks_indexed=1996`, `precise_comparisons=53316`.
 
----
+### D. LLaMAFactory validation
+- Modes: `internal` / `llamafactory` / `all`.
+- Default full sample: `--max-samples 0` or `--all-samples`.
+- Smoke: `make validate-sft-smoke` (`--max-samples 64`).
+- Tool vs normal counted **per row** (no proportional fabrication).
+- This environment: **LLaMAFactory not installed** → `blocked_dependency_missing`, `preprocess_executed=false` (not reported as PASS).
 
-## 3. Commands actually run
+### E. Build order / lock
+1. candidates → filter → reject isolate → dedup/balance → clusters → weighted split  
+2. cross-split probe → recluster/re-split if needed  
+3. staging write → exclusive lock → atomic publish  
+4. unified reports → consistency validator (via `validate all`)
+
+## 3. Commands executed
 
 ```bash
 make dataset-test
 make test
-# iterative while implementing:
-python -m bidpilot_data build-rag --limit 300   # via make dataset-build-rag
-python -m bidpilot_data build-agent --limit 500
-python -m bidpilot_data build-sft               # multiple times during leak coalesce tuning
+make dataset-build-sft
 make dataset-validate
-make validate-sft-internal                      # PASS
-make validate-sft-llamafactory                  # FAIL expected (LF missing)
-make validate-sft-real                          # FAIL expected (LF missing)
+make validate-sft-internal
 make dataset-report
-make dataset-test                               # final
-make test                                       # final
+make dataset-validate
 ```
 
----
-
-## 4. Tests
+## 4. Test results
 
 | Suite | Result |
 | --- | --- |
-| `make dataset-test` | **63 passed** |
+| `make dataset-test` | **75 passed** |
 | `make test` (backend) | **13 passed** |
 
-New coverage in `test_training_gates.py`: leak beyond 400th chunk; train/val & val/test; identical SFT QA; template vs business; LF missing status; tool role / empty final; multi_section dual-answer; Gold=0 closes training; project mutex.
+## 5. Cross-split stats (formal)
 
----
-
-## 5. Full cross-split stats
-
-| Metric | Value |
-| --- | --- |
-| `full_scan` | **true** |
-| `ok` | **true** |
-| items_scanned | 5620 |
-| candidate_pairs | 83166 |
-| precise_comparisons | 83166 |
-| severe_business_overlap | **0** |
-| exact_duplicate (failing) | **0** |
-| same_project_or_document | **0** |
-| template_overlap | **0** (latest scan) |
-| project_leaks | **[]** |
-
----
+- `full_scan`: true  
+- `ok`: true  
+- `fail_count`: 0  
+- `skipped_candidates_count`: 0  
+- `records_indexed`: 3624  
+- `chunks_indexed`: 1996  
+- `precise_comparisons`: 53316  
+- severe / same_project / exact: 0  
 
 ## 6. LLaMAFactory validation
 
-| Layer | Result |
+| Mode | Result |
 | --- | --- |
-| Internal structure (`validate-sft-internal`) | **PASS** (train 1919 / val 986 / test 719; tool pairing OK; rejected not leaked) |
-| External preprocess (`validate-sft-llamafactory`) | **`blocked_dependency_missing`** |
-| Combined (`validate-sft-real`) | **FAIL (nonzero)** — correct; not a full PASS |
+| Internal (`make validate-sft-internal`) | **PASS** — train/val/test 2738/549/337, no structure errors |
+| External preprocess | **`blocked_dependency_missing`** — not installed; do not claim LF PASS |
 
-Install / rerun:
+Install / reproduce:
 
 ```bash
 pip install llamafactory
 # or: git clone https://github.com/hiyouga/LLaMA-Factory && cd LLaMA-Factory && pip install -e . && export LLAMAFACTORY_HOME=$PWD
-# optional tokenizer override if Qwen3 weights unavailable:
-export BIDPILOT_LF_TOKENIZER=Qwen/Qwen2.5-0.5B-Instruct
-make validate-sft-llamafactory
-make validate-sft-real
+cd training/llamafactory
+python scripts/validate_sft_real.py --repo-root ../.. --mode all --all-samples
 ```
 
----
+## 7. RAG multi_section
 
-## 7. RAG multi_section dual evidence
+Unchanged this round (prior dual-evidence gates retained). Current RAG validate still part of `validate all` (**ok**).
 
-| Metric | Value |
-| --- | --- |
-| questions | 215 |
-| max_project_share | 0.0977 |
-| multi_section_total | **10** |
-| dual_chunk_pass | **10** |
-| dual_source_pass | **10** |
-| dual_answer_pass | **10** |
-| failed_question_ids | [] |
-| rag `ok` | **true** |
-
----
-
-## 8. Gold / Silver / reviewed / rejected
+## 8. Quality counts
 
 | Metric | Value |
+| --- | ---: |
+| structurally_valid_sft | 3624 |
+| silver | 3624 |
+| gold / reviewed_trainable | **0 / 0** |
+| rejected_sft (excluded from splits) | 32 |
+
+## 9. Domains / Match / RAG / Agent / Level A/B
+
+From readiness / stats (unchanged content, refreshed counts):
+
+- RequirementMatch: **0**  
+- RAG questions: **215**  
+- Agent tasks: present in eval set (see `agent_quality_report.json`)  
+- Level A/B: below formal targets (see `training_readiness_report.json` `current_metrics`)  
+- Gold=0 ⇒ pilot/formal LoRA **closed**
+
+## 10. Training gates (current)
+
+| Gate | Status |
 | --- | --- |
-| structurally_valid_sft | **3624** |
-| silver | **3624** |
-| gold | **0** |
-| reviewed_trainable_sft | **0** |
-| rejected_sft | **32** (`missing_source`) — excluded from splits |
-| train / validation / test | **1919 / 986 / 719** (sum=3624) |
+| Enter human review | **YES** (`ready_for_human_review=true`) — consistency + split leak + RAG + structure |
+| Pilot LoRA | **NO** (Gold/reviewed=0; LF preprocess missing) |
+| Formal LoRA | **NO** |
 
----
+## 11. Remaining blockers / next actions
 
-## 9. Source domains
+1. Install LLaMAFactory + tokenizer; run `make validate-sft-real` until `preprocess_executed=true`.  
+2. Human review → Gold / `reviewed_trainable_sft≥500` (do **not** auto-upgrade Silver).  
+3. Collect real result-class docs → RequirementMatch > 0.  
+4. Grow real coverage (domains, RAG/Agent/Level A/B) without templates/fiction.  
+5. Optional: further ratio tuning only if new real projects shrink the 16% oversized cluster (do not split it).
 
-SFT domains still ~2 effective (`download.ccgp.gov.cn`, `www.ccgp.gov.cn`); portal snapshots do not count. Pilot domain gate (≥5) **blocked**.
+## 12. Consistency snapshot
 
----
+All of the following agree on **2738 / 549 / 337** records and **23 / 5 / 15** projects:
 
-## 10. Matches / RAG / Agent / Level A/B
-
-| Metric | Value |
-| --- | --- |
-| RequirementMatch | **0** (no public review-result facts) |
-| RAG questions | **215** (target min 500 — gap) |
-| Agent tasks | **238** (target min 300 — gap) |
-| Level A / Level B | below config floors (see `DATASET_BUILD_REPORT.md`) |
-
----
-
-## 11. Allow / deny
-
-1. **Human review:** **allowed**
-2. **Pilot LoRA:** **denied** (Gold/reviewed=0; LF preprocess missing; domain/task floors)
-3. **Formal LoRA:** **denied**
-
----
-
-## 12. Remaining blockers & next actions
-
-1. Install LLaMAFactory + tokenizer; run `make validate-sft-real` until `preprocess_executed=true` and external=`passed`.
-2. Human-review pipeline → produce Gold SFT ≥500 before any pilot LoRA.
-3. Collect public evaluation / qualification-result documents → rebuild RequirementMatch > 0.
-4. Expand real project harvest (domains ≥5; Level A/B; RAG≥500; Agent≥300) without templates or fiction.
-5. Continue reviewing silver requirements / RAG / Agent citations.
-
-Do **not** start LoRA until pilot gates in `training_readiness_report.json` flip to true.
+- `sft/*/records.jsonl`  
+- `sft_split_manifest.json`  
+- `sft_build_stats.json`  
+- `split_distribution.json`  
+- `task_distribution.by_split_and_task`  
+- `cross_split_similarity_report.split_stats`  
+- `dataset_statistics.sft`  
+- LLaMAFactory `bidpilot_sft_{train,validation,test}.json`  
+- `artifact_consistency_report.json` → **ok=true**

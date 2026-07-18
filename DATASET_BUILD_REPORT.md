@@ -1,6 +1,6 @@
 # BidPilot Dataset Build Report
 
-Generated at: `2026-07-15T17:22:06.095095+00:00`
+Generated at: `2026-07-16T15:58:38.338705+00:00`
 
 ## Policy
 
@@ -62,8 +62,8 @@ Generated at: `2026-07-15T17:22:06.095095+00:00`
 - reviewed_trainable_sft: **0** (formal LoRA gate)
 - silver_candidate_sft: **3624**
 - rejected_sft: **32**
-- split counts: train=1919, validation=986, test=719
-- projects: train=28, validation=5, test=10
+- split counts: train=2738, validation=549, test=337
+- projects: train=23, validation=5, test=15
 - quality_level: `{'silver': 3624}`
 - review_status: `{'pending': 3624}`
 

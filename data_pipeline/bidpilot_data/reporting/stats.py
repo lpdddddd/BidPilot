@@ -282,7 +282,24 @@ def build_reports() -> dict[str, Any]:
         stats["parse_status_counts"][st] = stats["parse_status_counts"].get(st, 0) + 1
 
     write_json(root / "reports" / "dataset_statistics.json", stats)
+    from bidpilot_data.reporting.artifact_meta import attach_artifact_meta, sha256_json_obj, try_commit_sha
     from bidpilot_data.reporting.training_readiness import build_training_readiness_report
+
+    # Stamp dataset_statistics with same build meta as SFT artifacts when available
+    if sft_stats.get("dataset_build_id"):
+        manifest_obj = {}
+        mpath = root / "manifests" / "sft_split_manifest.json"
+        if mpath.exists():
+            manifest_obj = read_json(mpath)
+        stats = attach_artifact_meta(
+            stats,
+            dataset_build_id=sft_stats["dataset_build_id"],
+            split_manifest_sha256=sft_stats.get("split_manifest_sha256") or sha256_json_obj(manifest_obj),
+            source_records_sha256=sft_stats.get("source_records_sha256") or "",
+            commit_sha=sft_stats.get("commit_sha") or try_commit_sha(settings.repo_root),
+            generated_at=stats.get("generated_at"),
+        )
+        write_json(root / "reports" / "dataset_statistics.json", stats)
 
     readiness = build_training_readiness_report()
     stats["training_readiness"] = {
@@ -291,6 +308,7 @@ def build_reports() -> dict[str, Any]:
         "ready_for_pilot_lora": readiness.get("ready_for_pilot_lora"),
         "ready_for_formal_lora": readiness.get("ready_for_formal_lora"),
     }
+    write_json(root / "reports" / "dataset_statistics.json", stats)
     manifest = {
         "generated_at": stats["generated_at"],
         "artifacts": {
