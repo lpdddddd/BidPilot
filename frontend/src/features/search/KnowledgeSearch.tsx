@@ -51,7 +51,7 @@ function pageRangeLabel(item: SearchResultItem): string {
   if (item.page_start == null || item.page_end == null) return "无可靠页码";
   return item.page_start === item.page_end
     ? `第 ${item.page_start} 页`
-    : `第 ${item.page_start}–${item.page_end} 页`;
+    : `第 ${item.page_start}-${item.page_end} 页`;
 }
 
 function ResultCard({

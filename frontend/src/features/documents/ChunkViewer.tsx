@@ -24,7 +24,7 @@ function pageRangeLabel(chunk: ChunkItem): string {
   }
   return chunk.page_start === chunk.page_end
     ? `第 ${chunk.page_start} 页`
-    : `第 ${chunk.page_start}–${chunk.page_end} 页`;
+    : `第 ${chunk.page_start}-${chunk.page_end} 页`;
 }
 
 function ChunkCard({ chunk }: { chunk: ChunkItem }) {
