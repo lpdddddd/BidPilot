@@ -25,6 +25,7 @@ from app.schemas.document import (
     DocumentPreviewResponse,
     DocumentRead,
 )
+from app.schemas.search import IndexSummaryResponse
 from app.services.storage import StorageError, get_document_storage
 
 _UPLOAD_CHUNK_SIZE = 1024 * 1024
@@ -361,6 +362,70 @@ class DocumentService:
             error=chunking.get("error"),
             completed_at=chunking.get("completed_at"),
         )
+
+    # --------------------------------------------------------------- indexing
+
+    def request_indexing(self, project_id: UUID, document_id: UUID) -> DocumentRead:
+        """Validate and mark a document for (re)indexing; the actual work runs
+        in the background task with its own session."""
+        document = self._require_document(project_id, document_id)
+        if document.parse_status != ParseStatus.success:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"文档解析状态为 {document.parse_status.value}，只有解析成功的文档才能建立索引"
+                ),
+            )
+        meta = dict(document.metadata_json or {})
+        chunking = meta.get("chunking") or {}
+        if chunking.get("status") != "success":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Chunk 状态为 {chunking.get('status') or '未构建'}，需先完成切分再建立索引"
+                ),
+            )
+        indexing = dict(meta.get("indexing") or {})
+        indexing.update({"status": "pending", "error": None})
+        meta["indexing"] = indexing
+        document.metadata_json = meta
+        self.db.commit()
+        self.db.refresh(document)
+        return DocumentRead.model_validate(document)
+
+    def index_summary(self, project_id: UUID, document_id: UUID) -> IndexSummaryResponse:
+        document = self._require_document(project_id, document_id)
+        meta = document.metadata_json or {}
+        indexing = meta.get("indexing") or {}
+        return IndexSummaryResponse(
+            document_id=str(document.id),
+            status=str(indexing.get("status") or "not_indexed"),
+            indexed_chunk_count=int(indexing.get("indexed_chunk_count") or 0),
+            embedding_model=indexing.get("embedding_model"),
+            embedding_dimension=indexing.get("embedding_dimension"),
+            qdrant_collection=indexing.get("qdrant_collection"),
+            opensearch_index=indexing.get("opensearch_index"),
+            error=indexing.get("error"),
+            completed_at=indexing.get("completed_at"),
+        )
+
+    def list_indexable_documents(self, project_id: UUID) -> list[Document]:
+        """Documents in this project whose parse and chunking both succeeded."""
+        if ProjectRepository(self.db).get_by_id(project_id) is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+        documents = list(
+            self.db.scalars(
+                select(Document).where(
+                    Document.project_id == project_id,
+                    Document.parse_status == ParseStatus.success,
+                )
+            )
+        )
+        return [
+            doc
+            for doc in documents
+            if ((doc.metadata_json or {}).get("chunking") or {}).get("status") == "success"
+        ]
 
     # ------------------------------------------------------- legacy endpoints
 

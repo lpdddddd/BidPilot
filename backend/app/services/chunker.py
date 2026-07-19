@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 
 CHUNKER_NAME = "bidpilot-structure-chunker"
-CHUNKER_VERSION = "1.0.0"
+CHUNKER_VERSION = "1.1.0"
 
 
 @dataclass(frozen=True)
@@ -480,16 +480,28 @@ def build_chunks(
         index += 1
 
     # Phase 3: apply overlap from the previous same-chapter chunk and emit.
+    # The overlap must fit inside the remaining token budget so the final
+    # chunk (core + overlap prefix) never exceeds max_tokens.
     chunks: list[PlannedChunk] = []
     total_tokens = 0
 
     for index, core in enumerate(merged):
+        core_tokens = tokenizer.count(text[core.start : core.end])
         overlap_start = core.start
         if config.overlap_tokens > 0 and index > 0 and merged[index - 1].top == core.top:
             prev = merged[index - 1]
             prev_text = text[prev.start : prev.end]
-            tail_len = tokenizer.tail_chars(prev_text, config.overlap_tokens)
-            overlap_start = max(prev.end - tail_len, prev.start)
+            overlap_budget = min(config.overlap_tokens, config.max_tokens - core_tokens)
+            while overlap_budget > 0:
+                tail_len = tokenizer.tail_chars(prev_text, overlap_budget)
+                candidate_start = max(prev.end - tail_len, prev.start)
+                candidate_tokens = tokenizer.count(text[candidate_start : core.end])
+                if candidate_tokens <= config.max_tokens:
+                    overlap_start = candidate_start
+                    break
+                # Tokenizing the joined text can cost slightly more than the
+                # sum of the parts; shrink the budget by the excess and retry.
+                overlap_budget -= candidate_tokens - config.max_tokens
 
         content = text[overlap_start : core.end]
         if not content.strip():

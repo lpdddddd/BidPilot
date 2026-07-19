@@ -108,6 +108,25 @@ def test_oversized_paragraph_is_split_within_max_tokens():
         assert long_paragraph[chunk.source_char_start : chunk.source_char_end] == chunk.content
 
 
+def test_final_token_count_never_exceeds_max_tokens():
+    """Core text near max_tokens must not blow past the limit once the
+    overlap prefix is added; the overlap budget shrinks instead."""
+    long_text = "第一章 总则\n" + "投标文件应当按照招标文件的要求编制并如实填写全部内容。" * 200
+    config = ChunkerConfig(min_tokens=10, target_tokens=100, max_tokens=100, overlap_tokens=80)
+    result = build_chunks(long_text, config=config)
+
+    assert len(result.chunks) > 2
+    for chunk in result.chunks:
+        assert chunk.token_count <= config.max_tokens, (
+            f"chunk {chunk.chunk_index} has {chunk.token_count} tokens "
+            f"(overlap {chunk.overlap_prefix_chars} chars)"
+        )
+    # Overlap should still exist where the budget allows it.
+    default_result = build_chunks(SAMPLE_TENDER, config=ChunkerConfig())
+    for chunk in default_result.chunks:
+        assert chunk.token_count <= ChunkerConfig().max_tokens
+
+
 def test_overlap_only_between_same_chapter_neighbors():
     config = ChunkerConfig(min_tokens=5, target_tokens=40, max_tokens=80, overlap_tokens=15)
     result = build_chunks(SAMPLE_TENDER, config=config)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from minio import Minio
+from opensearchpy import OpenSearch
 from qdrant_client import QdrantClient
 from redis import Redis
 from sqlalchemy import text
@@ -65,3 +66,21 @@ def check_qdrant(settings: Settings | None = None) -> CheckResult:
         return CheckResult(name="qdrant", ok=True)
     except Exception as exc:  # noqa: BLE001
         return CheckResult(name="qdrant", ok=False, detail=str(exc))
+
+
+def get_opensearch_client(settings: Settings | None = None) -> OpenSearch:
+    settings = settings or get_settings()
+    return OpenSearch(hosts=[settings.opensearch_url], timeout=10)
+
+
+def check_opensearch(settings: Settings | None = None) -> CheckResult:
+    settings = settings or get_settings()
+    try:
+        client = OpenSearch(hosts=[settings.opensearch_url], timeout=2)
+        health = client.cluster.health()
+        cluster_status = health.get("status")
+        if cluster_status in ("green", "yellow"):
+            return CheckResult(name="opensearch", ok=True)
+        return CheckResult(name="opensearch", ok=False, detail=f"cluster status {cluster_status}")
+    except Exception as exc:  # noqa: BLE001
+        return CheckResult(name="opensearch", ok=False, detail=str(exc))

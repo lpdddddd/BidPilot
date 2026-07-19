@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   App as AntApp,
@@ -26,6 +26,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   buildDocumentChunks,
+  buildDocumentIndex,
   getDocumentDownload,
   getDocumentPreview,
   listDocuments,
@@ -33,7 +34,12 @@ import {
   uploadDocument,
 } from "../../api/client";
 import ChunkViewer from "./ChunkViewer";
-import type { ChunkingStatus, DocumentItem, ParseStatus } from "../../types/api";
+import type {
+  ChunkingStatus,
+  DocumentItem,
+  IndexingStatus,
+  ParseStatus,
+} from "../../types/api";
 
 const MAX_UPLOAD_MB = 50;
 const SUPPORTED_EXTENSIONS = ["pdf", "docx", "txt", "html", "htm", "xlsx"];
@@ -71,6 +77,13 @@ const CHUNK_STATUS_CONFIG: Record<ChunkingStatus, { label: string; color: string
   processing: { label: "构建中", color: "processing" },
   success: { label: "已完成", color: "green" },
   failed: { label: "构建失败", color: "red" },
+};
+
+const INDEX_STATUS_CONFIG: Record<IndexingStatus, { label: string; color: string }> = {
+  pending: { label: "等待索引", color: "default" },
+  processing: { label: "索引中", color: "processing" },
+  success: { label: "已索引", color: "green" },
+  failed: { label: "索引失败", color: "red" },
 };
 
 function formatBytes(size?: number | null): string {
@@ -161,7 +174,15 @@ function PreviewDrawer({
   );
 }
 
-export default function DocumentCenter({ projectId }: { projectId: string }) {
+export default function DocumentCenter({
+  projectId,
+  focusChunkDocumentId,
+  onFocusConsumed,
+}: {
+  projectId: string;
+  focusChunkDocumentId?: string | null;
+  onFocusConsumed?: () => void;
+}) {
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
   const [documentType, setDocumentType] = useState<string>("");
@@ -176,16 +197,30 @@ export default function DocumentCenter({ projectId }: { projectId: string }) {
       const items = q.state.data?.items;
       const active = items?.some((item) => {
         const chunkStatus = item.metadata_json?.chunking?.status;
+        const indexStatus = item.metadata_json?.indexing?.status;
         return (
           item.parse_status === "pending" ||
           item.parse_status === "processing" ||
           chunkStatus === "pending" ||
-          chunkStatus === "processing"
+          chunkStatus === "processing" ||
+          indexStatus === "pending" ||
+          indexStatus === "processing"
         );
       });
       return active ? 3000 : false;
     },
   });
+
+  // Jump target from the knowledge-search tab: open the chunk viewer for the
+  // requested document once the list is available.
+  useEffect(() => {
+    if (!focusChunkDocumentId || !query.data) return;
+    const target = query.data.items.find((item) => item.id === focusChunkDocumentId);
+    if (target) {
+      setChunkTarget(target);
+    }
+    onFocusConsumed?.();
+  }, [focusChunkDocumentId, query.data, onFocusConsumed]);
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) =>
@@ -224,6 +259,15 @@ export default function DocumentCenter({ projectId }: { projectId: string }) {
     mutationFn: (documentId: string) => buildDocumentChunks(projectId, documentId),
     onSuccess: () => {
       message.success("已开始构建 Chunk");
+      queryClient.invalidateQueries({ queryKey: ["documents", projectId] });
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+
+  const indexMutation = useMutation({
+    mutationFn: (documentId: string) => buildDocumentIndex(projectId, documentId),
+    onSuccess: () => {
+      message.success("已开始建立索引");
       queryClient.invalidateQueries({ queryKey: ["documents", projectId] });
     },
     onError: (error: Error) => message.error(error.message),
@@ -325,6 +369,39 @@ export default function DocumentCenter({ projectId }: { projectId: string }) {
         },
       },
       {
+        title: "索引",
+        key: "indexing",
+        width: 130,
+        render: (_: unknown, row: DocumentItem) => {
+          const indexing = row.metadata_json?.indexing;
+          if (!indexing) {
+            return (
+              <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                未索引
+              </Typography.Text>
+            );
+          }
+          const config = INDEX_STATUS_CONFIG[indexing.status] ?? {
+            label: indexing.status,
+            color: "default",
+          };
+          const tag = <Tag color={config.color}>{config.label}</Tag>;
+          if (indexing.status === "failed" && indexing.error) {
+            return <Tooltip title={indexing.error}>{tag}</Tooltip>;
+          }
+          if (indexing.status === "success") {
+            return (
+              <Tooltip
+                title={`已索引 ${indexing.indexed_chunk_count ?? 0} 个 Chunk（${indexing.embedding_model ?? ""}）`}
+              >
+                {tag}
+              </Tooltip>
+            );
+          }
+          return tag;
+        },
+      },
+      {
         title: "上传时间",
         dataIndex: "created_at",
         width: 160,
@@ -339,6 +416,10 @@ export default function DocumentCenter({ projectId }: { projectId: string }) {
           const chunkBuilt = chunking?.status === "success";
           const chunkBusy =
             chunking?.status === "pending" || chunking?.status === "processing";
+          const indexing = row.metadata_json?.indexing;
+          const indexBuilt = indexing?.status === "success";
+          const indexBusy =
+            indexing?.status === "pending" || indexing?.status === "processing";
           return (
             <Space size={4} wrap>
               <Button
@@ -365,6 +446,17 @@ export default function DocumentCenter({ projectId }: { projectId: string }) {
                   {chunkBuilt && (
                     <Button type="link" size="small" onClick={() => setChunkTarget(row)}>
                       查看 Chunk
+                    </Button>
+                  )}
+                  {chunkBuilt && (
+                    <Button
+                      type="link"
+                      size="small"
+                      disabled={indexBusy}
+                      loading={indexMutation.isPending && indexMutation.variables === row.id}
+                      onClick={() => indexMutation.mutate(row.id)}
+                    >
+                      {indexBuilt ? "重建索引" : "建立索引"}
                     </Button>
                   )}
                 </>
@@ -394,7 +486,7 @@ export default function DocumentCenter({ projectId }: { projectId: string }) {
         },
       },
     ],
-    [downloadMutation, reparseMutation, chunkMutation],
+    [downloadMutation, reparseMutation, chunkMutation, indexMutation],
   );
 
   return (

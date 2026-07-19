@@ -30,6 +30,25 @@ class Settings(BaseSettings):
     minio_secure: bool = False
 
     qdrant_url: str = "http://localhost:6333"
+    qdrant_collection_name: str = "bidpilot_chunks_v1"
+
+    opensearch_url: str = "http://localhost:9200"
+    opensearch_index_name: str = "bidpilot_chunks_v1"
+
+    embedding_provider: str = "sentence_transformers"
+    embedding_model_name: str = "BAAI/bge-small-zh-v1.5"
+    # bge family recommends an instruction prefix for short queries.
+    embedding_query_prefix: str = "为这个句子生成表示以用于检索相关文章："
+    embedding_batch_size: int = 32
+    reranker_model_name: str = "BAAI/bge-reranker-base"
+
+    retrieval_dense_top_k: int = 30
+    retrieval_bm25_top_k: int = 30
+    retrieval_fusion_top_k: int = 20
+    retrieval_rerank_top_k: int = 8
+    retrieval_rrf_k: int = 60
+    retrieval_dense_weight: float = 1.0
+    retrieval_bm25_weight: float = 1.0
 
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"

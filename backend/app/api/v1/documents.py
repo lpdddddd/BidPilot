@@ -13,7 +13,8 @@ from app.schemas.document import (
     DocumentPreviewResponse,
     DocumentRead,
 )
-from app.services import chunk_tasks, document_tasks
+from app.schemas.search import IndexSummaryResponse
+from app.services import chunk_tasks, document_tasks, index_tasks
 from app.services.document import DocumentService
 
 router = APIRouter()
@@ -147,3 +148,30 @@ def get_chunk_summary(
     db: Session = Depends(get_db),
 ) -> ChunkSummaryResponse:
     return DocumentService(db).chunk_summary(project_id, document_id)
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/index",
+    response_model=DocumentRead,
+)
+def build_document_index(
+    project_id: UUID,
+    document_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> DocumentRead:
+    document = DocumentService(db).request_indexing(project_id, document_id)
+    background_tasks.add_task(index_tasks.run_document_indexing, document.id)
+    return document
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/index-summary",
+    response_model=IndexSummaryResponse,
+)
+def get_index_summary(
+    project_id: UUID,
+    document_id: UUID,
+    db: Session = Depends(get_db),
+) -> IndexSummaryResponse:
+    return DocumentService(db).index_summary(project_id, document_id)

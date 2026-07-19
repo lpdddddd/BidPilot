@@ -151,6 +151,19 @@ def _chunk_document(session: Session, document_id: UUID) -> None:
             status=CHUNKING_STATUS_FAILED,
             error=f"切分结果写入失败: {exc}",
         )
+        return
+
+    # Fresh chunks invalidate any previous vector/BM25 index entries; the
+    # index task deletes old entries and writes the new ones.
+    _trigger_indexing(document.id)
+
+
+def _trigger_indexing(document_id: UUID) -> None:
+    """Kick off index rebuild after a successful chunk build (patchable in
+    tests). Deferred import avoids a circular dependency."""
+    from app.services import index_tasks
+
+    index_tasks.run_document_indexing(document_id)
 
 
 def _load_page_spans(storage: Any, meta: dict[str, Any]) -> list[PageSpanIn] | None:

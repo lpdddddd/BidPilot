@@ -53,6 +53,19 @@ export type ChunkingMeta = {
   completed_at?: string | null;
 };
 
+export type IndexingStatus = "pending" | "processing" | "success" | "failed";
+
+export type IndexingMeta = {
+  status: IndexingStatus;
+  indexed_chunk_count?: number;
+  embedding_model?: string | null;
+  embedding_dimension?: number | null;
+  qdrant_collection?: string | null;
+  opensearch_index?: string | null;
+  error?: string | null;
+  completed_at?: string | null;
+};
+
 export type DocumentMetadata = {
   parser_name?: string;
   parser_version?: string;
@@ -64,6 +77,7 @@ export type DocumentMetadata = {
   parse_error?: string | null;
   original_file_name?: string;
   chunking?: ChunkingMeta | null;
+  indexing?: IndexingMeta | null;
 };
 
 export type DocumentItem = {
@@ -153,6 +167,81 @@ export type ChunkSummaryResponse = {
   tokenizer: string | null;
   error: string | null;
   completed_at: string | null;
+};
+
+export type IndexSummaryResponse = {
+  document_id: string;
+  status: string;
+  indexed_chunk_count: number;
+  embedding_model: string | null;
+  embedding_dimension: number | null;
+  qdrant_collection: string | null;
+  opensearch_index: string | null;
+  error: string | null;
+  completed_at: string | null;
+};
+
+export type SearchRequestPayload = {
+  query: string;
+  top_k?: number;
+  document_types?: string[];
+  document_ids?: string[];
+};
+
+export type SearchResultItem = {
+  rank: number;
+  chunk_id: string;
+  document_id: string;
+  file_name: string | null;
+  document_type: string | null;
+  chunk_index: number | null;
+  section: string | null;
+  clause_id: string | null;
+  page_start: number | null;
+  page_end: number | null;
+  content: string;
+  content_hash: string | null;
+  source_sha256: string | null;
+  chunker_version: string | null;
+  dense_rank: number | null;
+  dense_score: number | null;
+  bm25_rank: number | null;
+  bm25_score: number | null;
+  rrf_score: number;
+  rerank_score: number | null;
+};
+
+export type RetrievalTrace = {
+  dense_candidate_count: number;
+  bm25_candidate_count: number;
+  fused_candidate_count: number;
+  returned_count: number;
+  embedding_model: string;
+  reranker_model: string | null;
+  qdrant_collection: string;
+  opensearch_index: string;
+  rrf_k: number;
+  latency: {
+    embed_ms: number;
+    dense_ms: number;
+    bm25_ms: number;
+    fusion_ms: number;
+    rerank_ms: number;
+    total_ms: number;
+  };
+  degraded: string[];
+};
+
+export type SearchResponse = {
+  query: string;
+  results: SearchResultItem[];
+  trace: RetrievalTrace;
+};
+
+export type ReindexResponse = {
+  project_id: string;
+  scheduled_document_count: number;
+  document_ids: string[];
 };
 
 export type HealthResponse = {

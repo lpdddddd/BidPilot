@@ -53,6 +53,17 @@ def _reset_schema(eng) -> None:
     Base.metadata.create_all(bind=eng)
 
 
+@pytest.fixture(autouse=True)
+def _no_auto_indexing(monkeypatch):
+    """Chunk builds trigger real indexing (Qdrant/OpenSearch/models); tests
+    stub the trigger and exercise index tasks explicitly with fakes."""
+    calls: list = []
+    monkeypatch.setattr(
+        "app.services.chunk_tasks._trigger_indexing", lambda document_id: calls.append(document_id)
+    )
+    return calls
+
+
 @pytest.fixture()
 def engine():
     if not POSTGRES_OK:

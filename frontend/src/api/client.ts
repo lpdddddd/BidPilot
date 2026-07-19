@@ -7,10 +7,14 @@ import type {
   DocumentListResponse,
   DocumentPreviewResponse,
   HealthResponse,
+  IndexSummaryResponse,
   Project,
   ProjectCreatePayload,
   ProjectListResponse,
   ReadyResponse,
+  ReindexResponse,
+  SearchRequestPayload,
+  SearchResponse,
 } from "../types/api";
 
 export async function getHealth(): Promise<HealthResponse> {
@@ -132,5 +136,42 @@ export async function getChunkSummary(
   const { data } = await http.get<ChunkSummaryResponse>(
     `/api/v1/projects/${projectId}/documents/${documentId}/chunk-summary`,
   );
+  return data;
+}
+
+export async function buildDocumentIndex(
+  projectId: string,
+  documentId: string,
+): Promise<DocumentItem> {
+  const { data } = await http.post<DocumentItem>(
+    `/api/v1/projects/${projectId}/documents/${documentId}/index`,
+  );
+  return data;
+}
+
+export async function getIndexSummary(
+  projectId: string,
+  documentId: string,
+): Promise<IndexSummaryResponse> {
+  const { data } = await http.get<IndexSummaryResponse>(
+    `/api/v1/projects/${projectId}/documents/${documentId}/index-summary`,
+  );
+  return data;
+}
+
+export async function searchProject(
+  projectId: string,
+  payload: SearchRequestPayload,
+): Promise<SearchResponse> {
+  const { data } = await http.post<SearchResponse>(
+    `/api/v1/projects/${projectId}/search`,
+    payload,
+    { timeout: 60000 },
+  );
+  return data;
+}
+
+export async function reindexProject(projectId: string): Promise<ReindexResponse> {
+  const { data } = await http.post<ReindexResponse>(`/api/v1/projects/${projectId}/reindex`);
   return data;
 }

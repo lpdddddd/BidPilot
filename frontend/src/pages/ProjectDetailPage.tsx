@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Alert, Button, Descriptions, Empty, Skeleton, Tabs, Tag } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { getProject } from "../api/client";
 import DocumentCenter from "../features/documents/DocumentCenter";
+import KnowledgeSearch from "../features/search/KnowledgeSearch";
 import type { Project } from "../types/api";
 import { usePageTitle } from "../components/usePageTitle";
 
@@ -47,6 +49,8 @@ function ProjectOverview({ project }: { project: Project }) {
 
 export default function ProjectDetailPage() {
   const { projectId = "" } = useParams();
+  const [activeTab, setActiveTab] = useState("overview");
+  const [chunkFocusDocumentId, setChunkFocusDocumentId] = useState<string | null>(null);
   const query = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => getProject(projectId),
@@ -104,7 +108,8 @@ export default function ProjectDetailPage() {
 
       <div className="bp-panel">
         <Tabs
-          defaultActiveKey="overview"
+          activeKey={activeTab}
+          onChange={setActiveTab}
           items={[
             {
               key: "overview",
@@ -114,12 +119,26 @@ export default function ProjectDetailPage() {
             {
               key: "documents",
               label: "文档中心",
-              children: <DocumentCenter projectId={project.id} />,
+              children: (
+                <DocumentCenter
+                  projectId={project.id}
+                  focusChunkDocumentId={chunkFocusDocumentId}
+                  onFocusConsumed={() => setChunkFocusDocumentId(null)}
+                />
+              ),
             },
             {
               key: "search",
               label: "知识检索",
-              children: <PendingCapability title="知识检索" step="第 4～5 步（向量检索与 RAG）" />,
+              children: (
+                <KnowledgeSearch
+                  projectId={project.id}
+                  onOpenSource={(documentId) => {
+                    setChunkFocusDocumentId(documentId);
+                    setActiveTab("documents");
+                  }}
+                />
+              ),
             },
             {
               key: "review",

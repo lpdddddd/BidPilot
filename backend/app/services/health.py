@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.schemas.health import ReadyResponse, ServiceStatus
 from app.services.infra_clients import (
     check_minio,
+    check_opensearch,
     check_postgres,
     check_qdrant,
     check_redis,
@@ -18,6 +19,7 @@ class HealthService:
             check_redis(),
             check_minio(),
             check_qdrant(),
+            check_opensearch(),
         ]
         services = [
             ServiceStatus(

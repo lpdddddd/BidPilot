@@ -12,7 +12,7 @@ PIPELINE_DIR := $(ROOT_DIR)/data_pipeline
 
 help:
 	@echo "BidPilot development commands"
-	@echo "  make infra-up            Start Postgres/Redis/MinIO/Qdrant"
+	@echo "  make infra-up            Start Postgres/Redis/MinIO/Qdrant/OpenSearch"
 	@echo "  make infra-down          Stop infrastructure"
 	@echo "  make backend-install     Install backend deps"
 	@echo "  make frontend-install    Install frontend deps"

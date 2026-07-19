@@ -86,8 +86,38 @@ services:
       timeout: 5s
       retries: 10
 
+  opensearch:
+    image: opensearchproject/opensearch:2.19.1
+    container_name: bidpilot-opensearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      # Dev-only: disable the security plugin so no TLS/credentials are needed.
+      - DISABLE_SECURITY_PLUGIN=true
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "${OPENSEARCH_PORT:-9200}:9200"
+    volumes:
+      - bidpilot_opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sf http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s || exit 1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
 volumes:
   bidpilot_postgres_data:
   bidpilot_redis_data:
   bidpilot_minio_data:
   bidpilot_qdrant_data:
+  bidpilot_opensearch_data:
