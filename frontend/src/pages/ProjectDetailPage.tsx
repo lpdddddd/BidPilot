@@ -26,11 +26,29 @@ function PendingCapability({ title, step }: { title: string; step: string }) {
   );
 }
 
+const PROJECT_STATUS_LABELS: Record<string, string> = {
+  draft: "草稿",
+  parsing: "解析中",
+  analyzing: "分析中",
+  reviewing: "审查中",
+  completed: "已完成",
+  archived: "已归档",
+};
+
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("zh-CN", { hour12: false });
+}
+
 function ProjectOverview({ project }: { project: Project }) {
   return (
     <Descriptions bordered column={{ xs: 1, md: 2 }} size="middle">
       <Descriptions.Item label="状态">
-        <Tag color="blue">{project.status}</Tag>
+        <Tag bordered={false} color="blue">
+          {PROJECT_STATUS_LABELS[project.status] ?? project.status}
+        </Tag>
       </Descriptions.Item>
       <Descriptions.Item label="采购人">{project.purchaser || "-"}</Descriptions.Item>
       <Descriptions.Item label="代理机构">{project.procurement_agency || "-"}</Descriptions.Item>
@@ -41,8 +59,10 @@ function ProjectOverview({ project }: { project: Project }) {
       <Descriptions.Item label="最高限价 (CNY)">
         {project.price_ceiling_cny || "-"}
       </Descriptions.Item>
-      <Descriptions.Item label="投标截止时间">{project.bid_deadline || "-"}</Descriptions.Item>
-      <Descriptions.Item label="创建时间">{project.created_at}</Descriptions.Item>
+      <Descriptions.Item label="投标截止时间">
+        {formatDateTime(project.bid_deadline)}
+      </Descriptions.Item>
+      <Descriptions.Item label="创建时间">{formatDateTime(project.created_at)}</Descriptions.Item>
     </Descriptions>
   );
 }

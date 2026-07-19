@@ -63,72 +63,102 @@ function ResultCard({
 }) {
   const channel = hitChannel(item);
   return (
-    <div
-      style={{
-        border: "1px solid var(--bp-border)",
-        borderRadius: 8,
-        padding: "14px 16px",
-        marginBottom: 12,
-        background: "var(--bp-surface)",
-      }}
-    >
-      <Space size={8} wrap style={{ marginBottom: 8 }}>
-        <Tag color="blue">#{item.rank}</Tag>
-        <Typography.Text strong>{item.file_name ?? "未知文件"}</Typography.Text>
-        {item.document_type && <Tag>{TYPE_LABELS[item.document_type] ?? item.document_type}</Tag>}
-        {item.section && <Tag color="geekblue">{item.section}</Tag>}
-        {item.clause_id && <Tag color="geekblue">{item.clause_id}</Tag>}
-        <Tag color={item.page_start != null ? "cyan" : "default"}>{pageRangeLabel(item)}</Tag>
-        <Tag color={channel.color}>{channel.label}</Tag>
-        {onOpenSource && item.document_id && (
-          <Button
-            type="link"
-            size="small"
-            style={{ padding: 0 }}
-            onClick={() => onOpenSource(item.document_id)}
+    <div className="bp-result-card">
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <span className="bp-rank-chip">{item.rank}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+              marginBottom: 6,
+            }}
           >
-            在文档中心查看
-          </Button>
-        )}
-      </Space>
-      <Typography.Paragraph
-        ellipsis={{ rows: 4, expandable: true, symbol: "展开全文" }}
-        style={{ whiteSpace: "pre-wrap", marginBottom: 8, fontSize: 13, lineHeight: 1.7 }}
-      >
-        {item.content}
-      </Typography.Paragraph>
-      <Collapse
-        ghost
-        size="small"
-        items={[
-          {
-            key: "debug",
-            label: (
-              <span style={{ fontSize: 12, color: "var(--bp-text-muted)" }}>检索调试信息</span>
-            ),
-            children: (
-              <Space size={12} wrap style={{ fontSize: 12 }}>
-                <span>rerank_score：{item.rerank_score != null ? item.rerank_score.toFixed(4) : "重排不可用"}</span>
-                <span>rrf_score：{item.rrf_score.toFixed(5)}</span>
-                <span>
-                  dense：{item.dense_rank != null ? `rank ${item.dense_rank} / ${item.dense_score?.toFixed(4)}` : "未命中"}
-                </span>
-                <span>
-                  bm25：{item.bm25_rank != null ? `rank ${item.bm25_rank} / ${item.bm25_score?.toFixed(2)}` : "未命中"}
-                </span>
-                {item.content_hash && (
-                  <Tooltip title={item.content_hash}>
-                    <span style={{ fontFamily: "monospace" }}>
-                      hash {item.content_hash.slice(0, 12)}
+            <Typography.Text strong style={{ fontSize: 14.5 }}>
+              {item.file_name ?? "未知文件"}
+            </Typography.Text>
+            {item.document_type && (
+              <Tag bordered={false}>{TYPE_LABELS[item.document_type] ?? item.document_type}</Tag>
+            )}
+            <Tag bordered={false} color={channel.color}>
+              {channel.label}
+            </Tag>
+            {onOpenSource && item.document_id && (
+              <Button
+                type="link"
+                size="small"
+                style={{ padding: 0, marginLeft: "auto", fontSize: 13 }}
+                onClick={() => onOpenSource(item.document_id)}
+              >
+                在文档中心查看
+              </Button>
+            )}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "2px 18px",
+              color: "var(--bp-text-muted)",
+              fontSize: 12.5,
+            }}
+          >
+            {item.section && <span>章节：{item.section}</span>}
+            {item.clause_id && <span>条款：{item.clause_id}</span>}
+            <span>{pageRangeLabel(item)}</span>
+          </div>
+          <Typography.Paragraph
+            className="bp-excerpt"
+            ellipsis={{ rows: 4, expandable: true, symbol: "展开全文" }}
+          >
+            {item.content}
+          </Typography.Paragraph>
+          <Collapse
+            ghost
+            size="small"
+            style={{ marginLeft: -16 }}
+            items={[
+              {
+                key: "debug",
+                label: (
+                  <span style={{ fontSize: 12, color: "var(--bp-text-muted)" }}>检索调试信息</span>
+                ),
+                children: (
+                  <Space size={16} wrap style={{ fontSize: 12, color: "var(--bp-text-muted)" }}>
+                    <span>
+                      rerank_score：
+                      {item.rerank_score != null ? item.rerank_score.toFixed(4) : "重排不可用"}
                     </span>
-                  </Tooltip>
-                )}
-                <span>chunk_index：{item.chunk_index ?? "-"}</span>
-              </Space>
-            ),
-          },
-        ]}
-      />
+                    <span>rrf_score：{item.rrf_score.toFixed(5)}</span>
+                    <span>
+                      dense：
+                      {item.dense_rank != null
+                        ? `rank ${item.dense_rank} / ${item.dense_score?.toFixed(4)}`
+                        : "未命中"}
+                    </span>
+                    <span>
+                      bm25：
+                      {item.bm25_rank != null
+                        ? `rank ${item.bm25_rank} / ${item.bm25_score?.toFixed(2)}`
+                        : "未命中"}
+                    </span>
+                    {item.content_hash && (
+                      <Tooltip title={item.content_hash}>
+                        <span style={{ fontFamily: "monospace" }}>
+                          hash {item.content_hash.slice(0, 12)}
+                        </span>
+                      </Tooltip>
+                    )}
+                    <span>chunk_index：{item.chunk_index ?? "-"}</span>
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -265,37 +295,51 @@ export default function KnowledgeSearch({
           />
         ) : (
           <>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                gap: 12,
+                margin: "4px 0 12px",
+              }}
+            >
+              <span style={{ fontWeight: 600, fontSize: 15 }}>检索结果</span>
+              <span style={{ color: "var(--bp-text-muted)", fontSize: 13 }}>
+                返回 {response.trace.returned_count} 条，总耗时{" "}
+                {response.trace.latency.total_ms.toFixed(0)} ms
+              </span>
+            </div>
             {response.results.map((item) => (
               <ResultCard key={item.chunk_id} item={item} onOpenSource={onOpenSource} />
             ))}
-            <Collapse
-              size="small"
-              items={[
-                {
-                  key: "trace",
-                  label: "检索过程（真实统计）",
-                  children: (
-                    <Space size={16} wrap style={{ fontSize: 13 }}>
-                      <span>Dense 候选：{response.trace.dense_candidate_count}</span>
-                      <span>BM25 候选：{response.trace.bm25_candidate_count}</span>
-                      <span>融合候选：{response.trace.fused_candidate_count}</span>
-                      <span>返回：{response.trace.returned_count}</span>
-                      <span>Embedding：{response.trace.embedding_model}</span>
-                      <span>Reranker：{response.trace.reranker_model ?? "不可用（已降级为 RRF 排序）"}</span>
-                      <span>总耗时：{response.trace.latency.total_ms.toFixed(0)} ms</span>
-                      <span>
-                        （embed {response.trace.latency.embed_ms.toFixed(0)} / 召回{" "}
-                        {response.trace.latency.dense_ms.toFixed(0)} / rerank{" "}
-                        {response.trace.latency.rerank_ms.toFixed(0)} ms）
-                      </span>
-                      {response.trace.degraded.length > 0 && (
-                        <Tag color="orange">降级：{response.trace.degraded.join(", ")}</Tag>
-                      )}
-                    </Space>
-                  ),
-                },
-              ]}
-            />
+            <div className="bp-trace-strip" style={{ marginTop: 16 }}>
+              <span>
+                Dense 候选 <strong>{response.trace.dense_candidate_count}</strong>
+              </span>
+              <span>
+                BM25 候选 <strong>{response.trace.bm25_candidate_count}</strong>
+              </span>
+              <span>
+                融合候选 <strong>{response.trace.fused_candidate_count}</strong>
+              </span>
+              <span>
+                Embedding <strong>{response.trace.embedding_model}</strong>
+              </span>
+              <span>
+                Reranker{" "}
+                <strong>{response.trace.reranker_model ?? "不可用（已降级为 RRF 排序）"}</strong>
+              </span>
+              <span>
+                耗时 embed <strong>{response.trace.latency.embed_ms.toFixed(0)}</strong> / 召回{" "}
+                <strong>{response.trace.latency.dense_ms.toFixed(0)}</strong> / rerank{" "}
+                <strong>{response.trace.latency.rerank_ms.toFixed(0)}</strong> ms
+              </span>
+              {response.trace.degraded.length > 0 && (
+                <Tag color="orange" style={{ marginInlineEnd: 0 }}>
+                  降级：{response.trace.degraded.join(", ")}
+                </Tag>
+              )}
+            </div>
           </>
         )
       ) : (

@@ -24,9 +24,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
             colorPrimary: "#1f4e79",
             colorInfo: "#1f4e79",
             colorLink: "#1f4e79",
-            fontFamily: "'Source Sans 3', 'Noto Sans SC', sans-serif",
-            borderRadius: 6,
-            colorBgLayout: "#f4f6f8",
+            fontFamily:
+              "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', Arial, sans-serif",
+            borderRadius: 8,
+            colorBgLayout: "#f3f5f8",
+            colorBorderSecondary: "#e3e8ee",
+            colorTextSecondary: "#5b6b7c",
+            colorInfoBg: "#eef5fb",
+            colorInfoBorder: "#c8ddef",
           },
           components: {
             Layout: {
@@ -34,9 +39,27 @@ export function AppProviders({ children }: { children: ReactNode }) {
               headerBg: "#ffffff",
             },
             Menu: {
-              darkItemBg: "#102138",
+              darkItemBg: "transparent",
               darkItemSelectedBg: "#1f4e79",
               darkSubMenuItemBg: "#0c1622",
+              itemBorderRadius: 8,
+              itemMarginInline: 10,
+            },
+            Table: {
+              headerBg: "#f8fafc",
+              headerColor: "#5b6b7c",
+              headerSplitColor: "transparent",
+              rowHoverBg: "#f3f6fa",
+            },
+            Tabs: {
+              titleFontSize: 15,
+              horizontalItemGutter: 28,
+            },
+            Button: {
+              controlHeight: 34,
+            },
+            Tag: {
+              borderRadiusSM: 6,
             },
           },
         }}

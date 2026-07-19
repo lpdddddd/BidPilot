@@ -19,6 +19,15 @@ import { createProject, listProjects } from "../api/client";
 import type { Project, ProjectCreatePayload } from "../types/api";
 import { usePageTitle } from "../components/usePageTitle";
 
+const PROJECT_STATUS_LABELS: Record<string, string> = {
+  draft: "草稿",
+  parsing: "解析中",
+  analyzing: "分析中",
+  reviewing: "审查中",
+  completed: "已完成",
+  archived: "已归档",
+};
+
 function CreateProjectModal({
   open,
   onClose,
@@ -158,7 +167,11 @@ export default function ProjectListPage() {
                   title: "状态",
                   dataIndex: "status",
                   width: 100,
-                  render: (value: string) => <Tag color="blue">{value}</Tag>,
+                  render: (value: string) => (
+                    <Tag bordered={false} color="blue">
+                      {PROJECT_STATUS_LABELS[value] ?? value}
+                    </Tag>
+                  ),
                 },
                 { title: "行业", dataIndex: "industry", render: (v: string | null) => v || "-" },
                 { title: "地区", dataIndex: "region", render: (v: string | null) => v || "-" },
