@@ -175,3 +175,5 @@ export async function reindexProject(projectId: string): Promise<ReindexResponse
   const { data } = await http.post<ReindexResponse>(`/api/v1/projects/${projectId}/reindex`);
   return data;
 }
+
+export { askProject, askProjectStream, getLlmHealth } from "./ask";

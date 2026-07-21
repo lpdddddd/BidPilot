@@ -50,9 +50,25 @@ class Settings(BaseSettings):
     retrieval_dense_weight: float = 1.0
     retrieval_bm25_weight: float = 1.0
 
+    # Reserved OpenAI-compatible settings (data pipeline / legacy).
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     model_name: str = "gpt-4o-mini"
+
+    # Grounded RAG (vLLM OpenAI-compatible). Separate from OPENAI_* so local
+    # Qwen3-14B and cloud OpenAI configs do not collide.
+    llm_enabled: bool = False
+    llm_base_url: str = "http://localhost:8001/v1"
+    llm_api_key: str = "local"
+    llm_model: str = "bidpilot-qwen3-14b"
+    llm_timeout_seconds: float = 120.0
+    llm_max_tokens: int = 1024
+    llm_temperature: float = 0.1
+    rag_context_top_k: int = 8
+    rag_max_context_tokens: int = 10000
+    # bge-reranker-base emits unbounded logits; keep a low floor so weakly
+    # related chunks are dropped without being overly aggressive.
+    rag_min_rerank_score: float = -5.0
 
     llamafactory_home: str = ""
 

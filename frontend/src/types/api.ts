@@ -238,6 +238,83 @@ export type SearchResponse = {
   trace: RetrievalTrace;
 };
 
+export type CitationItem = {
+  source_id: string;
+  chunk_id: string;
+  document_id: string;
+  file_name: string | null;
+  document_type: string | null;
+  section: string | null;
+  clause_id: string | null;
+  page_start: number | null;
+  page_end: number | null;
+  excerpt: string;
+  content_hash: string | null;
+  rerank_score: number | null;
+  rrf_score: number | null;
+  dense_rank: number | null;
+  dense_score: number | null;
+  bm25_rank: number | null;
+  bm25_score: number | null;
+  chunk_index: number | null;
+  document_url: string | null;
+};
+
+export type RagRetrievalTrace = RetrievalTrace & {
+  rag_prepare_ms: number;
+  context_chunk_count: number;
+  context_token_count: number;
+  filtered_by_min_score: number;
+};
+
+export type GenerationTrace = {
+  model: string;
+  context_chunk_count: number;
+  context_token_count: number;
+  latency_ms: number;
+  finish_reason: string | null;
+  request_id: string | null;
+};
+
+export type AskRequestPayload = {
+  question: string;
+  document_types?: string[];
+  document_ids?: string[];
+  top_k?: number;
+  stream?: boolean;
+};
+
+export type AskResponse = {
+  question: string;
+  answer: string;
+  citations: CitationItem[];
+  sources: CitationItem[];
+  retrieval_trace: RagRetrievalTrace;
+  generation_trace: GenerationTrace | null;
+  status: "answered" | "insufficient_evidence" | "llm_disabled";
+};
+
+export type LlmHealthResponse = {
+  status: "ok" | "disabled" | "error";
+  enabled: boolean;
+  model: string;
+  base_url: string;
+  reachable: boolean;
+  detail: string | null;
+  latency_ms: number | null;
+};
+
+export type AskStreamHandlers = {
+  onRetrieval?: (data: {
+    sources: CitationItem[];
+    retrieval_trace: RagRetrievalTrace;
+    status: "ok" | "insufficient_evidence";
+  }) => void;
+  onDelta?: (text: string) => void;
+  onFinal?: (result: AskResponse) => void;
+  onError?: (error: { message: string; detail?: unknown }) => void;
+};
+
 export type ReindexResponse = {
   project_id: string;
   scheduled_document_count: number;

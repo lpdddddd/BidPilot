@@ -1,0 +1,48 @@
+# Optional vLLM profile for BidPilot grounded RAG (Qwen3-14B).
+# Not started by `make infra-up`. Requires NVIDIA GPU + nvidia-container-toolkit.
+#
+# Usage:
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.llm.yml --profile llm up -d
+#
+# Then set in .env:
+#   LLM_ENABLED=true
+#   LLM_BASE_URL=http://localhost:8001/v1
+#   LLM_API_KEY=local
+#   LLM_MODEL=bidpilot-qwen3-14b
+
+services:
+  vllm-qwen3:
+    profiles: ["llm"]
+    image: vllm/vllm-openai:latest
+    container_name: bidpilot-vllm-qwen3
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}
+      CUDA_VISIBLE_DEVICES: ${LLM_CUDA_VISIBLE_DEVICES:-0}
+    ports:
+      - "${LLM_PORT:-8001}:8000"
+    volumes:
+      - ${HF_HOME:-${HOME}/.cache/huggingface}:/root/.cache/huggingface
+    command:
+      - Qwen/Qwen3-14B
+      - --served-model-name
+      - ${LLM_MODEL:-bidpilot-qwen3-14b}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --tensor-parallel-size
+      - "1"
+      - --gpu-memory-utilization
+      - "0.90"
+      - --max-model-len
+      - "16384"
+      - --enable-prefix-caching
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

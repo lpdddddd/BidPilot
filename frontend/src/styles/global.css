@@ -671,11 +671,94 @@ body {
 
 /* --------------------------------------------------------- knowledge search */
 
-.bp-search-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+.bp-mode-switch {
+  margin-bottom: 16px;
 }
+
+.bp-mode-switch .ant-segmented {
+  background: var(--bp-surface-2) !important;
+  padding: 3px !important;
+  border: 1px solid var(--bp-border);
+  border-radius: 12px !important;
+}
+
+.bp-mode-switch .ant-segmented-item-selected {
+  background: var(--bp-primary-soft) !important;
+  color: var(--bp-text) !important;
+  box-shadow: inset 0 0 0 1px rgba(124, 92, 255, 0.35);
+}
+
+.bp-model-status {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--bp-text-muted);
+  font-family: var(--bp-mono);
+}
+
+.bp-ask-progress {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(124, 92, 255, 0.25);
+  background: var(--bp-primary-soft);
+  color: var(--bp-text-muted);
+  font-size: 13px;
+}
+
+.bp-answer-panel {
+  padding: 18px 20px;
+  border-radius: var(--bp-radius);
+  border: 1px solid var(--bp-border);
+  background: var(--bp-surface-1);
+  box-shadow: var(--bp-shadow-sm);
+}
+
+.bp-answer-md {
+  color: var(--bp-text);
+  font-size: 14.5px;
+  line-height: 1.75;
+}
+
+.bp-answer-md p {
+  margin: 0 0 0.75em;
+}
+
+.bp-answer-md p:last-child {
+  margin-bottom: 0;
+}
+
+.bp-answer-md ul,
+.bp-answer-md ol {
+  margin: 0 0 0.75em;
+  padding-left: 1.25em;
+}
+
+.bp-cite-chip {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 2px;
+  padding: 0 6px;
+  border: 1px solid rgba(124, 92, 255, 0.4);
+  border-radius: 6px;
+  background: var(--bp-primary-soft);
+  color: var(--bp-accent);
+  font-size: 12px;
+  font-family: var(--bp-mono);
+  font-weight: 600;
+  cursor: pointer;
+  vertical-align: baseline;
+  transition: background var(--bp-transition), border-color var(--bp-transition);
+}
+
+.bp-cite-chip:hover {
+  background: rgba(124, 92, 255, 0.28);
+  border-color: var(--bp-primary);
+}
+
+.bp-evidence-card.is-active {
+  border-color: rgba(124, 92, 255, 0.55);
+  box-shadow: var(--bp-shadow-glow);
+}
+
 
 .bp-search-head {
   display: flex;
