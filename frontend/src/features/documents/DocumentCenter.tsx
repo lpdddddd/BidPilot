@@ -492,7 +492,7 @@ export default function DocumentCenter({
   return (
     <div>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
-        <div style={{ flex: "1 1 360px", minWidth: 300 }}>
+        <div className="bp-upload-panel" style={{ flex: "1 1 360px", minWidth: 300 }}>
           <Upload.Dragger
             multiple={false}
             showUploadList={false}
@@ -518,7 +518,9 @@ export default function DocumentCenter({
           </Upload.Dragger>
         </div>
         <div style={{ width: 220 }}>
-          <div className="bp-stat-label">文档类型</div>
+          <div className="bp-search-filters-label" style={{ marginBottom: 6 }}>
+            文档类型
+          </div>
           <Select
             value={documentType}
             onChange={setDocumentType}

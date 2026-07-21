@@ -33,17 +33,11 @@ function ChunkCard({ chunk }: { chunk: ChunkItem }) {
   const hashShort = chunk.content_hash ? chunk.content_hash.slice(0, 12) : null;
 
   return (
-    <div
-      style={{
-        border: "1px solid var(--bp-border)",
-        borderRadius: 8,
-        padding: "12px 16px",
-        marginBottom: 12,
-        background: "var(--bp-surface)",
-      }}
-    >
+    <div className="bp-chunk-card">
       <Space size={8} wrap style={{ marginBottom: 8 }}>
-        <Tag color="blue">#{chunk.chunk_index}</Tag>
+        <Tag bordered={false} color="processing">
+          #{chunk.chunk_index}
+        </Tag>
         {chunk.section ? (
           <Tag>{chunk.section}</Tag>
         ) : (

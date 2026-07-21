@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Button, Descriptions, Empty, Skeleton, Tabs, Tag } from "antd";
+import { Alert, Button, Empty, Skeleton, Tabs, Tag } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
@@ -11,18 +11,19 @@ import { usePageTitle } from "../components/usePageTitle";
 
 function PendingCapability({ title, step }: { title: string; step: string }) {
   return (
-    <Empty
-      image={Empty.PRESENTED_IMAGE_SIMPLE}
-      style={{ padding: "48px 0" }}
-      description={
-        <div>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>{title}能力建设中</div>
-          <div style={{ color: "var(--bp-text-muted)", fontSize: 13 }}>
-            将在{step}接入，当前阶段不提供模拟数据
+    <div className="bp-pending-capability">
+      <Empty
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        description={
+          <div>
+            <div className="bp-pending-capability-title">{title}尚未开放</div>
+            <div className="bp-pending-capability-desc">
+              将在{step}接入。当前阶段不提供模拟审查结果或虚假风险分数。
+            </div>
           </div>
-        </div>
-      }
-    />
+        }
+      />
+    </div>
   );
 }
 
@@ -42,28 +43,36 @@ function formatDateTime(value: string | null | undefined): string {
   return date.toLocaleString("zh-CN", { hour12: false });
 }
 
+function MetaItem({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="bp-meta-item">
+      <div className="bp-meta-label">{label}</div>
+      <div className="bp-meta-value">{children}</div>
+    </div>
+  );
+}
+
 function ProjectOverview({ project }: { project: Project }) {
   return (
-    <Descriptions bordered column={{ xs: 1, md: 2 }} size="middle">
-      <Descriptions.Item label="状态">
-        <Tag bordered={false} color="blue">
-          {PROJECT_STATUS_LABELS[project.status] ?? project.status}
-        </Tag>
-      </Descriptions.Item>
-      <Descriptions.Item label="采购人">{project.purchaser || "-"}</Descriptions.Item>
-      <Descriptions.Item label="代理机构">{project.procurement_agency || "-"}</Descriptions.Item>
-      <Descriptions.Item label="采购方式">{project.procurement_method || "-"}</Descriptions.Item>
-      <Descriptions.Item label="行业">{project.industry || "-"}</Descriptions.Item>
-      <Descriptions.Item label="地区">{project.region || "-"}</Descriptions.Item>
-      <Descriptions.Item label="预算 (CNY)">{project.budget_cny || "-"}</Descriptions.Item>
-      <Descriptions.Item label="最高限价 (CNY)">
-        {project.price_ceiling_cny || "-"}
-      </Descriptions.Item>
-      <Descriptions.Item label="投标截止时间">
-        {formatDateTime(project.bid_deadline)}
-      </Descriptions.Item>
-      <Descriptions.Item label="创建时间">{formatDateTime(project.created_at)}</Descriptions.Item>
-    </Descriptions>
+    <div>
+      <h2 className="bp-section-title">项目信息</h2>
+      <div className="bp-meta-grid">
+        <MetaItem label="状态">
+          <Tag bordered={false} color="processing">
+            {PROJECT_STATUS_LABELS[project.status] ?? project.status}
+          </Tag>
+        </MetaItem>
+        <MetaItem label="采购人">{project.purchaser || "-"}</MetaItem>
+        <MetaItem label="代理机构">{project.procurement_agency || "-"}</MetaItem>
+        <MetaItem label="采购方式">{project.procurement_method || "-"}</MetaItem>
+        <MetaItem label="行业">{project.industry || "-"}</MetaItem>
+        <MetaItem label="地区">{project.region || "-"}</MetaItem>
+        <MetaItem label="预算 (CNY)">{project.budget_cny || "-"}</MetaItem>
+        <MetaItem label="最高限价 (CNY)">{project.price_ceiling_cny || "-"}</MetaItem>
+        <MetaItem label="投标截止">{formatDateTime(project.bid_deadline)}</MetaItem>
+        <MetaItem label="创建时间">{formatDateTime(project.created_at)}</MetaItem>
+      </div>
+    </div>
   );
 }
 
@@ -113,44 +122,63 @@ export default function ProjectDetailPage() {
 
   return (
     <div>
-      <div
-        className="bp-page-header"
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}
-      >
-        <div>
-          <h1 className="bp-page-title">{project.project_name}</h1>
-          <p className="bp-page-subtitle">{project.project_code}</p>
+      <header className="bp-workspace-header">
+        <div className="bp-workspace-title-row">
+          <div>
+            <h1 className="bp-page-title">{project.project_name}</h1>
+            <div className="bp-workspace-meta">
+              <span className="bp-workspace-code">{project.project_code}</span>
+              <Tag bordered={false} color="processing">
+                {PROJECT_STATUS_LABELS[project.status] ?? project.status}
+              </Tag>
+              {project.purchaser && <span>{project.purchaser}</span>}
+              {(project.industry || project.region) && (
+                <span>
+                  {[project.industry, project.region].filter(Boolean).join(" · ")}
+                </span>
+              )}
+            </div>
+          </div>
+          <Link to="/projects">
+            <Button type="text" icon={<ArrowLeftOutlined />}>
+              返回项目列表
+            </Button>
+          </Link>
         </div>
-        <Link to="/projects">
-          <Button icon={<ArrowLeftOutlined />}>返回项目列表</Button>
-        </Link>
-      </div>
+      </header>
 
-      <div className="bp-panel">
-        <Tabs
-          activeKey={activeTab}
-          onChange={setActiveTab}
-          items={[
-            {
-              key: "overview",
-              label: "项目概览",
-              children: <ProjectOverview project={project} />,
-            },
-            {
-              key: "documents",
-              label: "文档中心",
-              children: (
+      <Tabs
+        className="bp-workspace-nav"
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={[
+          {
+            key: "overview",
+            label: "项目概览",
+            children: (
+              <div className="bp-workspace-body">
+                <ProjectOverview project={project} />
+              </div>
+            ),
+          },
+          {
+            key: "documents",
+            label: "文档中心",
+            children: (
+              <div className="bp-workspace-body">
                 <DocumentCenter
                   projectId={project.id}
                   focusChunkDocumentId={chunkFocusDocumentId}
                   onFocusConsumed={() => setChunkFocusDocumentId(null)}
                 />
-              ),
-            },
-            {
-              key: "search",
-              label: "知识检索",
-              children: (
+              </div>
+            ),
+          },
+          {
+            key: "search",
+            label: "知识检索",
+            children: (
+              <div className="bp-workspace-body">
                 <KnowledgeSearch
                   projectId={project.id}
                   onOpenSource={(documentId) => {
@@ -158,17 +186,20 @@ export default function ProjectDetailPage() {
                     setActiveTab("documents");
                   }}
                 />
-              ),
-            },
-            {
-              key: "review",
-              label: "智能审查",
-              children:
-                <PendingCapability title="智能审查" step="第 6～10 步（规则与 Agent 工作流）" />,
-            },
-          ]}
-        />
-      </div>
+              </div>
+            ),
+          },
+          {
+            key: "review",
+            label: "智能审查",
+            children: (
+              <div className="bp-workspace-body">
+                <PendingCapability title="智能审查" step="后续规则与 Agent 工作流阶段" />
+              </div>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }

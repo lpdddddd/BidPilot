@@ -109,13 +109,12 @@ export default function ProjectListPage() {
 
   return (
     <div>
-      <div
-        className="bp-page-header"
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}
-      >
+      <div className="bp-page-header bp-page-header-row">
         <div>
           <h1 className="bp-page-title">项目</h1>
-          <p className="bp-page-subtitle">管理招投标分析项目，后续在项目内接入文档与审查能力。</p>
+          <p className="bp-page-subtitle">
+            管理招投标分析项目。在项目工作区内上传文档、检索证据并准备审查。
+          </p>
         </div>
         <Space>
           <Button
@@ -134,21 +133,23 @@ export default function ProjectListPage() {
       <div className="bp-panel">
         {query.isSuccess ? (
           query.data.items.length === 0 ? (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>还没有任何项目</div>
-                  <div style={{ color: "var(--bp-text-muted)", fontSize: 13 }}>
-                    创建第一个招投标分析项目，后续可在项目内上传与审查文件
+            <div className="bp-empty-block">
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  <div>
+                    <div className="bp-empty-title">还没有任何项目</div>
+                    <div className="bp-empty-desc">
+                      创建第一个招投标分析项目，随后可在项目内上传与检索文件。
+                    </div>
                   </div>
-                </div>
-              }
-            >
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-                创建第一个项目
-              </Button>
-            </Empty>
+                }
+              >
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+                  创建第一个项目
+                </Button>
+              </Empty>
+            </div>
           ) : (
             <Table<Project>
               rowKey="id"
@@ -168,7 +169,7 @@ export default function ProjectListPage() {
                   dataIndex: "status",
                   width: 100,
                   render: (value: string) => (
-                    <Tag bordered={false} color="blue">
+                    <Tag bordered={false} color="processing">
                       {PROJECT_STATUS_LABELS[value] ?? value}
                     </Tag>
                   ),

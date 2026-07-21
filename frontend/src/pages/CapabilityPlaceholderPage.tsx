@@ -15,25 +15,24 @@ export default function CapabilityPlaceholderPage({
     <div>
       <div className="bp-page-header">
         <h1 className="bp-page-title">{title}</h1>
-        <p className="bp-page-subtitle">能力建设中</p>
+        <p className="bp-page-subtitle">能力尚未开放</p>
       </div>
       <div className="bp-panel">
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          style={{ padding: "64px 0" }}
-          description={
-            <div style={{ maxWidth: 420, margin: "0 auto" }}>
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>{title}尚未开放</div>
-              <div style={{ color: "var(--bp-text-muted)", fontSize: 13, lineHeight: 1.7 }}>
-                {description}
+        <div className="bp-pending-capability">
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <div style={{ maxWidth: 420, margin: "0 auto" }}>
+                <div className="bp-pending-capability-title">{title}尚未开放</div>
+                <div className="bp-pending-capability-desc">{description}</div>
               </div>
-            </div>
-          }
-        >
-          <Link to="/">
-            <Button>返回工作台</Button>
-          </Link>
-        </Empty>
+            }
+          >
+            <Link to="/">
+              <Button>返回工作台</Button>
+            </Link>
+          </Empty>
+        </div>
       </div>
     </div>
   );

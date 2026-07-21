@@ -14,6 +14,9 @@ const queryClient = new QueryClient({
   },
 });
 
+const FONT_STACK =
+  "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', Arial, sans-serif";
+
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
@@ -21,45 +24,82 @@ export function AppProviders({ children }: { children: ReactNode }) {
         locale={zhCN}
         theme={{
           token: {
-            colorPrimary: "#1f4e79",
-            colorInfo: "#1f4e79",
-            colorLink: "#1f4e79",
-            fontFamily:
-              "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', Arial, sans-serif",
+            colorPrimary: "#4f46e5",
+            colorInfo: "#4f46e5",
+            colorLink: "#4f46e5",
+            colorSuccess: "#16a34a",
+            colorWarning: "#d97706",
+            colorError: "#dc2626",
+            fontFamily: FONT_STACK,
             borderRadius: 8,
-            colorBgLayout: "#f3f5f8",
-            colorBorderSecondary: "#e3e8ee",
-            colorTextSecondary: "#5b6b7c",
-            colorInfoBg: "#eef5fb",
-            colorInfoBorder: "#c8ddef",
+            colorBgLayout: "#f6f5f3",
+            colorBgContainer: "#ffffff",
+            colorBorder: "#e7e5e4",
+            colorBorderSecondary: "#e7e5e4",
+            colorText: "#1c1917",
+            colorTextSecondary: "#78716c",
+            colorTextTertiary: "#a8a29e",
+            colorInfoBg: "rgba(79, 70, 229, 0.06)",
+            colorInfoBorder: "rgba(79, 70, 229, 0.18)",
+            controlHeight: 34,
+            controlOutline: "rgba(79, 70, 229, 0.18)",
           },
           components: {
             Layout: {
-              siderBg: "#102138",
-              headerBg: "#ffffff",
+              siderBg: "#17171c",
+              headerBg: "transparent",
+              bodyBg: "#f6f5f3",
             },
             Menu: {
               darkItemBg: "transparent",
-              darkItemSelectedBg: "#1f4e79",
-              darkSubMenuItemBg: "#0c1622",
+              darkItemSelectedBg: "rgba(79, 70, 229, 0.28)",
+              darkItemHoverBg: "rgba(255, 255, 255, 0.05)",
+              darkSubMenuItemBg: "transparent",
               itemBorderRadius: 8,
-              itemMarginInline: 10,
+              itemMarginInline: 8,
+              itemHeight: 40,
             },
             Table: {
-              headerBg: "#f8fafc",
-              headerColor: "#5b6b7c",
+              headerBg: "#fafaf8",
+              headerColor: "#78716c",
               headerSplitColor: "transparent",
-              rowHoverBg: "#f3f6fa",
+              rowHoverBg: "#f6f5f3",
+              borderColor: "#e7e5e4",
             },
             Tabs: {
-              titleFontSize: 15,
-              horizontalItemGutter: 28,
+              titleFontSize: 14,
+              horizontalItemGutter: 24,
+              inkBarColor: "#4f46e5",
+              itemSelectedColor: "#4f46e5",
+              itemHoverColor: "#4338ca",
+              itemColor: "#78716c",
             },
             Button: {
+              primaryShadow: "none",
+              defaultShadow: "none",
               controlHeight: 34,
+              controlHeightLG: 40,
+              borderRadius: 8,
+            },
+            Input: {
+              controlHeightLG: 44,
+              borderRadiusLG: 10,
+              activeBorderColor: "#4f46e5",
+              hoverBorderColor: "#a5b4fc",
             },
             Tag: {
               borderRadiusSM: 6,
+              defaultBg: "#f6f5f3",
+              defaultColor: "#57534e",
+            },
+            Drawer: {
+              colorBgElevated: "#ffffff",
+            },
+            Alert: {
+              borderRadiusLG: 10,
+            },
+            Select: {
+              controlHeight: 32,
             },
           },
         }}

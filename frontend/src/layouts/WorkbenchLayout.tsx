@@ -46,7 +46,7 @@ export default function WorkbenchLayout({ children }: { children: ReactNode }) {
     <Layout className="bp-shell" hasSider>
       <Sider
         className="bp-sider"
-        width={220}
+        width={196}
         breakpoint="lg"
         collapsedWidth={64}
         collapsed={collapsed}
@@ -54,22 +54,22 @@ export default function WorkbenchLayout({ children }: { children: ReactNode }) {
         trigger={null}
         style={{ position: "sticky", top: 0, height: "100vh", overflow: "auto" }}
       >
-        <div className="bp-logo" style={collapsed ? { padding: "0 18px" } : undefined}>
+        <div className={`bp-logo${collapsed ? " bp-logo-collapsed" : ""}`}>
           <span className="bp-logo-mark" aria-hidden="true">
             BP
           </span>
           {!collapsed && <span>BidPilot</span>}
         </div>
         <Menu
+          className="bp-sider-menu"
           theme="dark"
           mode="inline"
           selectedKeys={[selectedNavKey(location.pathname)]}
           items={NAV_ITEMS}
-          style={{ borderInlineEnd: "none", marginTop: 8 }}
         />
         {!collapsed && (
           <div className="bp-sider-footer">
-            招投标文件分析与
+            招投标证据检索与
             <br />
             合规审查工作台
           </div>
@@ -77,9 +77,9 @@ export default function WorkbenchLayout({ children }: { children: ReactNode }) {
       </Sider>
       <Layout>
         <Header className="bp-topbar">
-          <div className="bp-topbar-title">BidPilot 投标工作台</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <Tag color={import.meta.env.DEV ? "cyan" : "blue"}>{ENV_LABEL}</Tag>
+          <div className="bp-topbar-title">智能投标工作台</div>
+          <div className="bp-topbar-right">
+            <Tag bordered={false}>{ENV_LABEL}</Tag>
             <BackendStatus />
           </div>
         </Header>
