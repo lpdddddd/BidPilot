@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Layout, Menu, Tag } from "antd";
+import { Layout, Menu } from "antd";
 import {
   AppstoreOutlined,
   DatabaseOutlined,
@@ -28,6 +28,14 @@ const NAV_ITEMS = [
   },
 ];
 
+const CRUMB_LABELS: Record<string, string> = {
+  "/": "工作台",
+  "/projects": "项目",
+  "/knowledge": "知识库",
+  "/review": "智能审查",
+  "/evaluation": "评估中心",
+};
+
 function selectedNavKey(pathname: string): string {
   if (pathname === "/") return "/";
   const match = NAV_ITEMS.filter((item) => item.key !== "/").find((item) =>
@@ -36,11 +44,19 @@ function selectedNavKey(pathname: string): string {
   return match?.key ?? "/";
 }
 
-const ENV_LABEL = import.meta.env.DEV ? "开发环境" : "生产构建";
+function topbarCrumb(pathname: string): { section: string; detail?: string } {
+  if (pathname === "/") return { section: "工作台" };
+  if (pathname.startsWith("/projects/") && pathname !== "/projects") {
+    return { section: "项目", detail: "工作区" };
+  }
+  const key = selectedNavKey(pathname);
+  return { section: CRUMB_LABELS[key] ?? "BidPilot" };
+}
 
 export default function WorkbenchLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const crumb = topbarCrumb(location.pathname);
 
   return (
     <Layout className="bp-shell" hasSider>
@@ -69,17 +85,24 @@ export default function WorkbenchLayout({ children }: { children: ReactNode }) {
         />
         {!collapsed && (
           <div className="bp-sider-footer">
-            招投标证据检索与
+            证据优先的投标工作台
             <br />
-            合规审查工作台
+            定位资料 · 验证来源 · 可追溯依据
           </div>
         )}
       </Sider>
       <Layout>
         <Header className="bp-topbar">
-          <div className="bp-topbar-title">智能投标工作台</div>
+          <div className="bp-topbar-crumb" aria-label="当前位置">
+            <strong>{crumb.section}</strong>
+            {crumb.detail && (
+              <>
+                <span className="bp-faint">/</span>
+                <span>{crumb.detail}</span>
+              </>
+            )}
+          </div>
           <div className="bp-topbar-right">
-            <Tag bordered={false}>{ENV_LABEL}</Tag>
             <BackendStatus />
           </div>
         </Header>

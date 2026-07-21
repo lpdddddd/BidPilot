@@ -1,4 +1,4 @@
-import { Badge, Button, Skeleton } from "antd";
+import { Button, Skeleton } from "antd";
 import { ArrowRightOutlined, PlusOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -6,17 +6,19 @@ import { listProjects } from "../api/client";
 import { useBackendHealth, useBackendReady } from "../components/BackendStatus";
 import { usePageTitle } from "../components/usePageTitle";
 
-type CapabilityItem = {
+type CapabilityNode = {
   name: string;
   ready: boolean;
   note: string;
 };
 
-const CAPABILITIES: CapabilityItem[] = [
-  { name: "文档解析与切分", ready: true, note: "上传、解析、结构感知 Chunk 与来源追溯" },
-  { name: "混合检索", ready: true, note: "向量 + BM25 召回，RRF 融合与重排" },
-  { name: "带来源的文档问答", ready: false, note: "尚未接入大模型，当前仅返回检索证据" },
-  { name: "智能审查", ready: false, note: "规则与 Agent 工作流尚未开放" },
+const INTEL_NODES: CapabilityNode[] = [
+  { name: "文档解析", ready: true, note: "上传后提取文本与结构，保留页码区间" },
+  { name: "结构化切分", ready: true, note: "按章节与条款切分，生成可追溯 Chunk" },
+  { name: "混合检索", ready: true, note: "Dense + BM25 召回，RRF 融合与重排" },
+  { name: "来源追溯", ready: true, note: "结果携带文件、章节、条款与页码" },
+  { name: "文档问答", ready: false, note: "大模型回答尚未接入，当前仅返回检索证据" },
+  { name: "智能审查", ready: false, note: "规则与 Agent 工作流待后续开放" },
 ];
 
 export default function DashboardPage() {
@@ -26,90 +28,91 @@ export default function DashboardPage() {
   const projects = useQuery({ queryKey: ["projects"], queryFn: listProjects, retry: 0 });
 
   const apiConnected = health.isSuccess;
-  const readyLabel = ready.isLoading
-    ? "检查中"
-    : ready.isSuccess
-      ? `${ready.data.services.filter((s) => s.status === "ok").length}/${ready.data.services.length} 依赖正常`
-      : "无法获取";
-  const readyStatus: "success" | "warning" | "error" | "processing" = ready.isLoading
-    ? "processing"
-    : ready.isSuccess
-      ? ready.data.status === "ok"
-        ? "success"
-        : ready.data.status === "degraded"
-          ? "warning"
-          : "error"
-      : "error";
+  const readyOkCount = ready.isSuccess
+    ? ready.data.services.filter((s) => s.status === "ok").length
+    : null;
+  const readyTotal = ready.isSuccess ? ready.data.services.length : null;
+  const openCapabilityCount = INTEL_NODES.filter((n) => n.ready).length;
+  const projectTotal = projects.isSuccess ? projects.data.total : null;
 
   return (
-    <div>
-      <div className="bp-system-strip" aria-label="系统概况">
-        <span className="bp-system-item">
+    <div className="bp-dash">
+      <section className="bp-dash-hero">
+        <p className="bp-eyebrow">BidPilot / Evidence Workspace</p>
+        <h1 className="bp-page-title">智能投标工作台</h1>
+        <p className="bp-page-subtitle">
+          定位资料、验证来源、形成可追溯的投标依据。当前开放文档解析与混合检索；问答与审查按阶段接入，不提供模拟结论。
+        </p>
+        <div className="bp-dash-actions">
+          <Link to="/projects">
+            <Button type="primary" size="large" icon={<ArrowRightOutlined />} iconPosition="end">
+              进入项目
+            </Button>
+          </Link>
+          <Link to="/projects">
+            <Button size="large" icon={<PlusOutlined />}>
+              创建项目
+            </Button>
+          </Link>
+        </div>
+
+        <div className="bp-dash-metrics" aria-label="系统概览">
+          {projects.isLoading ? (
+            <Skeleton.Button active size="small" style={{ width: 88, height: 32 }} />
+          ) : (
+            projectTotal != null && (
+              <span className="bp-metric-chip">
+                项目 <strong>{projectTotal}</strong>
+              </span>
+            )
+          )}
+          <span className="bp-metric-chip">
+            已开放能力 <strong>{openCapabilityCount}</strong>
+          </span>
           {health.isLoading ? (
-            <Skeleton.Button active size="small" style={{ width: 72, height: 18 }} />
+            <Skeleton.Button active size="small" style={{ width: 100, height: 32 }} />
           ) : (
-            <Badge status={apiConnected ? "success" : "error"} text={apiConnected ? "API 已连接" : "API 未连接"} />
+            <span className="bp-metric-chip">
+              API <strong>{apiConnected ? "已连接" : "未连接"}</strong>
+            </span>
           )}
-        </span>
-        <span className="bp-system-item">
           {ready.isLoading ? (
-            <Skeleton.Button active size="small" style={{ width: 96, height: 18 }} />
+            <Skeleton.Button active size="small" style={{ width: 110, height: 32 }} />
           ) : (
-            <Badge status={readyStatus} text={readyLabel} />
+            readyOkCount != null &&
+            readyTotal != null && (
+              <span className="bp-metric-chip">
+                依赖 <strong>{`${readyOkCount}/${readyTotal}`}</strong>
+              </span>
+            )
           )}
-        </span>
-        <span className="bp-system-item">
-          项目{" "}
-          <strong style={{ color: "var(--bp-text)", fontWeight: 600 }}>
-            {projects.isLoading ? "…" : projects.isSuccess ? projects.data.total : "-"}
-          </strong>
-        </span>
-      </div>
+        </div>
+      </section>
 
-      <div className="bp-hero">
-        <section className="bp-hero-main">
-          <p className="bp-hero-kicker">BidPilot</p>
-          <h1 className="bp-page-title">智能投标工作台</h1>
-          <p className="bp-page-subtitle">
-            在项目资料中检索证据、追溯来源、准备合规审查。当前开放文档解析与混合检索；问答与审查能力按阶段接入，不提供模拟结论。
-          </p>
-          <div className="bp-hero-actions">
-            <Link to="/projects">
-              <Button type="primary" size="large" icon={<ArrowRightOutlined />} iconPosition="end">
-                进入项目
-              </Button>
-            </Link>
-            <Link to="/projects">
-              <Button size="large" icon={<PlusOutlined />}>
-                创建项目
-              </Button>
-            </Link>
-          </div>
-        </section>
-
-        <aside className="bp-panel-quiet">
-          <h2 className="bp-section-title">系统能力</h2>
-          <div className="bp-capability-list">
-            {CAPABILITIES.map((item) => (
-              <div key={item.name} className="bp-capability-row">
-                <span
-                  className={`bp-capability-dot${item.ready ? " is-ready" : ""}`}
-                  aria-label={item.ready ? "已开放" : "未开放"}
-                />
-                <div>
-                  <div className="bp-capability-name">
-                    {item.name}
-                    <span className="bp-faint" style={{ marginLeft: 8, fontWeight: 400, fontSize: 12 }}>
-                      {item.ready ? "已开放" : "待接入"}
-                    </span>
-                  </div>
-                  <div className="bp-capability-note">{item.note}</div>
+      <aside className="bp-intel" aria-label="Evidence Intelligence">
+        <div className="bp-intel-scan" aria-hidden="true" />
+        <div className="bp-intel-header">
+          <h2 className="bp-intel-title">Evidence Intelligence</h2>
+          <span className="bp-intel-sub">pipeline · live</span>
+        </div>
+        <div className="bp-intel-flow">
+          {INTEL_NODES.map((node) => (
+            <div
+              key={node.name}
+              className={`bp-intel-node${node.ready ? "" : " is-pending"}`}
+            >
+              <span className="bp-intel-dot" aria-hidden="true" />
+              <div>
+                <div className="bp-intel-node-title">
+                  {node.name}
+                  <span className="bp-intel-badge">{node.ready ? "online" : "queued"}</span>
                 </div>
+                <div className="bp-intel-node-note">{node.note}</div>
               </div>
-            ))}
-          </div>
-        </aside>
-      </div>
+            </div>
+          ))}
+        </div>
+      </aside>
     </div>
   );
 }

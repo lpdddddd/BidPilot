@@ -7,8 +7,6 @@ import {
   Empty,
   Pagination,
   Skeleton,
-  Space,
-  Tag,
   Tooltip,
   Typography,
 } from "antd";
@@ -34,41 +32,34 @@ function ChunkCard({ chunk }: { chunk: ChunkItem }) {
 
   return (
     <div className="bp-chunk-card">
-      <Space size={8} wrap style={{ marginBottom: 8 }}>
-        <Tag bordered={false} color="processing">
+      <div className="bp-evidence-source" style={{ marginBottom: 10 }}>
+        <span className="bp-rank" style={{ minWidth: 22, height: 22, fontSize: 11 }}>
           #{chunk.chunk_index}
-        </Tag>
-        {chunk.section ? (
-          <Tag>{chunk.section}</Tag>
-        ) : (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            未识别章节
-          </Typography.Text>
-        )}
-        {chunk.clause_id && <Tag color="geekblue">{chunk.clause_id}</Tag>}
-        <Tag color={chunk.page_start != null ? "cyan" : "default"}>{pageRangeLabel(chunk)}</Tag>
-        {chunk.token_count != null && <Tag>{chunk.token_count} tokens</Tag>}
+        </span>
+        <span>{chunk.section ? `章节 ${chunk.section}` : "未识别章节"}</span>
+        {chunk.clause_id && <span>条款 {chunk.clause_id}</span>}
+        <span>{pageRangeLabel(chunk)}</span>
+        {chunk.token_count != null && <span>{chunk.token_count} tokens</span>}
         {overlapChars > 0 && (
           <Tooltip title={`前 ${overlapChars} 个字符与上一 Chunk 结尾重叠，用于保持上下文连续`}>
-            <Tag color="purple">含重叠 {overlapChars} 字符</Tag>
+            <span>重叠 {overlapChars}</span>
           </Tooltip>
         )}
         {hashShort && (
           <Tooltip title={`内容 SHA-256：${chunk.content_hash}`}>
-            <Typography.Text type="secondary" style={{ fontSize: 12, fontFamily: "monospace" }}>
-              {hashShort}
-            </Typography.Text>
+            <code style={{ fontSize: 11 }}>{hashShort}</code>
           </Tooltip>
         )}
-      </Space>
+      </div>
       {meta?.section_path && meta.section_path.length > 1 && (
         <div style={{ marginBottom: 8, fontSize: 12, color: "var(--bp-text-muted)" }}>
-          章节路径：{meta.section_path.join(" / ")}
+          来源路径：{meta.section_path.join(" / ")}
         </div>
       )}
       <Typography.Paragraph
+        className="bp-evidence-excerpt"
         ellipsis={{ rows: 4, expandable: true, symbol: "展开全文" }}
-        style={{ whiteSpace: "pre-wrap", marginBottom: 0, fontSize: 13, lineHeight: 1.7 }}
+        style={{ marginBottom: 0 }}
       >
         {chunk.content}
       </Typography.Paragraph>

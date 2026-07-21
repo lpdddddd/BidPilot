@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   Alert,
   Button,
@@ -50,17 +50,41 @@ function pageRangeLabel(item: SearchResultItem): string {
     : `第 ${item.page_start}-${item.page_end} 页`;
 }
 
+/** Highlight query tokens in excerpt text (display only; does not alter retrieval). */
+function highlightQuery(text: string, query: string): ReactNode {
+  const tokens = query
+    .trim()
+    .split(/\s+/)
+    .filter((t) => t.length >= 2)
+    .slice(0, 8);
+  if (tokens.length === 0) return text;
+
+  const escaped = tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = new RegExp(`(${escaped.join("|")})`, "gi");
+  const parts = text.split(pattern);
+  if (parts.length === 1) return text;
+
+  const lowerTokens = new Set(tokens.map((t) => t.toLowerCase()));
+  return parts.map((part, i) =>
+    lowerTokens.has(part.toLowerCase()) ? <mark key={i}>{part}</mark> : part,
+  );
+}
+
 function EvidenceCard({
   item,
+  query,
   onOpenSource,
 }: {
   item: SearchResultItem;
+  query: string;
   onOpenSource?: (documentId: string) => void;
 }) {
   return (
     <article className="bp-evidence-card">
       <div className="bp-evidence-head">
-        <span className="bp-rank">{item.rank}</span>
+        <span className="bp-rank" title="排名">
+          {item.rank}
+        </span>
         <div className="bp-evidence-main">
           <div className="bp-evidence-title-row">
             <span className="bp-evidence-filename">{item.file_name ?? "未知文件"}</span>
@@ -78,7 +102,7 @@ function EvidenceCard({
             className="bp-evidence-excerpt"
             ellipsis={{ rows: 5, expandable: true, symbol: "展开全文" }}
           >
-            {item.content}
+            {highlightQuery(item.content, query)}
           </Typography.Paragraph>
           <div className="bp-evidence-actions">
             {onOpenSource && item.document_id ? (
@@ -95,7 +119,7 @@ function EvidenceCard({
               items={[
                 {
                   key: "debug",
-                  label: "检索详情",
+                  label: "检索技术详情",
                   children: (
                     <div className="bp-tech-grid">
                       <span>
@@ -145,6 +169,7 @@ export default function KnowledgeSearch({
   const [documentTypes, setDocumentTypes] = useState<string[]>([]);
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [response, setResponse] = useState<SearchResponse | null>(null);
+  const [lastQuery, setLastQuery] = useState("");
 
   const documentsQuery = useQuery({
     queryKey: ["documents", projectId],
@@ -168,30 +193,39 @@ export default function KnowledgeSearch({
         document_types: documentTypes,
         document_ids: documentIds,
       }),
-    onSuccess: setResponse,
+    onSuccess: (data) => {
+      setLastQuery(query.trim());
+      setResponse(data);
+    },
   });
 
   const canSearch = query.trim().length > 0 && !searchMutation.isPending;
 
   return (
     <div className="bp-search-shell">
-      <div className="bp-search-hint">
-        <span className="bp-search-hint-dot" aria-hidden="true" />
-        <span>
-          当前为项目资料混合检索（Dense + BM25 + RRF + 重排），返回可追溯原文证据；尚未调用大模型生成回答。
-        </span>
+      <div className="bp-search-head">
+        <h2 className="bp-page-title" style={{ fontSize: 22, marginBottom: 0 }}>
+          知识检索
+        </h2>
+        <p className="bp-page-subtitle">基于项目资料进行混合检索与来源定位。</p>
+        <div className="bp-search-hint">
+          <span className="bp-search-hint-dot" aria-hidden="true" />
+          <span>当前仅返回检索证据，尚未生成模型回答。</span>
+        </div>
       </div>
 
-      <div className="bp-search-composer">
+      <div className="bp-command">
         <Input
+          prefix={<SearchOutlined style={{ color: "var(--bp-text-faint)" }} />}
           size="large"
-          placeholder="向项目资料检索证据，例如：投标人需要具备哪些资质？"
+          placeholder="检索项目资料中的证据，例如：投标人需要具备哪些资质？"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onPressEnter={() => canSearch && searchMutation.mutate()}
           allowClear
         />
         <Button
+          className="bp-command-btn"
           type="primary"
           size="large"
           icon={<SearchOutlined />}
@@ -230,6 +264,10 @@ export default function KnowledgeSearch({
           <span className="bp-search-filters-label">返回</span>
           <InputNumber min={1} max={20} value={topK} onChange={(v) => setTopK(v ?? 8)} />
         </Space>
+        <div className="bp-search-tags">
+          <span className="bp-pill">Hybrid Retrieval</span>
+          <span className="bp-pill">Evidence First</span>
+        </div>
       </div>
 
       {searchMutation.isPending ? (
@@ -270,7 +308,12 @@ export default function KnowledgeSearch({
               </span>
             </div>
             {response.results.map((item) => (
-              <EvidenceCard key={item.chunk_id} item={item} onOpenSource={onOpenSource} />
+              <EvidenceCard
+                key={item.chunk_id}
+                item={item}
+                query={lastQuery}
+                onOpenSource={onOpenSource}
+              />
             ))}
             <Collapse
               className="bp-tech-details"
@@ -279,7 +322,7 @@ export default function KnowledgeSearch({
               items={[
                 {
                   key: "trace",
-                  label: "技术信息",
+                  label: "检索技术详情",
                   children: (
                     <div className="bp-tech-grid">
                       <span>Dense 候选 {response.trace.dense_candidate_count}</span>

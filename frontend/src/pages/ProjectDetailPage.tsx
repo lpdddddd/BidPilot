@@ -122,10 +122,15 @@ export default function ProjectDetailPage() {
 
   return (
     <div>
-      <header className="bp-workspace-header">
+      <header className="bp-workspace-banner">
         <div className="bp-workspace-title-row">
           <div>
-            <h1 className="bp-page-title">{project.project_name}</h1>
+            <p className="bp-eyebrow" style={{ marginBottom: 8 }}>
+              Project Workspace
+            </p>
+            <h1 className="bp-page-title" style={{ marginBottom: 0 }}>
+              {project.project_name}
+            </h1>
             <div className="bp-workspace-meta">
               <span className="bp-workspace-code">{project.project_code}</span>
               <Tag bordered={false} color="processing">
@@ -134,7 +139,7 @@ export default function ProjectDetailPage() {
               {project.purchaser && <span>{project.purchaser}</span>}
               {(project.industry || project.region) && (
                 <span>
-                  {[project.industry, project.region].filter(Boolean).join(" · ")}
+                  {[project.industry, project.region].filter(Boolean).join(" / ")}
                 </span>
               )}
             </div>

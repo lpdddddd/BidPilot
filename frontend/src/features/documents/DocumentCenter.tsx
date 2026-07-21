@@ -156,14 +156,16 @@ function PreviewDrawer({
             style={{
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
-              background: "var(--bp-surface)",
+              background: "rgba(0, 0, 0, 0.28)",
               border: "1px solid var(--bp-border)",
-              borderRadius: 6,
+              borderRadius: 10,
               padding: 16,
               fontSize: 13,
               lineHeight: 1.7,
               maxHeight: "70vh",
               overflow: "auto",
+              color: "var(--bp-text)",
+              fontFamily: "var(--bp-mono)",
             }}
           >
             {preview.data.preview}
