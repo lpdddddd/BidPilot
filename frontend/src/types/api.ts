@@ -310,6 +310,17 @@ export type AskStreamHandlers = {
     retrieval_trace: RagRetrievalTrace;
     status: "ok" | "insufficient_evidence";
   }) => void;
+  /** Progress only. Never carries unvalidated answer text (Scheme A). */
+  onGenerationStarted?: (data: {
+    request_id?: string;
+    model?: string;
+    context_chunk_count?: number;
+    message?: string;
+  }) => void;
+  /**
+   * @deprecated Backend no longer emits user-visible delta before citation
+   * validation. Kept for forward-compat; UI must not render it as final answer.
+   */
   onDelta?: (text: string) => void;
   onFinal?: (result: AskResponse) => void;
   onError?: (error: { message: string; detail?: unknown }) => void;

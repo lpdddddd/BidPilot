@@ -105,3 +105,4 @@ logs/
 
 # TypeScript incremental build info
 *.tsbuildinfo
+docs/acceptance/*.json

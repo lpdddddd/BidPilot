@@ -2,21 +2,45 @@
 # Start Qwen3-8B via vLLM (OpenAI-compatible) for BidPilot grounded RAG.
 # Default: single GPU, ~32GB class cards (e.g. RTX 5090). Not part of make infra-up.
 #
-# Prefers a local snapshot if present (ModelScope/HF download target):
-#   /root/autodl-tmp/models/Qwen3-8B
-# Override with LLM_HF_MODEL=/path/or/hub-id
+# Single config source (from environment / .env):
+#   LLM_MODEL          served name (default bidpilot-qwen3-8b)
+#   LLM_MODEL_SOURCE   Hub id fallback (default Qwen/Qwen3-8B)
+#   LLM_MODEL_PATH     local weights dir (optional; auto-detects default local)
 set -euo pipefail
 
-DEFAULT_LOCAL="/root/autodl-tmp/models/Qwen3-8B"
-if [[ -z "${LLM_HF_MODEL:-}" ]]; then
-  if [[ -f "${DEFAULT_LOCAL}/config.json" ]]; then
-    MODEL="${DEFAULT_LOCAL}"
-  else
-    MODEL="Qwen/Qwen3-8B"
-  fi
-else
-  MODEL="${LLM_HF_MODEL}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ -f "${ROOT_DIR}/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${ROOT_DIR}/.env"
+  set +a
 fi
+
+DEFAULT_LOCAL="${LLM_DEFAULT_LOCAL_PATH:-/root/autodl-tmp/models/Qwen3-8B}"
+LLM_MODEL_SOURCE="${LLM_MODEL_SOURCE:-Qwen/Qwen3-8B}"
+
+resolve_model() {
+  if [[ -n "${LLM_MODEL_PATH:-}" ]]; then
+    if [[ -f "${LLM_MODEL_PATH}/config.json" ]]; then
+      echo "${LLM_MODEL_PATH}"
+      return
+    fi
+    # Allow Hub id placed in LLM_MODEL_PATH by mistake.
+    if [[ "${LLM_MODEL_PATH}" == */* && ! -e "${LLM_MODEL_PATH}" ]]; then
+      echo "${LLM_MODEL_PATH}"
+      return
+    fi
+    echo "LLM_MODEL_PATH=${LLM_MODEL_PATH} has no config.json" >&2
+    exit 1
+  fi
+  if [[ -f "${DEFAULT_LOCAL}/config.json" ]]; then
+    echo "${DEFAULT_LOCAL}"
+    return
+  fi
+  echo "${LLM_MODEL_SOURCE}"
+}
+
+MODEL="$(resolve_model)"
 SERVED_NAME="${LLM_MODEL:-bidpilot-qwen3-8b}"
 HOST="${LLM_HOST:-0.0.0.0}"
 PORT="${LLM_PORT:-8001}"

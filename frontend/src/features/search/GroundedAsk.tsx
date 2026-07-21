@@ -154,7 +154,7 @@ function SourceCard({
   );
 }
 
-type Phase = "idle" | "retrieving" | "generating" | "done" | "error";
+type Phase = "idle" | "retrieving" | "verifying" | "done" | "error";
 
 export default function GroundedAsk({
   projectId,
@@ -209,7 +209,8 @@ export default function GroundedAsk({
     abortRef.current?.abort();
     abortRef.current = null;
     sessionRef.current += 1;
-    setPhase((p) => (p === "retrieving" || p === "generating" ? "idle" : p));
+    setAnswerText("");
+    setPhase((p) => (p === "retrieving" || p === "verifying" ? "idle" : p));
   };
 
   const submit = async () => {
@@ -247,13 +248,17 @@ export default function GroundedAsk({
             if (data.status === "insufficient_evidence") {
               setPhase("done");
             } else {
-              setPhase("generating");
+              setPhase("verifying");
             }
           },
-          onDelta: (text) => {
+          onGenerationStarted: () => {
             if (session !== sessionRef.current) return;
-            setPhase("generating");
-            setAnswerText((prev) => prev + text);
+            setPhase("verifying");
+            // Do not render model text until final citation validation.
+            setAnswerText("");
+          },
+          onDelta: () => {
+            // Intentionally ignored: unvalidated tokens must not become UI answer.
           },
           onFinal: (finalResult) => {
             if (session !== sessionRef.current) return;
@@ -266,6 +271,9 @@ export default function GroundedAsk({
           },
           onError: (err) => {
             if (session !== sessionRef.current) return;
+            setAnswerText("");
+            setCitations([]);
+            setResult(null);
             setError(err.message);
             setPhase("error");
           },
@@ -276,12 +284,15 @@ export default function GroundedAsk({
       if (session !== sessionRef.current) return;
       if (controller.signal.aborted) return;
       const message = err instanceof ApiError ? err.message : (err as Error).message;
+      setAnswerText("");
+      setCitations([]);
+      setResult(null);
       setError(message);
       setPhase("error");
     }
   };
 
-  const busy = phase === "retrieving" || phase === "generating";
+  const busy = phase === "retrieving" || phase === "verifying";
   const displayCitations = citations.length ? citations : [];
 
   const scrollToSource = (sourceId: string) => {
@@ -309,7 +320,7 @@ export default function GroundedAsk({
         </p>
         <div className="bp-search-hint">
           <span className="bp-search-hint-dot" aria-hidden="true" />
-          <span>回答仅依据本次检索到的项目资料生成。</span>
+          <span>回答仅依据本次检索到的项目资料生成；回答将在来源校验完成后显示。</span>
         </div>
         <div className="bp-model-status" aria-live="polite">
           模型：{modelLabel}
@@ -408,8 +419,10 @@ export default function GroundedAsk({
       {phase === "retrieving" && (
         <div className="bp-ask-progress">正在检索项目资料…</div>
       )}
-      {phase === "generating" && (
-        <div className="bp-ask-progress">正在基于检索证据生成回答…</div>
+      {phase === "verifying" && (
+        <div className="bp-ask-progress">
+          正在生成并核验引用。确认前不会展示未经验证的模型正文。
+        </div>
       )}
 
       {error && (

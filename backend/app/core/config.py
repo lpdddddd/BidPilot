@@ -60,7 +60,13 @@ class Settings(BaseSettings):
     llm_enabled: bool = False
     llm_base_url: str = "http://localhost:8001/v1"
     llm_api_key: str = "local"
+    # Served model name exposed by vLLM (--served-model-name).
     llm_model: str = "bidpilot-qwen3-8b"
+    # Hub id used when no local weights path is available.
+    llm_model_source: str = "Qwen/Qwen3-8B"
+    # Absolute path to local weights. Empty -> auto-detect default local dir,
+    # else fall back to llm_model_source. Used by serve script + compose.
+    llm_model_path: str = ""
     llm_timeout_seconds: float = 120.0
     llm_max_tokens: int = 1024
     llm_temperature: float = 0.1
@@ -69,6 +75,9 @@ class Settings(BaseSettings):
     # bge-reranker-base emits unbounded logits; keep a low floor so weakly
     # related chunks are dropped without being overly aggressive.
     rag_min_rerank_score: float = -5.0
+
+    # Default on-disk snapshot used by AutoDL / local GPU hosts.
+    llm_default_local_path: str = "/root/autodl-tmp/models/Qwen3-8B"
 
     llamafactory_home: str = ""
 

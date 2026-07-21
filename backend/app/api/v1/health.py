@@ -25,13 +25,18 @@ def ready(db: Session = Depends(get_db)) -> ReadyResponse:
 @router.get("/api/v1/health/llm", response_model=LlmHealthResponse)
 def llm_health() -> LlmHealthResponse:
     """Real LLM connectivity probe. Does not claim the model is warm if unreachable."""
+    from app.services.llm_model_resolve import resolve_llm_load_target
+
     probe = get_llm_client().health_check()
+    load_target = resolve_llm_load_target()
+    detail = probe["detail"]
+    detail = f"{detail}; load_target={load_target}" if detail else f"load_target={load_target}"
     return LlmHealthResponse(
         status=probe["status"],
         enabled=probe["enabled"],
         model=probe["model"],
         base_url=probe["base_url"],
         reachable=probe["reachable"],
-        detail=probe["detail"],
+        detail=detail,
         latency_ms=probe["latency_ms"],
     )

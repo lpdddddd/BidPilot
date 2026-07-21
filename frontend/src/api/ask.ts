@@ -87,7 +87,12 @@ export async function askProjectStream(
     }
     if (event === "retrieval") {
       handlers.onRetrieval?.(data as Parameters<NonNullable<AskStreamHandlers["onRetrieval"]>>[0]);
+    } else if (event === "generation_started") {
+      handlers.onGenerationStarted?.(
+        data as Parameters<NonNullable<AskStreamHandlers["onGenerationStarted"]>>[0],
+      );
     } else if (event === "delta") {
+      // Scheme A: ignore unverified token streams for UI rendering.
       const text = (data as { text?: string }).text ?? "";
       if (text) handlers.onDelta?.(text);
     } else if (event === "final") {

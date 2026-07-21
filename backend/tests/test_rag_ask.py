@@ -273,7 +273,8 @@ def test_llm_unavailable_surfaces_clear_error():
     assert "connection refused" in str(exc.value.detail)
 
 
-def test_stream_event_order():
+def test_stream_event_order_buffers_until_validated():
+    """Scheme A: no client-visible delta; retrieval → generation_started → final."""
     pid = uuid4()
     item = _item(chunk_id="c1", document_id="d1", content="证据正文")
     retrieval = FakeRetrieval(SearchResponse(query="q", results=[item], trace=_trace()))
@@ -281,12 +282,75 @@ def test_stream_event_order():
     service = RagAnswerService(db=SimpleNamespace(), retrieval=retrieval, llm=llm)  # type: ignore[arg-type]
     events = list(service.answer_stream(pid, AskRequest(question="问", stream=True)))
     names = [e["event"] for e in events]
-    assert names[0] == "retrieval"
-    assert "delta" in names
-    assert names[-1] == "final"
+    assert names == ["retrieval", "generation_started", "final"]
+    assert "delta" not in names
     assert "error" not in names
+    # Client payload must not contain unvalidated draft text elsewhere.
+    for ev in events[:-1]:
+        dumped = str(ev)
+        assert "答案" not in dumped
     final = events[-1]["data"]["result"]
+    assert final["answer"] == "答案 [S1]。"
     assert final["citations"][0]["chunk_id"] == "c1"
+    assert final["citations"][0]["source_id"] == "S1"
+    assert final["citations"][0]["document_id"] == "d1"
+
+
+def test_stream_unknown_citation_emits_error_without_answer_body():
+    pid = uuid4()
+    item = _item(chunk_id="c1", document_id="d1", content="证据")
+    retrieval = FakeRetrieval(SearchResponse(query="q", results=[item], trace=_trace()))
+    llm = FakeLlm("编造结论见 [S99]。")
+    service = RagAnswerService(db=SimpleNamespace(), retrieval=retrieval, llm=llm)  # type: ignore[arg-type]
+    events = list(service.answer_stream(pid, AskRequest(question="问", stream=True)))
+    names = [e["event"] for e in events]
+    assert names[0] == "retrieval"
+    assert "generation_started" in names
+    assert names[-1] == "error"
+    assert "final" not in names
+    assert "delta" not in names
+    # No event may carry the unvalidated answer as a renderable field.
+    for ev in events:
+        data = ev.get("data") or {}
+        assert "answer" not in data
+        assert "text" not in data
+        if ev["event"] == "error":
+            assert "S99" in str(data.get("detail") or data.get("message"))
+
+
+def test_stream_substantive_without_citation_errors():
+    pid = uuid4()
+    item = _item(chunk_id="c1", document_id="d1", content="证据")
+    retrieval = FakeRetrieval(SearchResponse(query="q", results=[item], trace=_trace()))
+    llm = FakeLlm("投标人必须具备一级资质。")
+    service = RagAnswerService(db=SimpleNamespace(), retrieval=retrieval, llm=llm)  # type: ignore[arg-type]
+    events = list(service.answer_stream(pid, AskRequest(question="问", stream=True)))
+    assert events[-1]["event"] == "error"
+    assert "delta" not in [e["event"] for e in events]
+    assert all("answer" not in (e.get("data") or {}) for e in events)
+
+
+def test_stream_empty_answer_errors():
+    pid = uuid4()
+    item = _item(chunk_id="c1", document_id="d1", content="证据")
+    retrieval = FakeRetrieval(SearchResponse(query="q", results=[item], trace=_trace()))
+    llm = FakeLlm("   ")
+    service = RagAnswerService(db=SimpleNamespace(), retrieval=retrieval, llm=llm)  # type: ignore[arg-type]
+    events = list(service.answer_stream(pid, AskRequest(question="问", stream=True)))
+    assert events[-1]["event"] == "error"
+
+
+def test_stream_insufficient_phrase_ok_without_citations():
+    pid = uuid4()
+    item = _item(chunk_id="c1", document_id="d1", content="无关")
+    retrieval = FakeRetrieval(SearchResponse(query="q", results=[item], trace=_trace()))
+    llm = FakeLlm("当前资料不足以确认。")
+    service = RagAnswerService(db=SimpleNamespace(), retrieval=retrieval, llm=llm)  # type: ignore[arg-type]
+    events = list(service.answer_stream(pid, AskRequest(question="问", stream=True)))
+    assert [e["event"] for e in events] == ["retrieval", "generation_started", "final"]
+    result = events[-1]["data"]["result"]
+    assert result["status"] == "insufficient_evidence"
+    assert result["citations"] == []
 
 
 def test_stream_empty_retrieval_skips_llm():
@@ -385,7 +449,10 @@ def test_ask_api_sse_order(client, monkeypatch):
             "event": "retrieval",
             "data": {"sources": [], "retrieval_trace": {}, "status": "ok"},
         }
-        yield {"event": "delta", "data": {"text": "你好"}}
+        yield {
+            "event": "generation_started",
+            "data": {"request_id": "r1", "model": "bidpilot-qwen3-8b", "message": "核验中"},
+        }
         yield {
             "event": "final",
             "data": {
@@ -434,8 +501,24 @@ def test_ask_api_sse_order(client, monkeypatch):
         assert resp.status_code == 200
         body = "".join(resp.iter_text())
     assert "event: retrieval" in body
-    assert "event: delta" in body
+    assert "event: generation_started" in body
     assert "event: final" in body
+    assert "event: delta" not in body
+
+
+def test_resolve_llm_load_target_prefers_explicit_path(tmp_path, monkeypatch):
+    from app.core.config import Settings
+    from app.services.llm_model_resolve import resolve_llm_load_target
+
+    weights = tmp_path / "weights"
+    weights.mkdir()
+    (weights / "config.json").write_text("{}")
+    settings = Settings(
+        llm_model_path=str(weights),
+        llm_model_source="Qwen/Qwen3-8B",
+        llm_default_local_path=str(tmp_path / "missing"),
+    )
+    assert resolve_llm_load_target(settings) == str(weights.resolve())
 
 
 def test_llm_health_disabled(client, monkeypatch):

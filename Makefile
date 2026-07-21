@@ -8,7 +8,7 @@ PIP ?= pip
 
 PIPELINE_DIR := $(ROOT_DIR)/data_pipeline
 
-.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft validate-sft-sample validate-sft-real validate-sft-internal validate-sft-llamafactory validate-sft-smoke dataset-install dataset-test dataset-bootstrap dataset-download dataset-parse dataset-label dataset-review-export dataset-review-priority dataset-validate dataset-build-rag dataset-build-agent dataset-build-sft dataset-report dataset-demo
+.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft validate-sft-sample validate-sft-real validate-sft-internal validate-sft-llamafactory validate-sft-smoke dataset-install dataset-test dataset-bootstrap dataset-download dataset-parse dataset-label dataset-review-export dataset-review-priority dataset-validate dataset-build-rag dataset-build-agent dataset-build-sft dataset-report dataset-demo rag-smoke rag-smoke-live llm-up
 
 help:
 	@echo "BidPilot development commands"
@@ -39,7 +39,9 @@ help:
 	@echo "  make dataset-validate    Validate all dataset artifacts"
 	@echo "  make dataset-build-sft   Build ShareGPT SFT splits"
 	@echo "  make dataset-report      Write dataset statistics reports"
-	@echo "  make dataset-demo        Run full local demo pipeline"
+	@echo "  make rag-smoke           Mock RAG acceptance (no GPU / vLLM required)"
+	@echo "  make rag-smoke-live      Live RAG smoke against running API + vLLM"
+	@echo "  make llm-up              Print commands to start local Qwen3-8B vLLM"
 
 infra-up:
 	$(COMPOSE) up -d
@@ -68,6 +70,19 @@ frontend:
 
 test:
 	cd $(BACKEND_DIR) && pytest -q
+
+rag-smoke:
+	cd $(ROOT_DIR) && $(PYTHON) scripts/rag_smoke_accept.py
+
+rag-smoke-live:
+	cd $(ROOT_DIR) && RAG_SMOKE_LIVE=1 $(PYTHON) scripts/rag_smoke_accept.py
+
+llm-up:
+	@echo "Start local vLLM (uses LLM_MODEL_PATH / LLM_MODEL_SOURCE from .env):"
+	@echo "  ./scripts/serve_qwen3_vllm.sh"
+	@echo "Or compose profile:"
+	@echo "  docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.llm.yml --profile llm up -d"
+	@echo "Then set LLM_ENABLED=true and run: make rag-smoke-live"
 
 lint:
 	cd $(BACKEND_DIR) && ruff check app tests

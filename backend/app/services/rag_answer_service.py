@@ -380,7 +380,12 @@ class RagAnswerService:
         )
 
     def answer_stream(self, project_id: UUID, request: AskRequest) -> Iterator[dict[str, Any]]:
-        """Yield SSE-ready dicts: retrieval | delta | final | error."""
+        """Yield SSE events with evidence-first semantics (Scheme A).
+
+        Event order on success: retrieval → generation_started → final.
+        Unvalidated model text is never sent as delta/answer to the client.
+        On citation validation failure: error only (no answer body).
+        """
         try:
             sources, trace, question = self._prepare(project_id, request)
         except HTTPException as exc:
@@ -442,12 +447,22 @@ class RagAnswerService:
             project_id,
             len(sources),
         )
+        yield {
+            "event": "generation_started",
+            "data": {
+                "request_id": request_id,
+                "model": self.llm.model,
+                "context_chunk_count": len(sources),
+                "message": "正在生成并核验引用来源",
+            },
+        }
+
         started = time.perf_counter()
         parts: list[str] = []
         try:
+            # Buffer tokens server-side; do not leak unverified text via delta.
             for delta in self.llm.chat_stream(messages, request_id=request_id):
                 parts.append(delta)
-                yield {"event": "delta", "data": {"text": delta}}
         except LlmError as exc:
             yield {
                 "event": "error",
@@ -455,11 +470,9 @@ class RagAnswerService:
             }
             return
 
-        answer = "".join(parts).strip()
-        # Strip thinking if streamed without tags fully closed earlier
         from app.services.llm_client import _strip_thinking
 
-        answer = _strip_thinking(answer)
+        answer = _strip_thinking("".join(parts).strip())
         latency_ms = (time.perf_counter() - started) * 1000
         try:
             cited_ids = validate_answer(answer, {s.source_id for s in sources})
