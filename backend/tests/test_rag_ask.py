@@ -97,7 +97,7 @@ class FakeRetrieval:
 class FakeLlm:
     def __init__(self, content: str = "投标人须具备资质 [S1]。", *, enabled: bool = True):
         self.enabled = enabled
-        self.model = "bidpilot-qwen3-14b"
+        self.model = "bidpilot-qwen3-8b"
         self.content = content
         self.chat_calls: list = []
         self.stream_calls: list = []
@@ -358,7 +358,7 @@ def test_ask_api_json_with_mocks(client, monkeypatch):
                 ),
             ),
             generation_trace=GenerationTrace(
-                model="bidpilot-qwen3-14b",
+                model="bidpilot-qwen3-8b",
                 context_chunk_count=0,
                 context_token_count=0,
                 latency_ms=1,

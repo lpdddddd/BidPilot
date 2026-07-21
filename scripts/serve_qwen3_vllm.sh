@@ -1,10 +1,23 @@
 #!/usr/bin/env bash
-# Start Qwen3-14B via vLLM (OpenAI-compatible) for BidPilot grounded RAG.
+# Start Qwen3-8B via vLLM (OpenAI-compatible) for BidPilot grounded RAG.
 # Default: single GPU, ~32GB class cards (e.g. RTX 5090). Not part of make infra-up.
+#
+# Prefers a local snapshot if present (ModelScope/HF download target):
+#   /root/autodl-tmp/models/Qwen3-8B
+# Override with LLM_HF_MODEL=/path/or/hub-id
 set -euo pipefail
 
-MODEL="${LLM_HF_MODEL:-Qwen/Qwen3-14B}"
-SERVED_NAME="${LLM_MODEL:-bidpilot-qwen3-14b}"
+DEFAULT_LOCAL="/root/autodl-tmp/models/Qwen3-8B"
+if [[ -z "${LLM_HF_MODEL:-}" ]]; then
+  if [[ -f "${DEFAULT_LOCAL}/config.json" ]]; then
+    MODEL="${DEFAULT_LOCAL}"
+  else
+    MODEL="Qwen/Qwen3-8B"
+  fi
+else
+  MODEL="${LLM_HF_MODEL}"
+fi
+SERVED_NAME="${LLM_MODEL:-bidpilot-qwen3-8b}"
 HOST="${LLM_HOST:-0.0.0.0}"
 PORT="${LLM_PORT:-8001}"
 TP="${LLM_TENSOR_PARALLEL_SIZE:-1}"

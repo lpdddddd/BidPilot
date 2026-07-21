@@ -56,11 +56,11 @@ class Settings(BaseSettings):
     model_name: str = "gpt-4o-mini"
 
     # Grounded RAG (vLLM OpenAI-compatible). Separate from OPENAI_* so local
-    # Qwen3-14B and cloud OpenAI configs do not collide.
+    # Qwen3-8B and cloud OpenAI configs do not collide.
     llm_enabled: bool = False
     llm_base_url: str = "http://localhost:8001/v1"
     llm_api_key: str = "local"
-    llm_model: str = "bidpilot-qwen3-14b"
+    llm_model: str = "bidpilot-qwen3-8b"
     llm_timeout_seconds: float = 120.0
     llm_max_tokens: int = 1024
     llm_temperature: float = 0.1

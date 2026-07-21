@@ -1,4 +1,4 @@
-# Optional vLLM profile for BidPilot grounded RAG (Qwen3-14B).
+# Optional vLLM profile for BidPilot grounded RAG (Qwen3-8B).
 # Not started by `make infra-up`. Requires NVIDIA GPU + nvidia-container-toolkit.
 #
 # Usage:
@@ -8,7 +8,7 @@
 #   LLM_ENABLED=true
 #   LLM_BASE_URL=http://localhost:8001/v1
 #   LLM_API_KEY=local
-#   LLM_MODEL=bidpilot-qwen3-14b
+#   LLM_MODEL=bidpilot-qwen3-8b
 
 services:
   vllm-qwen3:
@@ -25,9 +25,9 @@ services:
     volumes:
       - ${HF_HOME:-${HOME}/.cache/huggingface}:/root/.cache/huggingface
     command:
-      - Qwen/Qwen3-14B
+      - Qwen/Qwen3-8B
       - --served-model-name
-      - ${LLM_MODEL:-bidpilot-qwen3-14b}
+      - ${LLM_MODEL:-bidpilot-qwen3-8b}
       - --host
       - 0.0.0.0
       - --port

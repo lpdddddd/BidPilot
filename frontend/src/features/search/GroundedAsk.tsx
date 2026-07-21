@@ -331,7 +331,7 @@ export default function GroundedAsk({
           description={
             llmHealth.data.enabled
               ? `无法连接 ${llmHealth.data.base_url}。请启动 vLLM：./scripts/serve_qwen3_vllm.sh`
-              : "在 .env 中设置 LLM_ENABLED=true，并启动 Qwen3-14B（见 scripts/serve_qwen3_vllm.sh）。"
+              : "在 .env 中设置 LLM_ENABLED=true，并启动 Qwen3-8B（见 scripts/serve_qwen3_vllm.sh）。"
           }
         />
       )}

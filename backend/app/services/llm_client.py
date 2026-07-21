@@ -1,4 +1,4 @@
-"""OpenAI-compatible LLM client for vLLM (Qwen3-14B).
+"""OpenAI-compatible LLM client for vLLM (Qwen3-8B).
 
 Never logs full document content or API keys. Thinking is disabled for Qwen3.
 """
