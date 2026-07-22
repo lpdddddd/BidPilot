@@ -45,9 +45,7 @@ def draft_blob(content: dict[str, Any], markdown: str | None = None) -> str:
     return "\n".join(texts)
 
 
-def draft_covered_requirement_ids(
-    ctx: ComplianceContext, versions: list[Any]
-) -> set[UUID]:
+def draft_covered_requirement_ids(ctx: ComplianceContext, versions: list[Any]) -> set[UUID]:
     """Requirement IDs referenced by current draft sources / blocks / matrix."""
     covered: set[UUID] = set()
     version_ids = {v.id for v in versions}

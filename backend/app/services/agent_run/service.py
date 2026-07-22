@@ -108,9 +108,7 @@ class AgentRunService:
                 "requested_requirement_ids": [
                     str(x) for x in (req.requested_requirement_ids or [])
                 ],
-                "selected_document_ids": [
-                    str(x) for x in (req.selected_document_ids or [])
-                ],
+                "selected_document_ids": [str(x) for x in (req.selected_document_ids or [])],
                 "metadata": req.metadata or {},
             },
             current_node=None,
@@ -123,9 +121,7 @@ class AgentRunService:
             project_id=project.id,
             organization_id=project.organization_id,
             user_request=req.user_request or "",
-            requested_requirement_ids=[
-                str(x) for x in (req.requested_requirement_ids or [])
-            ],
+            requested_requirement_ids=[str(x) for x in (req.requested_requirement_ids or [])],
             selected_document_ids=[str(x) for x in (req.selected_document_ids or [])],
             metadata=req.metadata or {},
         )
@@ -463,6 +459,7 @@ class AgentRunService:
         for s in steps:
             events.append(
                 AgentEventItem(
+                    id=s.id,
                     event_type="step",
                     sequence=s.step_index,
                     name=s.node_name,
@@ -480,6 +477,7 @@ class AgentRunService:
                 summary = t.result_json.get("summary")
             events.append(
                 AgentEventItem(
+                    id=t.id,
                     event_type="tool",
                     sequence=10_000 + i,
                     name=t.tool_name,
@@ -489,7 +487,18 @@ class AgentRunService:
                     payload={"duration_ms": t.duration_ms},
                 )
             )
-        events.sort(key=lambda e: (e.created_at or datetime.min.replace(tzinfo=UTC), e.sequence))
+        # Stable order: sequence, created_at, id (resume continues step sequence).
+        _min_dt = datetime.min.replace(tzinfo=UTC)
+        _nil = UUID(int=0)
+
+        def _event_sort_key(e: AgentEventItem):
+            return (
+                e.sequence,
+                e.created_at or _min_dt,
+                e.id or _nil,
+            )
+
+        events.sort(key=_event_sort_key)
         return AgentEventsResponse(run_id=run.id, items=events, total=len(events))
 
     def get_result(self, run_id: UUID, *, project_id: UUID | None = None) -> AgentResultResponse:
@@ -506,17 +515,13 @@ class AgentRunService:
             citations=list(state.get("citations") or []),
             draft_ids=[UUID(x) for x in (state.get("draft_ids") or []) if x],
             compliance_run_id=(
-                UUID(state["compliance_run_id"])
-                if state.get("compliance_run_id")
-                else None
+                UUID(state["compliance_run_id"]) if state.get("compliance_run_id") else None
             ),
             warnings=list(state.get("warnings") or []),
             errors=list(state.get("errors") or []),
         )
 
-    def list_for_project(
-        self, project_id: UUID, *, limit: int = 20
-    ) -> AgentRunListResponse:
+    def list_for_project(self, project_id: UUID, *, limit: int = 20) -> AgentRunListResponse:
         project = self.db.get(BidProject, project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="project not found")
@@ -563,7 +568,5 @@ class AgentRunService:
             finished_at=run.finished_at,
             created_at=run.created_at,
             updated_at=run.updated_at,
-            state=AgentStateRead.model_validate(run.state_json)
-            if run.state_json
-            else None,
+            state=AgentStateRead.model_validate(run.state_json) if run.state_json else None,
         )

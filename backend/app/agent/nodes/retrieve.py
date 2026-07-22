@@ -33,9 +33,7 @@ def retrieve_evidence(state: AgentState) -> AgentState:
         )
     except Exception as exc:  # noqa: BLE001
         mark_retryable_error(state, f"{type(exc).__name__}: {exc}", "retrieve_error")
-        record_tool_event(
-            state, name="search_evidence", status="error", summary=str(exc)
-        )
+        record_tool_event(state, name="search_evidence", status="error", summary=str(exc))
         return touch(state)
     record_tool_event(
         state,
@@ -55,9 +53,13 @@ def retrieve_evidence(state: AgentState) -> AgentState:
         {
             "chunk_id": c.get("chunk_id"),
             "document_id": c.get("document_id"),
+            "document_title": c.get("document_title") or c.get("file_name"),
             "section": c.get("section"),
             "page_start": c.get("page_start"),
+            "page": c.get("page_start"),
             "score": c.get("score"),
+            "conclusion_summary": c.get("conclusion_summary") or c.get("summary"),
+            "summary": c.get("summary"),
         }
         for c in chunks
     ]

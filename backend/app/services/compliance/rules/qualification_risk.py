@@ -34,9 +34,7 @@ class QualificationInsufficientRule:
     def evaluate(self, ctx: ComplianceContext) -> list[ComplianceFinding]:
         findings: list[ComplianceFinding] = []
         targets = [
-            r
-            for r in ctx.requirements
-            if enum_value(r.category) in QUALIFICATION_CATEGORIES
+            r for r in ctx.requirements if enum_value(r.category) in QUALIFICATION_CATEGORIES
         ]
         if not targets:
             findings.append(
@@ -64,8 +62,7 @@ class QualificationInsufficientRule:
                         severity=ComplianceSeverity.warning,
                         status=ComplianceFindingStatus.unknown,
                         message=(
-                            f"资格相关要求「{req.title}」尚无匹配结果，"
-                            "无法判定材料是否充分。"
+                            f"资格相关要求「{req.title}」尚无匹配结果，无法判定材料是否充分。"
                         ),
                         finding_suffix=f"unmatched:{req.id}",
                         requirement_id=req.id,
@@ -84,9 +81,7 @@ class QualificationInsufficientRule:
                             category=self.category,
                             severity=self.default_severity,
                             status=ComplianceFindingStatus.fail,
-                            message=(
-                                f"资格相关要求「{req.title}」匹配状态为 {status}。"
-                            ),
+                            message=(f"资格相关要求「{req.title}」匹配状态为 {status}。"),
                             finding_suffix=str(match.id),
                             requirement_id=req.id,
                             match_id=match.id,
@@ -101,9 +96,7 @@ class QualificationInsufficientRule:
                             category=self.category,
                             severity=ComplianceSeverity.info,
                             status=ComplianceFindingStatus.pass_,
-                            message=(
-                                f"资格相关要求「{req.title}」匹配状态为 {status}。"
-                            ),
+                            message=(f"资格相关要求「{req.title}」匹配状态为 {status}。"),
                             finding_suffix=f"ok:{match.id}",
                             requirement_id=req.id,
                             match_id=match.id,
@@ -121,11 +114,7 @@ class HighRiskUnconfirmedRule:
 
     def evaluate(self, ctx: ComplianceContext) -> list[ComplianceFinding]:
         findings: list[ComplianceFinding] = []
-        risky = [
-            m
-            for m in ctx.evidence_matches
-            if enum_value(m.risk_level) in HIGH_RISK_LEVELS
-        ]
+        risky = [m for m in ctx.evidence_matches if enum_value(m.risk_level) in HIGH_RISK_LEVELS]
         if not risky:
             findings.append(
                 make_finding(
@@ -166,9 +155,7 @@ class HighRiskUnconfirmedRule:
                         category=self.category,
                         severity=self.default_severity,
                         status=ComplianceFindingStatus.fail,
-                        message=(
-                            f"高风险匹配「{title}」审核状态为 {review}，尚未确认。"
-                        ),
+                        message=(f"高风险匹配「{title}」审核状态为 {review}，尚未确认。"),
                         finding_suffix=str(match.id),
                         requirement_id=match.requirement_id,
                         match_id=match.id,
@@ -187,9 +174,7 @@ class InvalidBidAttentionRule:
 
     def evaluate(self, ctx: ComplianceContext) -> list[ComplianceFinding]:
         findings: list[ComplianceFinding] = []
-        invalids = [
-            r for r in ctx.requirements if enum_value(r.category) == "invalid_bid"
-        ]
+        invalids = [r for r in ctx.requirements if enum_value(r.category) == "invalid_bid"]
         if not invalids:
             findings.append(
                 make_finding(
@@ -212,9 +197,7 @@ class InvalidBidAttentionRule:
                     category=self.category,
                     severity=self.default_severity,
                     status=ComplianceFindingStatus.fail,
-                    message=(
-                        f"存在废标/无效投标相关要求「{req.title}」，须人工重点核对。"
-                    ),
+                    message=(f"存在废标/无效投标相关要求「{req.title}」，须人工重点核对。"),
                     finding_suffix=str(req.id),
                     requirement_id=req.id,
                     remediation="逐条核对响应材料是否触碰废标条款；引擎不自动下结论。",
@@ -308,8 +291,7 @@ class DefinitiveNegativeQualificationRule:
                         severity=self.default_severity,
                         status=ComplianceFindingStatus.fail,
                         message=(
-                            f"资格/强制要求「{req.title}」匹配为明确负面"
-                            f"（status={status}）。"
+                            f"资格/强制要求「{req.title}」匹配为明确负面（status={status}）。"
                         ),
                         finding_suffix=str(match.id),
                         requirement_id=req.id,
@@ -317,9 +299,7 @@ class DefinitiveNegativeQualificationRule:
                         remediation="不得以不足材料冒充负面结论；冲突须人工裁决。",
                     )
                 )
-        if hits == 0 and not any(
-            f.status == ComplianceFindingStatus.unknown for f in findings
-        ):
+        if hits == 0 and not any(f.status == ComplianceFindingStatus.unknown for f in findings):
             findings.append(
                 make_finding(
                     rule_id=self.rule_id,
@@ -348,8 +328,6 @@ class StructuredThresholdFieldsRule:
         from datetime import date as date_cls
 
         from app.services.compliance.config import (
-            STRUCTURED_AMOUNT_KEYS,
-            STRUCTURED_EXPIRY_KEYS,
             STRUCTURED_LEVEL_KEYS,
             STRUCTURED_QUANTITY_KEYS,
             STRUCTURED_YEARS_KEYS,
@@ -384,9 +362,7 @@ class StructuredThresholdFieldsRule:
         for req in ctx.requirements:
             req_bags = [
                 req.metadata_json if isinstance(req.metadata_json, dict) else {},
-                req.evidence_required_json
-                if isinstance(req.evidence_required_json, dict)
-                else {},
+                req.evidence_required_json if isinstance(req.evidence_required_json, dict) else {},
             ]
             req_found: dict[str, Any] = {}
             for bag in req_bags:
@@ -674,8 +650,7 @@ class StructuredThresholdFieldsRule:
                                 severity=ComplianceSeverity.error,
                                 status=ComplianceFindingStatus.fail,
                                 message=(
-                                    f"要求「{req.title}」数量不达标："
-                                    f"企业 {co_q} < 要求 {req_q}。"
+                                    f"要求「{req.title}」数量不达标：企业 {co_q} < 要求 {req_q}。"
                                 ),
                                 finding_suffix=f"qty_fail:{req.id}",
                                 requirement_id=req.id,
@@ -904,10 +879,7 @@ class StructuredThresholdFieldsRule:
                     category=self.category,
                     severity=ComplianceSeverity.warning,
                     status=ComplianceFindingStatus.unknown,
-                    message=(
-                        "未发现 expiry/金额/年限等结构化字段；"
-                        "不编造阈值，跳过数值比对。"
-                    ),
+                    message=("未发现 expiry/金额/年限等结构化字段；不编造阈值，跳过数值比对。"),
                     finding_suffix="no_structured_fields",
                     remediation=(
                         "若业务需要，在 requirement.metadata_json / "

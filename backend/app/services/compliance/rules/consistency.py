@@ -215,9 +215,7 @@ class DateConflictRule:
         if bid_deadline is not None:
             project_deadline = _safe_parse(bid_deadline, "project.bid_deadline")
 
-        deadline_reqs = [
-            r for r in ctx.requirements if enum_value(r.category) == "deadline"
-        ]
+        deadline_reqs = [r for r in ctx.requirements if enum_value(r.category) == "deadline"]
 
         # Collect requirement-side dates
         req_dates: list[tuple[Any, str, Any]] = []  # (req, key, date)
@@ -293,10 +291,7 @@ class DateConflictRule:
                         category=self.category,
                         severity=self.default_severity,
                         status=ComplianceFindingStatus.fail,
-                        message=(
-                            f"存在截止日期要求「{req.title}」，"
-                            "但项目 bid_deadline 为空。"
-                        ),
+                        message=(f"存在截止日期要求「{req.title}」，但项目 bid_deadline 为空。"),
                         finding_suffix=f"missing_deadline:{req.id}",
                         requirement_id=req.id,
                         remediation="在项目详情补录投标截止时间。",
@@ -307,22 +302,27 @@ class DateConflictRule:
                     )
                 )
 
-        if not deadline_reqs and project_deadline is None and not req_dates and not match_dates:
-            if not draft_dates:
-                findings.append(
-                    make_finding(
-                        rule_id=self.rule_id,
-                        rule_name=self.name,
-                        category=self.category,
-                        severity=ComplianceSeverity.warning,
-                        status=ComplianceFindingStatus.unknown,
-                        message="未识别到可比对的日期字段（要求/项目/匹配/草稿）。",
-                        finding_suffix="insufficient",
-                        remediation="确认招标文件是否含截止/交付时间条款，或在结构化字段中补录。",
-                        metadata_json={"parse_errors": parse_errors[:5]} if parse_errors else None,
-                    )
+        if (
+            not deadline_reqs
+            and project_deadline is None
+            and not req_dates
+            and not match_dates
+            and not draft_dates
+        ):
+            findings.append(
+                make_finding(
+                    rule_id=self.rule_id,
+                    rule_name=self.name,
+                    category=self.category,
+                    severity=ComplianceSeverity.warning,
+                    status=ComplianceFindingStatus.unknown,
+                    message="未识别到可比对的日期字段（要求/项目/匹配/草稿）。",
+                    finding_suffix="insufficient",
+                    remediation="确认招标文件是否含截止/交付时间条款，或在结构化字段中补录。",
+                    metadata_json={"parse_errors": parse_errors[:5]} if parse_errors else None,
                 )
-                return findings
+            )
+            return findings
 
         # One-sided: requirement dates without project/match counterpart → unknown
         if req_dates and project_deadline is None and not match_dates:
@@ -345,33 +345,42 @@ class DateConflictRule:
 
         # Compare requirement bid_deadline-like fields vs project
         for req, key, d in req_dates:
-            if key in {"bid_deadline", "delivery_deadline"} and project_deadline is not None:
-                if d != project_deadline:
-                    findings.append(
-                        make_finding(
-                            rule_id=self.rule_id,
-                            rule_name=self.name,
-                            category=self.category,
-                            severity=ComplianceSeverity.error,
-                            status=ComplianceFindingStatus.fail,
-                            message=(
-                                f"要求「{req.title}」{key}={d.isoformat()} "
-                                f"与项目 bid_deadline={project_deadline.isoformat()} 不一致。"
-                            ),
-                            finding_suffix=f"req_vs_project:{req.id}:{key}",
-                            requirement_id=req.id,
-                        )
+            if (
+                key in {"bid_deadline", "delivery_deadline"}
+                and project_deadline is not None
+                and d != project_deadline
+            ):
+                findings.append(
+                    make_finding(
+                        rule_id=self.rule_id,
+                        rule_name=self.name,
+                        category=self.category,
+                        severity=ComplianceSeverity.error,
+                        status=ComplianceFindingStatus.fail,
+                        message=(
+                            f"要求「{req.title}」{key}={d.isoformat()} "
+                            f"与项目 bid_deadline={project_deadline.isoformat()} 不一致。"
+                        ),
+                        finding_suffix=f"req_vs_project:{req.id}:{key}",
+                        requirement_id=req.id,
                     )
+                )
 
         # Draft dates vs requirement dates → error/critical on mismatch
         if draft_dates and req_dates:
             req_date_set = {d for _, _, d in req_dates}
             for draft_id, dd in draft_dates:
                 # If draft mentions a date that conflicts with all requirement dates
-                if dd not in req_date_set and project_deadline is not None and dd != project_deadline:
+                if (
+                    dd not in req_date_set
+                    and project_deadline is not None
+                    and dd != project_deadline
+                ):
                     # Only flag when draft date is clearly different from project deadline
                     # and at least one requirement deadline exists
-                    deadline_like = [d for _, k, d in req_dates if "deadline" in k or "delivery" in k]
+                    deadline_like = [
+                        d for _, k, d in req_dates if "deadline" in k or "delivery" in k
+                    ]
                     if deadline_like and dd not in deadline_like:
                         findings.append(
                             make_finding(
@@ -380,9 +389,7 @@ class DateConflictRule:
                                 category=self.category,
                                 severity=ComplianceSeverity.critical,
                                 status=ComplianceFindingStatus.fail,
-                                message=(
-                                    f"草稿日期 {dd.isoformat()} 与要求/项目截止日期不一致。"
-                                ),
+                                message=(f"草稿日期 {dd.isoformat()} 与要求/项目截止日期不一致。"),
                                 finding_suffix=f"draft_mismatch:{draft_id}:{dd.isoformat()}",
                                 draft_id=draft_id,
                                 remediation="核对草稿中的时间表述是否与招标截止/交付要求一致。",
@@ -553,9 +560,7 @@ class MultipleExclusiveMatchStatusesRule:
                     continue
                 # multiple distinct exclusive statuses (e.g. conflicting + insufficient)
                 if len(statuses - POSITIVE_MATCH_STATUSES) > 1 or (
-                    "supported" in statuses
-                    and "partially_supported" in statuses
-                    and negative
+                    "supported" in statuses and "partially_supported" in statuses and negative
                 ):
                     bad += 1
                     findings.append(
@@ -678,17 +683,13 @@ class InsufficientMatchDefinitiveDraftRule:
     rule_id = "E006_gap_match_definitive_draft"
     name = "材料不足却写明确满足"
     category = ComplianceRuleCategory.consistency
-    description = (
-        "匹配为 insufficient_evidence 时，草稿不得出现强满足/明确响应表述。"
-    )
+    description = "匹配为 insufficient_evidence 时，草稿不得出现强满足/明确响应表述。"
     default_severity = ComplianceSeverity.error
 
     def evaluate(self, ctx: ComplianceContext) -> list[ComplianceFinding]:
         findings: list[ComplianceFinding] = []
         gap_matches = [
-            m
-            for m in ctx.evidence_matches
-            if enum_value(m.status) == "insufficient_evidence"
+            m for m in ctx.evidence_matches if enum_value(m.status) == "insufficient_evidence"
         ]
         versions = current_draft_versions(ctx)
         if not gap_matches:
@@ -732,9 +733,7 @@ class InsufficientMatchDefinitiveDraftRule:
                     for block in section.get("blocks") or []:
                         if not isinstance(block, dict):
                             continue
-                        req_ids = {
-                            str(x) for x in (block.get("requirement_ids") or [])
-                        }
+                        req_ids = {str(x) for x in (block.get("requirement_ids") or [])}
                         if str(match.requirement_id) in req_ids:
                             related_texts.append(str(block.get("content") or ""))
                 related_texts.append(draft_blob(content, ver.content_markdown))
@@ -759,9 +758,7 @@ class InsufficientMatchDefinitiveDraftRule:
                         category=self.category,
                         severity=self.default_severity,
                         status=ComplianceFindingStatus.fail,
-                        message=(
-                            "匹配为 insufficient_evidence，但草稿写出明确满足表述。"
-                        ),
+                        message=("匹配为 insufficient_evidence，但草稿写出明确满足表述。"),
                         finding_suffix=str(match.id),
                         requirement_id=match.requirement_id,
                         match_id=match.id,

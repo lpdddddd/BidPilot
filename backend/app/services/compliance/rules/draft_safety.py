@@ -207,9 +207,7 @@ class DraftCitationIntegrityRule:
                 problems.append("requirement_missing")
             if src.match_id:
                 match = ctx.matches_by_id.get(src.match_id)
-                if match is None:
-                    problems.append("match_not_active")
-                elif getattr(match, "lifecycle_status", "active") != "active":
+                if match is None or getattr(match, "lifecycle_status", "active") != "active":
                     problems.append("match_not_active")
             if problems:
                 bad += 1
@@ -349,8 +347,7 @@ class DraftEmptyOrShortRule:
                         severity=self.default_severity,
                         status=ComplianceFindingStatus.fail,
                         message=(
-                            f"草稿正文过短（{len(blob)} 字符，"
-                            f"阈值 {MIN_DRAFT_CONTENT_CHARS}）。"
+                            f"草稿正文过短（{len(blob)} 字符，阈值 {MIN_DRAFT_CONTENT_CHARS}）。"
                         ),
                         finding_suffix=str(ver.id),
                         draft_id=ver.draft_id,
@@ -378,8 +375,7 @@ class DraftStrongClaimWithoutSupportRule:
     name = "无正向匹配的强满足表述"
     category = ComplianceRuleCategory.draft_safety
     description = (
-        "出现「完全满足/已具备/保证」等强表述时，"
-        "对应要求的匹配须为 supported/partially_supported。"
+        "出现「完全满足/已具备/保证」等强表述时，对应要求的匹配须为 supported/partially_supported。"
     )
     default_severity = ComplianceSeverity.error
 
@@ -455,11 +451,7 @@ class DraftStrongClaimWithoutSupportRule:
             bad = 0
             for rid in sorted(req_ids, key=str):
                 matches = ctx.matches_by_requirement_id.get(rid) or []
-                positive = [
-                    m
-                    for m in matches
-                    if enum_value(m.status) in POSITIVE_MATCH_STATUSES
-                ]
+                positive = [m for m in matches if enum_value(m.status) in POSITIVE_MATCH_STATUSES]
                 if positive:
                     continue
                 bad += 1
@@ -471,10 +463,7 @@ class DraftStrongClaimWithoutSupportRule:
                         category=self.category,
                         severity=self.default_severity,
                         status=ComplianceFindingStatus.fail,
-                        message=(
-                            "草稿含强满足表述，但关联要求匹配非正向"
-                            f"（status={status}）。"
-                        ),
+                        message=(f"草稿含强满足表述，但关联要求匹配非正向（status={status}）。"),
                         finding_suffix=f"{ver.id}:{rid}",
                         draft_id=ver.draft_id,
                         requirement_id=rid,

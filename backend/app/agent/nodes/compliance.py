@@ -97,8 +97,7 @@ def run_compliance_check(state: AgentState) -> AgentState:
         "critical_count": sum(
             1
             for f in findings
-            if (f.severity.value if hasattr(f.severity, "value") else f.severity)
-            == "critical"
+            if (f.severity.value if hasattr(f.severity, "value") else f.severity) == "critical"
         ),
         "error_count": sum(
             1
@@ -108,8 +107,7 @@ def run_compliance_check(state: AgentState) -> AgentState:
         "warning_count": sum(
             1
             for f in findings
-            if (f.severity.value if hasattr(f.severity, "value") else f.severity)
-            == "warning"
+            if (f.severity.value if hasattr(f.severity, "value") else f.severity) == "warning"
         ),
         "critical_qualification": critical_qual,
     }

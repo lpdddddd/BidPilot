@@ -126,7 +126,14 @@ Formal A–E `ComplianceEngine` on adapted `compliance_reference.jsonl` samples
 cd backend
 python -m app.services.compliance.offline_eval
 # → datasets/reports/compliance_rule_offline_eval.json
+# Clean-env fallback fixture (versioned):
+python -m app.services.compliance.offline_eval \
+  --reference ../datasets/eval/reference/fixtures/compliance_reference.min.jsonl
 ```
+
+Reports distinguish `rules_executed`, `focus_rules_evaluated`, and
+`rules_without_direct_reference_coverage` (marked `not_directly_evaluated` in
+`coverage_matrix` — do not claim 100% for those rules).
 
 ## Package
 

@@ -140,9 +140,7 @@ class QuoteGroundingRule:
                         remediation="修正引文或重新匹配，禁止保留未接地文本。",
                     )
                 )
-        if checked == 0 and not any(
-            f.status == ComplianceFindingStatus.fail for f in findings
-        ):
+        if checked == 0 and not any(f.status == ComplianceFindingStatus.fail for f in findings):
             # only short/empty quotes — already reported as unknown
             pass
         return findings
@@ -218,8 +216,7 @@ class CompanyEvidenceDocumentScopeRule:
                         severity=self.default_severity,
                         status=ComplianceFindingStatus.fail,
                         message=(
-                            f"企业证据错误引用招标侧文档「{doc.file_name}」"
-                            f"（类型 {dtype}）。"
+                            f"企业证据错误引用招标侧文档「{doc.file_name}」（类型 {dtype}）。"
                         ),
                         finding_suffix=f"tender_leak:{link.id}",
                         match_id=link.match_id,
@@ -256,9 +253,7 @@ class SupportedMatchNeedsQuoteRule:
     def evaluate(self, ctx: ComplianceContext) -> list[ComplianceFinding]:
         findings: list[ComplianceFinding] = []
         positives = [
-            m
-            for m in ctx.evidence_matches
-            if enum_value(m.status) in POSITIVE_MATCH_STATUSES
+            m for m in ctx.evidence_matches if enum_value(m.status) in POSITIVE_MATCH_STATUSES
         ]
         if not positives:
             findings.append(
@@ -360,11 +355,7 @@ class DanglingEvidenceLinkRule:
             chunk = ctx.chunks_by_id.get(chunk_id) if chunk_id else None
             page_start = getattr(chunk, "page_start", None) if chunk else None
             page_end = getattr(chunk, "page_end", None) if chunk else None
-            if (
-                page_start is not None
-                and page_end is not None
-                and int(page_start) > int(page_end)
-            ):
+            if page_start is not None and page_end is not None and int(page_start) > int(page_end):
                 problems.append("invalid_page_range")
 
             meta: dict[str, Any] = {}
@@ -422,9 +413,7 @@ class ConflictingEvidenceCitationRule:
     rule_id = "B005_conflicting_evidence_citation"
     name = "冲突证据引用"
     category = ComplianceRuleCategory.evidence
-    description = (
-        "匹配状态为 conflicting_evidence，或企业角色链接引用招标侧文档时记冲突。"
-    )
+    description = "匹配状态为 conflicting_evidence，或企业角色链接引用招标侧文档时记冲突。"
     default_severity = ComplianceSeverity.error
 
     def evaluate(self, ctx: ComplianceContext) -> list[ComplianceFinding]:
@@ -482,9 +471,7 @@ class ConflictingEvidenceCitationRule:
                         category=self.category,
                         severity=self.default_severity,
                         status=ComplianceFindingStatus.fail,
-                        message=(
-                            f"企业角色证据链接引用了招标侧文档（类型 {dtype}）。"
-                        ),
+                        message=(f"企业角色证据链接引用了招标侧文档（类型 {dtype}）。"),
                         finding_suffix=f"tender_as_company:{link.id}",
                         match_id=link.match_id,
                         source_location_json={

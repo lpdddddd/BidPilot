@@ -80,7 +80,11 @@ class AgentRun(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 class AgentStep(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "agent_steps"
     __table_args__ = (
-        Index("ix_agent_steps_agent_run_id_step_index", "agent_run_id", "step_index"),
+        UniqueConstraint(
+            "agent_run_id",
+            "step_index",
+            name="uq_agent_steps_agent_run_id_step_index",
+        ),
     )
 
     agent_run_id: Mapped[UUID] = mapped_column(

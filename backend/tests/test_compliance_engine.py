@@ -156,8 +156,7 @@ def test_coverage_pass_fail_insufficient(db: Session):
         rule_ids=["A001_mandatory_coverage"],
     )
     assert any(
-        f.status == ComplianceFindingStatus.fail and f.requirement_id == req.id
-        for f in findings
+        f.status == ComplianceFindingStatus.fail and f.requirement_id == req.id for f in findings
     )
 
     match = RequirementEvidenceMatch(
@@ -184,17 +183,14 @@ def test_coverage_pass_fail_insufficient(db: Session):
         rule_ids=["A001_mandatory_coverage"],
     )
     assert any(
-        f.status == ComplianceFindingStatus.pass_ and f.requirement_id == req.id
-        for f in findings
+        f.status == ComplianceFindingStatus.pass_ and f.requirement_id == req.id for f in findings
     )
 
 
 def test_evidence_quote_grounding(db: Session):
     project = _org_project(db)
     req = _req(db, project, title="业绩要求")
-    company = _doc(
-        db, project, document_type=DocumentType.qualification, file_name="q.pdf"
-    )
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
     chunk = _chunk(db, project, company, "本公司具备同类项目三年实施经验。")
     match = RequirementEvidenceMatch(
         project_id=project.id,
@@ -301,8 +297,7 @@ def test_qualification_and_invalid_bid(db: Session):
         categories=[ComplianceRuleCategory.qualification_risk],
     )
     assert any(
-        f.rule_id == "C001_qualification_insufficient"
-        and f.status == ComplianceFindingStatus.fail
+        f.rule_id == "C001_qualification_insufficient" and f.status == ComplianceFindingStatus.fail
         for f in findings
     )
     assert any(
@@ -355,13 +350,9 @@ def test_draft_safety_forbidden_and_unevidenced(db: Session):
         categories=[ComplianceRuleCategory.draft_safety],
     )
     assert any(
-        f.rule_id == "D001_unevidenced_manual" and f.status.value == "fail"
-        for f in findings
+        f.rule_id == "D001_unevidenced_manual" and f.status.value == "fail" for f in findings
     )
-    assert any(
-        f.rule_id == "D002_forbidden_claims" and f.status.value == "fail"
-        for f in findings
-    )
+    assert any(f.rule_id == "D002_forbidden_claims" and f.status.value == "fail" for f in findings)
 
 
 def test_consistency_deadline(db: Session):
@@ -420,11 +411,63 @@ def test_offline_adapter_formal_engine_parity():
     assert evaluated["ok"] is True
     assert evaluated["engine_verdict"] in {"pass", "fail", "attention_required"}
     assert evaluated["rule_ids_executed"]
+    assert evaluated["rules_executed"] == evaluated["rule_ids_executed"]
+    assert evaluated["focus_rules_evaluated"] == evaluated["focus_rule_ids"]
     assert all("severity" in f and "category" in f for f in evaluated["findings"])
 
     a, b = evaluate_sample_online_parity(sample)
     assert [f.finding_id for f in a] == [f.finding_id for f in b]
     assert [f.rule_id for f in a] == [f.rule_id for f in b]
+
+
+def test_offline_eval_fixture_honest_coverage(tmp_path):
+    """Minimal versioned fixture must distinguish focus vs not_directly_evaluated."""
+    from pathlib import Path
+
+    from app.services.compliance.offline_eval import (
+        DEFAULT_FIXTURE_REFERENCE,
+        run_offline_eval,
+    )
+    from app.services.compliance.registry import get_default_registry
+
+    assert DEFAULT_FIXTURE_REFERENCE.exists(), DEFAULT_FIXTURE_REFERENCE
+    out = tmp_path / "offline_eval.json"
+    report = run_offline_eval(DEFAULT_FIXTURE_REFERENCE, out)
+    assert report["succeeded"] == report["sample_count"]
+    assert report["failed"] == 0
+    assert "rules_executed" in report
+    assert "focus_rules_evaluated" in report
+    assert "rules_without_direct_reference_coverage" in report
+    assert "coverage_matrix" in report
+    all_ids = set(get_default_registry().all_rule_ids())
+    focus = set(report["focus_rules_evaluated"])
+    without = set(report["rules_without_direct_reference_coverage"])
+    assert focus
+    assert without == all_ids - focus
+    for rid, row in report["coverage_matrix"].items():
+        if rid not in focus:
+            assert row["coverage"] in {
+                "not_directly_evaluated",
+                "executed_without_focus_sample",
+            }
+            assert (
+                row.get("note") in {None, "not_directly_evaluated"}
+                or row["coverage"] == "not_directly_evaluated"
+            )
+            # Must not claim a 100% rate for non-focus rules
+            assert row.get("rate") is None
+    # Reproducible on same fixture inputs (ignore ephemeral finding UUIDs)
+    out2 = tmp_path / "offline_eval2.json"
+    report2 = run_offline_eval(DEFAULT_FIXTURE_REFERENCE, out2)
+    assert report["focus_rules_evaluated"] == report2["focus_rules_evaluated"]
+    assert report["verdict_match_rate"] == report2["verdict_match_rate"]
+    assert report["rules_without_direct_reference_coverage"] == report2[
+        "rules_without_direct_reference_coverage"
+    ]
+    assert report["sample_count"] == report2["sample_count"]
+    assert [r.get("verdict_match") for r in report["results"]] == [
+        r.get("verdict_match") for r in report2["results"]
+    ]
 
 
 def test_coverage_a004_a005(db: Session):
@@ -453,13 +496,11 @@ def test_coverage_a004_a005(db: Session):
         rule_ids=["A004_uncovered_match_status", "A005_high_priority_uncovered"],
     )
     assert any(
-        f.rule_id == "A004_uncovered_match_status"
-        and f.status == ComplianceFindingStatus.fail
+        f.rule_id == "A004_uncovered_match_status" and f.status == ComplianceFindingStatus.fail
         for f in findings
     )
     assert any(
-        f.rule_id == "A005_high_priority_uncovered"
-        and f.status == ComplianceFindingStatus.fail
+        f.rule_id == "A005_high_priority_uncovered" and f.status == ComplianceFindingStatus.fail
         for f in findings
     )
 
@@ -475,9 +516,7 @@ def test_coverage_a004_a005(db: Session):
 def test_evidence_b004_dangling(db: Session):
     project = _org_project(db, "CMP-B4")
     req = _req(db, project, title="业绩")
-    company = _doc(
-        db, project, document_type=DocumentType.case, file_name="case.pdf"
-    )
+    company = _doc(db, project, document_type=DocumentType.case, file_name="case.pdf")
     # Invalid page range triggers B004 without violating FKs
     chunk = DocumentChunk(
         document_id=company.id,
@@ -549,8 +588,7 @@ def test_qualification_c004_c005(db: Session):
         rule_ids=["C004_definitive_negative"],
     )
     assert any(
-        f.rule_id == "C004_definitive_negative"
-        and f.status == ComplianceFindingStatus.fail
+        f.rule_id == "C004_definitive_negative" and f.status == ComplianceFindingStatus.fail
         for f in findings
     )
 
@@ -579,8 +617,7 @@ def test_qualification_c004_c005(db: Session):
         rule_ids=["C005_structured_thresholds"],
     )
     assert any(
-        f.status == ComplianceFindingStatus.fail
-        and f.severity.value in {"error", "critical"}
+        f.status == ComplianceFindingStatus.fail and f.severity.value in {"error", "critical"}
         for f in findings_fail
     )
 
@@ -669,8 +706,7 @@ def test_draft_d004_d005_and_consistency_e004(db: Session):
         for f in findings
     )
     assert any(
-        f.rule_id == "E004_exclusive_match_statuses"
-        and f.status == ComplianceFindingStatus.fail
+        f.rule_id == "E004_exclusive_match_statuses" and f.status == ComplianceFindingStatus.fail
         for f in findings
     )
 
@@ -749,9 +785,7 @@ def test_d003_d006_d007_e005_e006(db: Session):
     )
     db.add(src_bad)
 
-    foreign_doc = _doc(
-        db, other, document_type=DocumentType.qualification, file_name="other.pdf"
-    )
+    foreign_doc = _doc(db, other, document_type=DocumentType.qualification, file_name="other.pdf")
     src_cross = ProposalDraftSource(
         project_id=other.id,
         draft_version_id=version.id,
@@ -789,8 +823,7 @@ def test_d003_d006_d007_e005_e006(db: Session):
         for f in findings
     )
     assert any(
-        f.rule_id == "E006_gap_match_definitive_draft"
-        and f.status == ComplianceFindingStatus.fail
+        f.rule_id == "E006_gap_match_definitive_draft" and f.status == ComplianceFindingStatus.fail
         for f in findings
     )
     assert any(

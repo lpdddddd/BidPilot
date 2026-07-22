@@ -192,9 +192,7 @@ class ComplianceService:
         run_id = run.id
 
         try:
-            ctx = load_compliance_context(
-                self.db, project_id, draft_id=effective_draft_id
-            )
+            ctx = load_compliance_context(self.db, project_id, draft_id=effective_draft_id)
             findings, stats = self.engine.run(
                 ctx,
                 rule_ids=req.rule_ids,
@@ -217,8 +215,8 @@ class ComplianceService:
                 error_summary=str(exc.detail),
                 db=self.db,
             )
-            # Return structured failure including run_id (do not lose it)
-            failed = self._load_run_fresh(project_id, run_id)
+            # Keep run row refreshed before re-raising structured HTTP error.
+            self._load_run_fresh(project_id, run_id)
             raise HTTPException(
                 status_code=exc.status_code,
                 detail={
@@ -317,9 +315,7 @@ class ComplianceService:
         filters: ComplianceFindingFilters | None = None,
     ) -> ComplianceFindingListResponse:
         filters = filters or ComplianceFindingFilters()
-        stmt = select(ComplianceFindingRow).where(
-            ComplianceFindingRow.project_id == project_id
-        )
+        stmt = select(ComplianceFindingRow).where(ComplianceFindingRow.project_id == project_id)
         if filters.run_id:
             stmt = stmt.where(ComplianceFindingRow.run_id == filters.run_id)
         else:
@@ -341,9 +337,7 @@ class ComplianceService:
         if filters.rule_id:
             stmt = stmt.where(ComplianceFindingRow.rule_id == filters.rule_id)
         if filters.requirement_id:
-            stmt = stmt.where(
-                ComplianceFindingRow.requirement_id == filters.requirement_id
-            )
+            stmt = stmt.where(ComplianceFindingRow.requirement_id == filters.requirement_id)
         if filters.draft_id:
             stmt = stmt.where(ComplianceFindingRow.draft_id == filters.draft_id)
         if filters.status:

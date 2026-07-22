@@ -79,9 +79,7 @@ def load_compliance_context_for_check(
     if requirement_ids:
         missing = [rid for rid in requirement_ids if rid not in requirements_by_id]
         if missing:
-            extra = list(
-                db.scalars(select(Requirement).where(Requirement.id.in_(missing))).all()
-            )
+            extra = list(db.scalars(select(Requirement).where(Requirement.id.in_(missing))).all())
             for r in extra:
                 requirements_by_id[r.id] = r
                 requirements.append(r)
@@ -130,11 +128,7 @@ def load_compliance_context_for_check(
         missing_l = [lid for lid in evidence_link_ids if lid not in have]
         if missing_l:
             tender_links.extend(
-                list(
-                    db.scalars(
-                        select(EvidenceLink).where(EvidenceLink.id.in_(missing_l))
-                    ).all()
-                )
+                list(db.scalars(select(EvidenceLink).where(EvidenceLink.id.in_(missing_l))).all())
             )
 
     company_links: list[RequirementEvidenceMatchLink] = []
@@ -157,9 +151,7 @@ def load_compliance_context_for_check(
     if draft_ids:
         missing_d = [did for did in draft_ids if did not in drafts_by_id]
         if missing_d:
-            for d in db.scalars(
-                select(ProposalDraft).where(ProposalDraft.id.in_(missing_d))
-            ).all():
+            for d in db.scalars(select(ProposalDraft).where(ProposalDraft.id.in_(missing_d))).all():
                 drafts.append(d)
                 drafts_by_id[d.id] = d
 
@@ -234,10 +226,7 @@ def load_compliance_context_for_check(
             matches_by_id[m.id] = m
             # Active same-project matches participate in coverage / draft rules.
             # Non-active or foreign matches stay in matches_by_id for D003/E005 only.
-            if (
-                getattr(m, "lifecycle_status", "active") == "active"
-                and m.project_id == project_id
-            ):
+            if getattr(m, "lifecycle_status", "active") == "active" and m.project_id == project_id:
                 matches.append(m)
                 matches_by_requirement[m.requirement_id].append(m)
                 company_links.extend(list(m.company_links or []))
@@ -247,22 +236,16 @@ def load_compliance_context_for_check(
                 if m.project_id != project_id:
                     matches.append(m)
 
-    documents = list(
-        db.scalars(select(Document).where(Document.project_id == project_id)).all()
-    )
+    documents = list(db.scalars(select(Document).where(Document.project_id == project_id)).all())
     documents_by_id = {d.id: d for d in documents}
     if extra_doc_ids:
         missing_docs = [i for i in extra_doc_ids if i not in documents_by_id]
         if missing_docs:
-            for d in db.scalars(
-                select(Document).where(Document.id.in_(missing_docs))
-            ).all():
+            for d in db.scalars(select(Document).where(Document.id.in_(missing_docs))).all():
                 documents_by_id[d.id] = d
 
     chunks = list(
-        db.scalars(
-            select(DocumentChunk).where(DocumentChunk.project_id == project_id)
-        ).all()
+        db.scalars(select(DocumentChunk).where(DocumentChunk.project_id == project_id)).all()
     )
     chunks_by_id = {c.id: c for c in chunks}
     if extra_chunk_ids:

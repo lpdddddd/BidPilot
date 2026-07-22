@@ -66,15 +66,11 @@ def generate_response_draft(state: AgentState) -> AgentState:
         )
     except LlmError as exc:
         mark_fatal_error(state, f"LLM schema/error: {exc}", "llm_schema_error")
-        record_tool_event(
-            state, name="generate_proposal_draft", status="error", summary=str(exc)
-        )
+        record_tool_event(state, name="generate_proposal_draft", status="error", summary=str(exc))
         return touch(state)
     except Exception as exc:  # noqa: BLE001
         mark_retryable_error(state, f"{type(exc).__name__}: {exc}", "draft_error")
-        record_tool_event(
-            state, name="generate_proposal_draft", status="error", summary=str(exc)
-        )
+        record_tool_event(state, name="generate_proposal_draft", status="error", summary=str(exc))
         return touch(state)
 
     record_tool_event(

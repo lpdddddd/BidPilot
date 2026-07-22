@@ -159,9 +159,7 @@ def after_validate(state: AgentState) -> str:
     if revise_count < max_revise:
         # Clear loop nodes so revise → validate can re-execute.
         done = [
-            n
-            for n in (state.get("completed_nodes") or [])
-            if n not in {NODE_VALIDATE, NODE_REVISE}
+            n for n in (state.get("completed_nodes") or []) if n not in {NODE_VALIDATE, NODE_REVISE}
         ]
         state["completed_nodes"] = done
         state["route_decision"] = "revise_draft"
@@ -187,13 +185,7 @@ def after_revise(state: AgentState) -> str:
 
 
 def _should_fail(state: AgentState) -> bool:
-    if state.get("status") == "failed":
-        return True
-    if state.get("last_error_retryable"):
-        return False
-    if state.get("error_code") and state.get("status") == "failed":
-        return True
-    return False
+    return state.get("status") == "failed"
 
 
 def _should_retry(state: AgentState, node: str) -> bool:

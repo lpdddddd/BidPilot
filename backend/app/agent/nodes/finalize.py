@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.agent.nodes._helpers import begin_node, finish_node, now_iso
-from app.agent.state import NODE_FINALIZE, TERMINAL_STATUSES, AgentState, touch
+from app.agent.state import NODE_FINALIZE, TERMINAL_STATUSES, AgentState
 
 
 def finalize_run(state: AgentState) -> AgentState:
@@ -10,9 +10,7 @@ def finalize_run(state: AgentState) -> AgentState:
         return state
     status = state.get("status") or "running"
 
-    if status in {"blocked"}:
-        pass
-    elif status == "failed":
+    if status in {"blocked"} or status == "failed":
         pass
     elif status == "waiting_for_user":
         return finish_node(state, NODE_FINALIZE)
@@ -24,9 +22,7 @@ def finalize_run(state: AgentState) -> AgentState:
         else:
             state["status"] = "completed_with_warnings"
     elif state.get("warnings") and status not in TERMINAL_STATUSES - {"completed"}:
-        if status == "running" or status == "pending":
-            state["status"] = "completed_with_warnings"
-        elif status == "completed":
+        if status == "running" or status == "pending" or status == "completed":
             state["status"] = "completed_with_warnings"
     elif status in {"running", "pending"}:
         state["status"] = "completed"

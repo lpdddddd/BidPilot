@@ -78,9 +78,7 @@ def check_requirement_coverage(
     )
 
 
-def check_evidence_integrity(
-    db: Session, payload: EvidenceIntegrityInput
-) -> ComplianceToolResult:
+def check_evidence_integrity(db: Session, payload: EvidenceIntegrityInput) -> ComplianceToolResult:
     report = ComplianceService(db).start_run(
         payload.project_id,
         ComplianceStartRequest(categories=[ComplianceRuleCategory.evidence]),
@@ -92,9 +90,7 @@ def check_evidence_integrity(
     )
 
 
-def check_draft_compliance(
-    db: Session, payload: DraftComplianceInput
-) -> ComplianceToolResult:
+def check_draft_compliance(db: Session, payload: DraftComplianceInput) -> ComplianceToolResult:
     """Run draft-scoped compliance (D* draft_safety + E* consistency by default).
 
     Passes ``draft_id`` through ComplianceStartRequest so ownership checks
@@ -139,14 +135,10 @@ def run_project_compliance_check(
     )
 
 
-def get_compliance_report(
-    db: Session, payload: GetReportInput
-) -> ComplianceToolResult:
+def get_compliance_report(db: Session, payload: GetReportInput) -> ComplianceToolResult:
     service = ComplianceService(db)
     if payload.run_id is not None:
-        report: ComplianceReport | None = service.get_report(
-            payload.project_id, payload.run_id
-        )
+        report: ComplianceReport | None = service.get_report(payload.project_id, payload.run_id)
     else:
         report = service.get_latest(payload.project_id)
         if report is None:

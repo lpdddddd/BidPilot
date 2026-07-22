@@ -90,6 +90,13 @@ python -m app.services.compliance.offline_eval
 
 将每条 `compliance_reference.jsonl` 适配为 `ComplianceContext`（SimpleNamespace 实体），调用正式 A–E 引擎。
 
+若完整 `compliance_reference.jsonl` 未检出（gitignore），可使用版本化最小夹具：
+
+```bash
+python -m app.services.compliance.offline_eval \
+  --reference ../datasets/eval/reference/fixtures/compliance_reference.min.jsonl
+```
+
 **Verdict 映射**（见 `adapter_reference.py` 注释）：
 
 - `fail`：focus 规则存在 severity∈{error,critical} 的 fail
@@ -97,7 +104,13 @@ python -m app.services.compliance.offline_eval
 - `pass`：其余
 
 报告字段：`succeeded`/`failed`/`rule_trigger_counts`/`severity_distribution`/
-`category_distribution`/`overall_consistency`/`per_rule_consistency`/`false_positives`/`false_negatives`。
+`category_distribution`/`overall_consistency`/`per_rule_consistency`/`false_positives`/`false_negatives`，
+以及覆盖诚实性字段：
+
+- `rules_executed` — 引擎实际执行过的 rule_id 并集
+- `focus_rules_evaluated` — 参与 verdict 对照的 focus 规则
+- `rules_without_direct_reference_coverage` — 无直接 focus 样本的规则（`not_directly_evaluated`）
+- `coverage_matrix` — 每条 rule_id 的覆盖状态；无 focus 样本时 **不得** 声称 100%
 
 ## 限制（必读）
 

@@ -83,6 +83,9 @@ datasets/fixtures/**
 !datasets/eval/reference/reference_dataset_summary.md
 !datasets/eval/reference/reference_dataset_report.json
 !datasets/eval/reference/splits.json
+!datasets/eval/reference/fixtures/
+!datasets/eval/reference/fixtures/.gitkeep
+!datasets/eval/reference/fixtures/compliance_reference.min.jsonl
 training/llamafactory/outputs/*
 !training/llamafactory/outputs/.gitkeep
 training/llamafactory/data/bidpilot_sft_*.json

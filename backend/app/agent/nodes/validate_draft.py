@@ -11,7 +11,7 @@ from app.agent.nodes._helpers import (
     get_runtime,
     record_tool_event,
 )
-from app.agent.state import NODE_VALIDATE, AgentState, append_warning, touch
+from app.agent.state import NODE_VALIDATE, AgentState, append_warning
 from app.services.compliance.config import STRONG_SATISFACTION_PATTERNS
 from app.tools.agent_tools import GetProposalDraftInput, get_proposal_draft
 from app.tools.compliance_tools import DraftComplianceInput, check_draft_compliance
@@ -46,16 +46,10 @@ def _finding_dict(finding: Any, *, draft_id: str | None = None) -> dict[str, Any
         "message": _truncate(getattr(finding, "message", None)) or "",
         "remediation": _truncate(getattr(finding, "remediation", None)),
         "requirement_id": (
-            str(finding.requirement_id)
-            if getattr(finding, "requirement_id", None)
-            else None
+            str(finding.requirement_id) if getattr(finding, "requirement_id", None) else None
         ),
         "match_id": str(finding.match_id) if getattr(finding, "match_id", None) else None,
-        "draft_id": (
-            str(finding.draft_id)
-            if getattr(finding, "draft_id", None)
-            else draft_id
-        ),
+        "draft_id": (str(finding.draft_id) if getattr(finding, "draft_id", None) else draft_id),
     }
 
 
@@ -91,8 +85,7 @@ def _validation_failed(findings: list[dict[str, Any]], meta: dict[str, Any]) -> 
     if meta.get("warnings_fail_validation"):
         return any(f.get("status") == "fail" for f in findings)
     return any(
-        f.get("status") == "fail" and f.get("severity") in _FAIL_SEVERITIES
-        for f in findings
+        f.get("status") == "fail" and f.get("severity") in _FAIL_SEVERITIES for f in findings
     )
 
 
@@ -194,27 +187,27 @@ def validate_draft(state: AgentState) -> AgentState:
                     draft_texts.append(_text_from_draft(loaded.data))
             except Exception:  # noqa: BLE001
                 pass
-    elif not draft_ids:
+    elif (
+        not draft_ids
+        and not draft_texts
+        and not meta.get("allow_empty_draft")
+        and state.get("status") not in {"blocked", "failed"}
+    ):
         # No draft ids — empty content fails unless allow_empty_draft / risk preview.
-        if (
-            not draft_texts
-            and not meta.get("allow_empty_draft")
-            and state.get("status") not in {"blocked", "failed"}
-        ):
-            all_findings.append(
-                {
-                    "finding_id": "agent-empty-draft",
-                    "rule_id": "AGENT_SUPPLEMENT_empty_draft",
-                    "category": "draft_safety",
-                    "severity": "error",
-                    "status": "fail",
-                    "message": "draft content empty",
-                    "remediation": "Generate a proposal draft before validation.",
-                    "requirement_id": None,
-                    "match_id": None,
-                    "draft_id": None,
-                }
-            )
+        all_findings.append(
+            {
+                "finding_id": "agent-empty-draft",
+                "rule_id": "AGENT_SUPPLEMENT_empty_draft",
+                "category": "draft_safety",
+                "severity": "error",
+                "status": "fail",
+                "message": "draft content empty",
+                "remediation": "Generate a proposal draft before validation.",
+                "requirement_id": None,
+                "match_id": None,
+                "draft_id": None,
+            }
+        )
 
     forbid_claims = bool(
         state.get("critical_qualification") or meta.get("forbid_satisfaction_claims")

@@ -35,15 +35,11 @@ def match_company_evidence_node(state: AgentState) -> AgentState:
         )
     except LlmError as exc:
         mark_fatal_error(state, f"LLM schema/error: {exc}", "llm_schema_error")
-        record_tool_event(
-            state, name="match_company_evidence", status="error", summary=str(exc)
-        )
+        record_tool_event(state, name="match_company_evidence", status="error", summary=str(exc))
         return touch(state)
     except Exception as exc:  # noqa: BLE001
         mark_retryable_error(state, f"{type(exc).__name__}: {exc}", "match_error")
-        record_tool_event(
-            state, name="match_company_evidence", status="error", summary=str(exc)
-        )
+        record_tool_event(state, name="match_company_evidence", status="error", summary=str(exc))
         return touch(state)
 
     record_tool_event(

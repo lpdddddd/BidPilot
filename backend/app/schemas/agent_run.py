@@ -78,6 +78,7 @@ class AgentRunListResponse(BaseModel):
 
 
 class AgentEventItem(BaseModel):
+    id: UUID | None = None
     event_type: str
     sequence: int
     name: str

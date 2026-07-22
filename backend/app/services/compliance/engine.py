@@ -100,6 +100,4 @@ def run_compliance_rules(
     categories: list[ComplianceRuleCategory] | None = None,
     registry: RuleRegistry | None = None,
 ) -> tuple[list[ComplianceFinding], dict]:
-    return ComplianceEngine(registry).run(
-        ctx, rule_ids=rule_ids, categories=categories
-    )
+    return ComplianceEngine(registry).run(ctx, rule_ids=rule_ids, categories=categories)

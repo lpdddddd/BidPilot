@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import contextvars
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -84,7 +85,7 @@ def record_tool_event(
     state["tool_events"] = events
     runtime = _RUNTIME.get()
     if runtime and runtime.persist_tool:
-        try:
+        with contextlib.suppress(Exception):
             runtime.persist_tool(
                 run_id=UUID(state["run_id"]),
                 tool_name=name,
@@ -92,8 +93,6 @@ def record_tool_event(
                 summary=summary,
                 duration_ms=duration_ms,
             )
-        except Exception:  # noqa: BLE001
-            pass
 
 
 def mark_node_start(state: AgentState, node: str) -> AgentState:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.agent.nodes._helpers import begin_node, finish_node, now_iso
-from app.agent.state import NODE_INITIALIZE, AgentState, GRAPH_VERSION, touch
+from app.agent.state import GRAPH_VERSION, NODE_INITIALIZE, AgentState
 
 
 def initialize_run(state: AgentState) -> AgentState:

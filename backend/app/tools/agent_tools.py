@@ -96,9 +96,9 @@ def get_project_context(db: Session, payload: GetProjectContextInput) -> ToolRes
         doc_stmt = doc_stmt.where(Document.id.in_(payload.selected_document_ids))
     documents = list(db.scalars(doc_stmt).all())
     req_count = db.scalar(
-        select(func.count()).select_from(Requirement).where(
-            Requirement.project_id == payload.project_id
-        )
+        select(func.count())
+        .select_from(Requirement)
+        .where(Requirement.project_id == payload.project_id)
     )
     return ToolResult(
         summary=f"docs={len(documents)} requirements={req_count or 0}",
@@ -146,7 +146,10 @@ def search_evidence(
             "page_end": item.page_end,
             "section": item.section,
             "document_id": item.document_id,
+            "document_title": item.file_name,
+            "file_name": item.file_name,
             "summary": (item.content or "")[:160],
+            "conclusion_summary": (item.content or "")[:160],
         }
         for item in response.results
     ]
@@ -183,8 +186,10 @@ def extract_requirements(
                 data={"requirements": items, "source": "existing"},
             )
 
-    service = RequirementExtractionService(db, llm=llm) if llm is not None else (
-        RequirementExtractionService(db)
+    service = (
+        RequirementExtractionService(db, llm=llm)
+        if llm is not None
+        else (RequirementExtractionService(db))
     )
     run = service.start_extraction(
         payload.project_id,
@@ -227,9 +232,7 @@ def match_company_evidence(
             RequirementEvidenceMatch.lifecycle_status == "active",
         )
         if payload.requirement_ids:
-            stmt = stmt.where(
-                RequirementEvidenceMatch.requirement_id.in_(payload.requirement_ids)
-            )
+            stmt = stmt.where(RequirementEvidenceMatch.requirement_id.in_(payload.requirement_ids))
         existing = list(db.scalars(stmt).all())
         if existing:
             items = [
@@ -256,9 +259,7 @@ def match_company_evidence(
                 }
             ]
             return ToolResult(
-                summary=(
-                    f"existing_matches={len(items)} insufficient={len(insufficient)}"
-                ),
+                summary=(f"existing_matches={len(items)} insufficient={len(insufficient)}"),
                 data={
                     "matches": items,
                     "insufficient_count": len(insufficient),
@@ -267,9 +268,7 @@ def match_company_evidence(
             )
 
     service = (
-        RequirementMatchService(db, llm=llm)
-        if llm is not None
-        else RequirementMatchService(db)
+        RequirementMatchService(db, llm=llm) if llm is not None else RequirementMatchService(db)
     )
     run = service.start_matching(
         payload.project_id,
@@ -311,8 +310,7 @@ def match_company_evidence(
     ]
     return ToolResult(
         summary=(
-            f"match_status={refreshed.status} matches={len(items)} "
-            f"insufficient={len(insufficient)}"
+            f"match_status={refreshed.status} matches={len(items)} insufficient={len(insufficient)}"
         ),
         data={
             "matches": items,
@@ -345,9 +343,7 @@ def generate_proposal_draft(
             },
         )
 
-    service = (
-        ProposalDraftService(db, llm=llm) if llm is not None else ProposalDraftService(db)
-    )
+    service = ProposalDraftService(db, llm=llm) if llm is not None else ProposalDraftService(db)
     run = service.start_generation(
         payload.project_id,
         ProposalDraftCreateRequest(

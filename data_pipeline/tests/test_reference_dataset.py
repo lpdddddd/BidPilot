@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 from bidpilot_data.reference_dataset.build import build_reference_dataset
@@ -442,3 +443,24 @@ def test_dry_run_fixture_mode(tmp_datasets: Path) -> None:
     )
     assert "counts" in report
     assert not (tmp_datasets / "eval" / "reference_dry" / "reference_dataset.jsonl").exists()
+
+
+def test_compliance_reference_min_fixture_versioned() -> None:
+    """Versioned minimal compliance fixture exists for clean-env offline eval repro."""
+    root = Path(__file__).resolve().parents[2]
+    fixture = (
+        root
+        / "datasets"
+        / "eval"
+        / "reference"
+        / "fixtures"
+        / "compliance_reference.min.jsonl"
+    )
+    assert fixture.exists(), fixture
+    rows = [json.loads(line) for line in fixture.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(rows) >= 3
+    types = {(r.get("input") or {}).get("rule_type") for r in rows}
+    assert {"mandatory", "deadline", "invalid_bid"} <= types
+    # Stable bytes for reproducibility checks
+    digest = hashlib.sha256(fixture.read_bytes()).hexdigest()
+    assert len(digest) == 64

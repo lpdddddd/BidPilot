@@ -11,6 +11,7 @@
   "verdict_match_rate": 1.0,
   "label_consistency_rate": 1.0,
   "overall_consistency": 1.0,
+  "focus_rules_label_consistency_rate": 1.0,
   "per_rule_consistency": {
     "A001_mandatory_coverage": {
       "agree": 18,
@@ -105,7 +106,302 @@
     "evidence": 100,
     "qualification_risk": 100
   },
-  "note": "Offline eval runs the formal A–E ComplianceEngine on adapted compliance_reference.jsonl samples (ComplianceContext via SimpleNamespace). No REF_* keyword engine. Verdict agreement maps reference pass/fail/attention_required to whether focus rules for rule_type produced fail findings with severity≥error (fail), warning-fail/unknown (attention_required), or otherwise (pass). Engine version: compliance-rules-1.2.0",
+  "rules_executed": [
+    "A001_mandatory_coverage",
+    "A002_match_presence",
+    "A003_tender_evidence_link",
+    "A004_uncovered_match_status",
+    "A005_high_priority_uncovered",
+    "A006_draft_missing_mandatory",
+    "B001_quote_grounding",
+    "B002_company_doc_scope",
+    "B003_supported_needs_quote",
+    "B004_dangling_evidence",
+    "B005_conflicting_evidence_citation",
+    "C001_qualification_insufficient",
+    "C002_high_risk_unconfirmed",
+    "C003_invalid_bid_attention",
+    "C004_definitive_negative",
+    "C005_structured_thresholds",
+    "D001_unevidenced_manual",
+    "D002_forbidden_claims",
+    "D003_citation_integrity",
+    "D004_placeholders",
+    "D005_empty_or_short",
+    "D006_strong_claim_without_support",
+    "D007_cross_project_source",
+    "E001_status_vs_links",
+    "E002_review_lifecycle",
+    "E003_date_conflicts",
+    "E004_exclusive_match_statuses",
+    "E005_project_ownership",
+    "E006_gap_match_definitive_draft"
+  ],
+  "focus_rules_evaluated": [
+    "A001_mandatory_coverage",
+    "C003_invalid_bid_attention",
+    "E003_date_conflicts"
+  ],
+  "rules_without_direct_reference_coverage": [
+    "A002_match_presence",
+    "A003_tender_evidence_link",
+    "A004_uncovered_match_status",
+    "A005_high_priority_uncovered",
+    "A006_draft_missing_mandatory",
+    "B001_quote_grounding",
+    "B002_company_doc_scope",
+    "B003_supported_needs_quote",
+    "B004_dangling_evidence",
+    "B005_conflicting_evidence_citation",
+    "C001_qualification_insufficient",
+    "C002_high_risk_unconfirmed",
+    "C004_definitive_negative",
+    "C005_structured_thresholds",
+    "D001_unevidenced_manual",
+    "D002_forbidden_claims",
+    "D003_citation_integrity",
+    "D004_placeholders",
+    "D005_empty_or_short",
+    "D006_strong_claim_without_support",
+    "D007_cross_project_source",
+    "E001_status_vs_links",
+    "E002_review_lifecycle",
+    "E004_exclusive_match_statuses",
+    "E005_project_ownership",
+    "E006_gap_match_definitive_draft"
+  ],
+  "coverage_matrix": {
+    "E001_status_vs_links": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "E002_review_lifecycle": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "E003_date_conflicts": {
+      "coverage": "focus_evaluated",
+      "executed": true,
+      "agree": 1,
+      "disagree": 0,
+      "rate": 1.0
+    },
+    "E004_exclusive_match_statuses": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "E005_project_ownership": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "E006_gap_match_definitive_draft": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "A001_mandatory_coverage": {
+      "coverage": "focus_evaluated",
+      "executed": true,
+      "agree": 18,
+      "disagree": 0,
+      "rate": 1.0
+    },
+    "A002_match_presence": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "A003_tender_evidence_link": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "A004_uncovered_match_status": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "A005_high_priority_uncovered": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "A006_draft_missing_mandatory": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "D001_unevidenced_manual": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "D002_forbidden_claims": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "D003_citation_integrity": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "D004_placeholders": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "D005_empty_or_short": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "D006_strong_claim_without_support": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "D007_cross_project_source": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "B001_quote_grounding": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "B002_company_doc_scope": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "B003_supported_needs_quote": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "B004_dangling_evidence": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "B005_conflicting_evidence_citation": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "C001_qualification_insufficient": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "C002_high_risk_unconfirmed": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "C003_invalid_bid_attention": {
+      "coverage": "focus_evaluated",
+      "executed": true,
+      "agree": 1,
+      "disagree": 0,
+      "rate": 1.0
+    },
+    "C004_definitive_negative": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    },
+    "C005_structured_thresholds": {
+      "coverage": "executed_without_focus_sample",
+      "executed": true,
+      "agree": 0,
+      "disagree": 0,
+      "rate": null,
+      "note": "not_directly_evaluated"
+    }
+  },
+  "note": "Offline eval runs the formal A–E ComplianceEngine on adapted compliance_reference.jsonl samples (ComplianceContext via SimpleNamespace). No REF_* keyword engine. Verdict agreement maps reference pass/fail/attention_required to whether focus rules for rule_type produced fail findings with severity≥error (fail), warning-fail/unknown (attention_required), or otherwise (pass). Coverage honesty: rules_executed = union of engine rule_ids across samples; focus_rules_evaluated = rules used for verdict agreement; rules_without_direct_reference_coverage are marked not_directly_evaluated (do not claim 100% for those). Engine version: compliance-rules-1.2.0",
   "results": [
     {
       "sample_id": "010dd1a5-660b-51af-b68c-62749372be1c",
@@ -148,7 +444,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -237,7 +567,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:35361ffb-1d54-4448-a930-0ae6667b85d2",
+          "finding_id": "A001_mandatory_coverage:3865c5f3-436a-43e2-bece-5dbf7974635e",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -245,13 +575,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "35361ffb-1d54-4448-a930-0ae6667b85d2",
+          "requirement_id": "3865c5f3-436a-43e2-bece-5dbf7974635e",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:35361ffb-1d54-4448-a930-0ae6667b85d2",
+          "finding_id": "A002_match_presence:3865c5f3-436a-43e2-bece-5dbf7974635e",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -259,7 +589,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "35361ffb-1d54-4448-a930-0ae6667b85d2",
+          "requirement_id": "3865c5f3-436a-43e2-bece-5dbf7974635e",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -489,7 +819,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:35361ffb-1d54-4448-a930-0ae6667b85d2",
+          "finding_id": "C001_qualification_insufficient:unmatched:3865c5f3-436a-43e2-bece-5dbf7974635e",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -497,7 +827,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "35361ffb-1d54-4448-a930-0ae6667b85d2",
+          "requirement_id": "3865c5f3-436a-43e2-bece-5dbf7974635e",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -531,7 +861,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:35361ffb-1d54-4448-a930-0ae6667b85d2",
+          "finding_id": "C004_definitive_negative:unmatched:3865c5f3-436a-43e2-bece-5dbf7974635e",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -539,7 +869,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "35361ffb-1d54-4448-a930-0ae6667b85d2",
+          "requirement_id": "3865c5f3-436a-43e2-bece-5dbf7974635e",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -713,7 +1043,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -802,7 +1166,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:e7a715e9-e088-4f01-ba3c-c23ee3d94566",
+          "finding_id": "A001_mandatory_coverage:a0c1b54e-e3f5-4276-8376-311fae37d606",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -810,13 +1174,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "e7a715e9-e088-4f01-ba3c-c23ee3d94566",
+          "requirement_id": "a0c1b54e-e3f5-4276-8376-311fae37d606",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:e7a715e9-e088-4f01-ba3c-c23ee3d94566",
+          "finding_id": "A002_match_presence:a0c1b54e-e3f5-4276-8376-311fae37d606",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -824,7 +1188,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "e7a715e9-e088-4f01-ba3c-c23ee3d94566",
+          "requirement_id": "a0c1b54e-e3f5-4276-8376-311fae37d606",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -1054,7 +1418,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:e7a715e9-e088-4f01-ba3c-c23ee3d94566",
+          "finding_id": "C001_qualification_insufficient:unmatched:a0c1b54e-e3f5-4276-8376-311fae37d606",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -1062,7 +1426,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "e7a715e9-e088-4f01-ba3c-c23ee3d94566",
+          "requirement_id": "a0c1b54e-e3f5-4276-8376-311fae37d606",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -1096,7 +1460,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:e7a715e9-e088-4f01-ba3c-c23ee3d94566",
+          "finding_id": "C004_definitive_negative:unmatched:a0c1b54e-e3f5-4276-8376-311fae37d606",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -1104,7 +1468,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "e7a715e9-e088-4f01-ba3c-c23ee3d94566",
+          "requirement_id": "a0c1b54e-e3f5-4276-8376-311fae37d606",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -1278,7 +1642,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -1367,7 +1765,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:528b50f3-57d9-4226-8ffc-6d2d9912e45d",
+          "finding_id": "A001_mandatory_coverage:f3148ee1-4366-46f1-8be9-0e15692bdcf4",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -1375,13 +1773,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "528b50f3-57d9-4226-8ffc-6d2d9912e45d",
+          "requirement_id": "f3148ee1-4366-46f1-8be9-0e15692bdcf4",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:528b50f3-57d9-4226-8ffc-6d2d9912e45d",
+          "finding_id": "A002_match_presence:f3148ee1-4366-46f1-8be9-0e15692bdcf4",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -1389,7 +1787,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "528b50f3-57d9-4226-8ffc-6d2d9912e45d",
+          "requirement_id": "f3148ee1-4366-46f1-8be9-0e15692bdcf4",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -1619,7 +2017,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:528b50f3-57d9-4226-8ffc-6d2d9912e45d",
+          "finding_id": "C001_qualification_insufficient:unmatched:f3148ee1-4366-46f1-8be9-0e15692bdcf4",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -1627,7 +2025,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "528b50f3-57d9-4226-8ffc-6d2d9912e45d",
+          "requirement_id": "f3148ee1-4366-46f1-8be9-0e15692bdcf4",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -1661,7 +2059,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:528b50f3-57d9-4226-8ffc-6d2d9912e45d",
+          "finding_id": "C004_definitive_negative:unmatched:f3148ee1-4366-46f1-8be9-0e15692bdcf4",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -1669,7 +2067,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "528b50f3-57d9-4226-8ffc-6d2d9912e45d",
+          "requirement_id": "f3148ee1-4366-46f1-8be9-0e15692bdcf4",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -1843,7 +2241,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -1932,7 +2364,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:ee462b10-4c80-43d6-8753-917e27f8a822",
+          "finding_id": "A001_mandatory_coverage:46c23ec8-ce5a-46ec-8b04-667284770bb8",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -1940,13 +2372,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "ee462b10-4c80-43d6-8753-917e27f8a822",
+          "requirement_id": "46c23ec8-ce5a-46ec-8b04-667284770bb8",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:ee462b10-4c80-43d6-8753-917e27f8a822",
+          "finding_id": "A002_match_presence:46c23ec8-ce5a-46ec-8b04-667284770bb8",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -1954,7 +2386,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "ee462b10-4c80-43d6-8753-917e27f8a822",
+          "requirement_id": "46c23ec8-ce5a-46ec-8b04-667284770bb8",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -2184,7 +2616,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:ee462b10-4c80-43d6-8753-917e27f8a822",
+          "finding_id": "C001_qualification_insufficient:unmatched:46c23ec8-ce5a-46ec-8b04-667284770bb8",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -2192,7 +2624,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "ee462b10-4c80-43d6-8753-917e27f8a822",
+          "requirement_id": "46c23ec8-ce5a-46ec-8b04-667284770bb8",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -2226,7 +2658,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:ee462b10-4c80-43d6-8753-917e27f8a822",
+          "finding_id": "C004_definitive_negative:unmatched:46c23ec8-ce5a-46ec-8b04-667284770bb8",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -2234,7 +2666,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "ee462b10-4c80-43d6-8753-917e27f8a822",
+          "requirement_id": "46c23ec8-ce5a-46ec-8b04-667284770bb8",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -2408,7 +2840,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "E003_date_conflicts"
+      ],
+      "focus_rules_evaluated": [
         "E003_date_conflicts"
       ],
       "findings": [
@@ -2441,7 +2907,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "E003_date_conflicts:missing_deadline:479f114f-08dc-4261-b360-5f4831d346ad",
+          "finding_id": "E003_date_conflicts:missing_deadline:2644177e-ead9-4e1c-9023-c3384652b02f",
           "rule_id": "E003_date_conflicts",
           "rule_name": "日期冲突检查",
           "category": "consistency",
@@ -2449,7 +2915,7 @@
           "status": "fail",
           "message": "存在截止日期要求「reference:deadline」，但项目 bid_deadline 为空。",
           "remediation": "在项目详情补录投标截止时间。",
-          "requirement_id": "479f114f-08dc-4261-b360-5f4831d346ad",
+          "requirement_id": "2644177e-ead9-4e1c-9023-c3384652b02f",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -2511,7 +2977,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:479f114f-08dc-4261-b360-5f4831d346ad",
+          "finding_id": "A002_match_presence:2644177e-ead9-4e1c-9023-c3384652b02f",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -2519,7 +2985,7 @@
           "status": "fail",
           "message": "要求「reference:deadline」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "479f114f-08dc-4261-b360-5f4831d346ad",
+          "requirement_id": "2644177e-ead9-4e1c-9023-c3384652b02f",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -2972,7 +3438,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -3061,7 +3561,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:0de5cf86-cec6-4506-8a65-131a15d20714",
+          "finding_id": "A001_mandatory_coverage:c0a998d7-f186-4c5b-ad11-0afb69f2dd83",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -3069,13 +3569,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "0de5cf86-cec6-4506-8a65-131a15d20714",
+          "requirement_id": "c0a998d7-f186-4c5b-ad11-0afb69f2dd83",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:0de5cf86-cec6-4506-8a65-131a15d20714",
+          "finding_id": "A002_match_presence:c0a998d7-f186-4c5b-ad11-0afb69f2dd83",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -3083,7 +3583,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "0de5cf86-cec6-4506-8a65-131a15d20714",
+          "requirement_id": "c0a998d7-f186-4c5b-ad11-0afb69f2dd83",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -3313,7 +3813,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:0de5cf86-cec6-4506-8a65-131a15d20714",
+          "finding_id": "C001_qualification_insufficient:unmatched:c0a998d7-f186-4c5b-ad11-0afb69f2dd83",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -3321,7 +3821,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "0de5cf86-cec6-4506-8a65-131a15d20714",
+          "requirement_id": "c0a998d7-f186-4c5b-ad11-0afb69f2dd83",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -3355,7 +3855,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:0de5cf86-cec6-4506-8a65-131a15d20714",
+          "finding_id": "C004_definitive_negative:unmatched:c0a998d7-f186-4c5b-ad11-0afb69f2dd83",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -3363,7 +3863,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "0de5cf86-cec6-4506-8a65-131a15d20714",
+          "requirement_id": "c0a998d7-f186-4c5b-ad11-0afb69f2dd83",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -3537,7 +4037,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -3626,7 +4160,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:7b89895e-70eb-4851-a06a-e31b09ab8dc1",
+          "finding_id": "A001_mandatory_coverage:8a0560ac-aad6-44e2-9f0b-345212910081",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -3634,13 +4168,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "7b89895e-70eb-4851-a06a-e31b09ab8dc1",
+          "requirement_id": "8a0560ac-aad6-44e2-9f0b-345212910081",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:7b89895e-70eb-4851-a06a-e31b09ab8dc1",
+          "finding_id": "A002_match_presence:8a0560ac-aad6-44e2-9f0b-345212910081",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -3648,7 +4182,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "7b89895e-70eb-4851-a06a-e31b09ab8dc1",
+          "requirement_id": "8a0560ac-aad6-44e2-9f0b-345212910081",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -3878,7 +4412,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:7b89895e-70eb-4851-a06a-e31b09ab8dc1",
+          "finding_id": "C001_qualification_insufficient:unmatched:8a0560ac-aad6-44e2-9f0b-345212910081",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -3886,7 +4420,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "7b89895e-70eb-4851-a06a-e31b09ab8dc1",
+          "requirement_id": "8a0560ac-aad6-44e2-9f0b-345212910081",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -3920,7 +4454,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:7b89895e-70eb-4851-a06a-e31b09ab8dc1",
+          "finding_id": "C004_definitive_negative:unmatched:8a0560ac-aad6-44e2-9f0b-345212910081",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -3928,7 +4462,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "7b89895e-70eb-4851-a06a-e31b09ab8dc1",
+          "requirement_id": "8a0560ac-aad6-44e2-9f0b-345212910081",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -4102,7 +4636,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -4191,7 +4759,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:a2ada327-2623-4455-817b-137db7ccb786",
+          "finding_id": "A001_mandatory_coverage:333e7024-187e-481b-9520-715f2cd37e57",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -4199,13 +4767,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "a2ada327-2623-4455-817b-137db7ccb786",
+          "requirement_id": "333e7024-187e-481b-9520-715f2cd37e57",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:a2ada327-2623-4455-817b-137db7ccb786",
+          "finding_id": "A002_match_presence:333e7024-187e-481b-9520-715f2cd37e57",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -4213,7 +4781,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "a2ada327-2623-4455-817b-137db7ccb786",
+          "requirement_id": "333e7024-187e-481b-9520-715f2cd37e57",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -4443,7 +5011,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:a2ada327-2623-4455-817b-137db7ccb786",
+          "finding_id": "C001_qualification_insufficient:unmatched:333e7024-187e-481b-9520-715f2cd37e57",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -4451,7 +5019,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "a2ada327-2623-4455-817b-137db7ccb786",
+          "requirement_id": "333e7024-187e-481b-9520-715f2cd37e57",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -4485,7 +5053,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:a2ada327-2623-4455-817b-137db7ccb786",
+          "finding_id": "C004_definitive_negative:unmatched:333e7024-187e-481b-9520-715f2cd37e57",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -4493,7 +5061,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "a2ada327-2623-4455-817b-137db7ccb786",
+          "requirement_id": "333e7024-187e-481b-9520-715f2cd37e57",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -4667,7 +5235,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -4756,7 +5358,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:987fb426-0d16-4122-9ddb-5224e167dc34",
+          "finding_id": "A001_mandatory_coverage:9cf962c0-b121-4887-a06c-9f15eb6f3d13",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -4764,13 +5366,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "987fb426-0d16-4122-9ddb-5224e167dc34",
+          "requirement_id": "9cf962c0-b121-4887-a06c-9f15eb6f3d13",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:987fb426-0d16-4122-9ddb-5224e167dc34",
+          "finding_id": "A002_match_presence:9cf962c0-b121-4887-a06c-9f15eb6f3d13",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -4778,7 +5380,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "987fb426-0d16-4122-9ddb-5224e167dc34",
+          "requirement_id": "9cf962c0-b121-4887-a06c-9f15eb6f3d13",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -5008,7 +5610,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:987fb426-0d16-4122-9ddb-5224e167dc34",
+          "finding_id": "C001_qualification_insufficient:unmatched:9cf962c0-b121-4887-a06c-9f15eb6f3d13",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -5016,7 +5618,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "987fb426-0d16-4122-9ddb-5224e167dc34",
+          "requirement_id": "9cf962c0-b121-4887-a06c-9f15eb6f3d13",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -5050,7 +5652,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:987fb426-0d16-4122-9ddb-5224e167dc34",
+          "finding_id": "C004_definitive_negative:unmatched:9cf962c0-b121-4887-a06c-9f15eb6f3d13",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -5058,7 +5660,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "987fb426-0d16-4122-9ddb-5224e167dc34",
+          "requirement_id": "9cf962c0-b121-4887-a06c-9f15eb6f3d13",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -5232,7 +5834,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -5321,7 +5957,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:ada24374-93ef-4f91-bdd1-ee9ca4b53ee0",
+          "finding_id": "A001_mandatory_coverage:31d5781e-fc7f-4326-937f-7f0117258b3b",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -5329,13 +5965,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "ada24374-93ef-4f91-bdd1-ee9ca4b53ee0",
+          "requirement_id": "31d5781e-fc7f-4326-937f-7f0117258b3b",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:ada24374-93ef-4f91-bdd1-ee9ca4b53ee0",
+          "finding_id": "A002_match_presence:31d5781e-fc7f-4326-937f-7f0117258b3b",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -5343,7 +5979,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "ada24374-93ef-4f91-bdd1-ee9ca4b53ee0",
+          "requirement_id": "31d5781e-fc7f-4326-937f-7f0117258b3b",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -5573,7 +6209,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:ada24374-93ef-4f91-bdd1-ee9ca4b53ee0",
+          "finding_id": "C001_qualification_insufficient:unmatched:31d5781e-fc7f-4326-937f-7f0117258b3b",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -5581,7 +6217,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "ada24374-93ef-4f91-bdd1-ee9ca4b53ee0",
+          "requirement_id": "31d5781e-fc7f-4326-937f-7f0117258b3b",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -5615,7 +6251,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:ada24374-93ef-4f91-bdd1-ee9ca4b53ee0",
+          "finding_id": "C004_definitive_negative:unmatched:31d5781e-fc7f-4326-937f-7f0117258b3b",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -5623,7 +6259,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "ada24374-93ef-4f91-bdd1-ee9ca4b53ee0",
+          "requirement_id": "31d5781e-fc7f-4326-937f-7f0117258b3b",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -5797,7 +6433,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -5886,7 +6556,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:4b3355b9-41a6-4222-9c9a-d1b5430be7ee",
+          "finding_id": "A001_mandatory_coverage:2399e0bb-bc7a-4207-8660-2c4c0b7c5bda",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -5894,13 +6564,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "4b3355b9-41a6-4222-9c9a-d1b5430be7ee",
+          "requirement_id": "2399e0bb-bc7a-4207-8660-2c4c0b7c5bda",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:4b3355b9-41a6-4222-9c9a-d1b5430be7ee",
+          "finding_id": "A002_match_presence:2399e0bb-bc7a-4207-8660-2c4c0b7c5bda",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -5908,7 +6578,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "4b3355b9-41a6-4222-9c9a-d1b5430be7ee",
+          "requirement_id": "2399e0bb-bc7a-4207-8660-2c4c0b7c5bda",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -6138,7 +6808,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:4b3355b9-41a6-4222-9c9a-d1b5430be7ee",
+          "finding_id": "C001_qualification_insufficient:unmatched:2399e0bb-bc7a-4207-8660-2c4c0b7c5bda",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -6146,7 +6816,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "4b3355b9-41a6-4222-9c9a-d1b5430be7ee",
+          "requirement_id": "2399e0bb-bc7a-4207-8660-2c4c0b7c5bda",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -6180,7 +6850,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:4b3355b9-41a6-4222-9c9a-d1b5430be7ee",
+          "finding_id": "C004_definitive_negative:unmatched:2399e0bb-bc7a-4207-8660-2c4c0b7c5bda",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -6188,7 +6858,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "4b3355b9-41a6-4222-9c9a-d1b5430be7ee",
+          "requirement_id": "2399e0bb-bc7a-4207-8660-2c4c0b7c5bda",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -6362,7 +7032,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -6451,7 +7155,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:cecf8ec9-38f7-44a4-8ffb-5c45ad53ca55",
+          "finding_id": "A001_mandatory_coverage:1944517c-5d08-4204-88b6-dac4c3bb2f31",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -6459,13 +7163,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "cecf8ec9-38f7-44a4-8ffb-5c45ad53ca55",
+          "requirement_id": "1944517c-5d08-4204-88b6-dac4c3bb2f31",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:cecf8ec9-38f7-44a4-8ffb-5c45ad53ca55",
+          "finding_id": "A002_match_presence:1944517c-5d08-4204-88b6-dac4c3bb2f31",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -6473,7 +7177,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "cecf8ec9-38f7-44a4-8ffb-5c45ad53ca55",
+          "requirement_id": "1944517c-5d08-4204-88b6-dac4c3bb2f31",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -6703,7 +7407,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:cecf8ec9-38f7-44a4-8ffb-5c45ad53ca55",
+          "finding_id": "C001_qualification_insufficient:unmatched:1944517c-5d08-4204-88b6-dac4c3bb2f31",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -6711,7 +7415,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "cecf8ec9-38f7-44a4-8ffb-5c45ad53ca55",
+          "requirement_id": "1944517c-5d08-4204-88b6-dac4c3bb2f31",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -6745,7 +7449,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:cecf8ec9-38f7-44a4-8ffb-5c45ad53ca55",
+          "finding_id": "C004_definitive_negative:unmatched:1944517c-5d08-4204-88b6-dac4c3bb2f31",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -6753,7 +7457,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "cecf8ec9-38f7-44a4-8ffb-5c45ad53ca55",
+          "requirement_id": "1944517c-5d08-4204-88b6-dac4c3bb2f31",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -6927,7 +7631,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -7016,7 +7754,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:10521846-4e4c-4b22-9f91-9d8c92fb1392",
+          "finding_id": "A001_mandatory_coverage:9a08d189-215e-420a-ae9e-9fefd17c84e9",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -7024,13 +7762,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "10521846-4e4c-4b22-9f91-9d8c92fb1392",
+          "requirement_id": "9a08d189-215e-420a-ae9e-9fefd17c84e9",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:10521846-4e4c-4b22-9f91-9d8c92fb1392",
+          "finding_id": "A002_match_presence:9a08d189-215e-420a-ae9e-9fefd17c84e9",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -7038,7 +7776,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "10521846-4e4c-4b22-9f91-9d8c92fb1392",
+          "requirement_id": "9a08d189-215e-420a-ae9e-9fefd17c84e9",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -7268,7 +8006,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:10521846-4e4c-4b22-9f91-9d8c92fb1392",
+          "finding_id": "C001_qualification_insufficient:unmatched:9a08d189-215e-420a-ae9e-9fefd17c84e9",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -7276,7 +8014,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "10521846-4e4c-4b22-9f91-9d8c92fb1392",
+          "requirement_id": "9a08d189-215e-420a-ae9e-9fefd17c84e9",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -7310,7 +8048,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:10521846-4e4c-4b22-9f91-9d8c92fb1392",
+          "finding_id": "C004_definitive_negative:unmatched:9a08d189-215e-420a-ae9e-9fefd17c84e9",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -7318,7 +8056,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "10521846-4e4c-4b22-9f91-9d8c92fb1392",
+          "requirement_id": "9a08d189-215e-420a-ae9e-9fefd17c84e9",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -7492,7 +8230,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -7581,7 +8353,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:3a00d49c-5ff6-4dd7-ac7f-c400d3c70055",
+          "finding_id": "A001_mandatory_coverage:0eb8a3c6-c3d5-4629-aa6a-5859d25d1f38",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -7589,13 +8361,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "3a00d49c-5ff6-4dd7-ac7f-c400d3c70055",
+          "requirement_id": "0eb8a3c6-c3d5-4629-aa6a-5859d25d1f38",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:3a00d49c-5ff6-4dd7-ac7f-c400d3c70055",
+          "finding_id": "A002_match_presence:0eb8a3c6-c3d5-4629-aa6a-5859d25d1f38",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -7603,7 +8375,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "3a00d49c-5ff6-4dd7-ac7f-c400d3c70055",
+          "requirement_id": "0eb8a3c6-c3d5-4629-aa6a-5859d25d1f38",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -7833,7 +8605,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:3a00d49c-5ff6-4dd7-ac7f-c400d3c70055",
+          "finding_id": "C001_qualification_insufficient:unmatched:0eb8a3c6-c3d5-4629-aa6a-5859d25d1f38",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -7841,7 +8613,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "3a00d49c-5ff6-4dd7-ac7f-c400d3c70055",
+          "requirement_id": "0eb8a3c6-c3d5-4629-aa6a-5859d25d1f38",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -7875,7 +8647,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:3a00d49c-5ff6-4dd7-ac7f-c400d3c70055",
+          "finding_id": "C004_definitive_negative:unmatched:0eb8a3c6-c3d5-4629-aa6a-5859d25d1f38",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -7883,7 +8655,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "3a00d49c-5ff6-4dd7-ac7f-c400d3c70055",
+          "requirement_id": "0eb8a3c6-c3d5-4629-aa6a-5859d25d1f38",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -8057,7 +8829,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -8146,7 +8952,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:3f5ba3a1-5a71-41fa-9834-7fa8600e0334",
+          "finding_id": "A001_mandatory_coverage:4f41f944-dc10-4a5a-8f90-29ea34dab75a",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -8154,13 +8960,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "3f5ba3a1-5a71-41fa-9834-7fa8600e0334",
+          "requirement_id": "4f41f944-dc10-4a5a-8f90-29ea34dab75a",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:3f5ba3a1-5a71-41fa-9834-7fa8600e0334",
+          "finding_id": "A002_match_presence:4f41f944-dc10-4a5a-8f90-29ea34dab75a",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -8168,7 +8974,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "3f5ba3a1-5a71-41fa-9834-7fa8600e0334",
+          "requirement_id": "4f41f944-dc10-4a5a-8f90-29ea34dab75a",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -8398,7 +9204,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:3f5ba3a1-5a71-41fa-9834-7fa8600e0334",
+          "finding_id": "C001_qualification_insufficient:unmatched:4f41f944-dc10-4a5a-8f90-29ea34dab75a",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -8406,7 +9212,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "3f5ba3a1-5a71-41fa-9834-7fa8600e0334",
+          "requirement_id": "4f41f944-dc10-4a5a-8f90-29ea34dab75a",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -8440,7 +9246,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:3f5ba3a1-5a71-41fa-9834-7fa8600e0334",
+          "finding_id": "C004_definitive_negative:unmatched:4f41f944-dc10-4a5a-8f90-29ea34dab75a",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -8448,7 +9254,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "3f5ba3a1-5a71-41fa-9834-7fa8600e0334",
+          "requirement_id": "4f41f944-dc10-4a5a-8f90-29ea34dab75a",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -8622,7 +9428,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -8711,7 +9551,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:d947b5b9-1b6c-4bbb-b9c9-86a07a8bb675",
+          "finding_id": "A001_mandatory_coverage:ec706137-0091-4765-951f-45408eb77b13",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -8719,13 +9559,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "d947b5b9-1b6c-4bbb-b9c9-86a07a8bb675",
+          "requirement_id": "ec706137-0091-4765-951f-45408eb77b13",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:d947b5b9-1b6c-4bbb-b9c9-86a07a8bb675",
+          "finding_id": "A002_match_presence:ec706137-0091-4765-951f-45408eb77b13",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -8733,7 +9573,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "d947b5b9-1b6c-4bbb-b9c9-86a07a8bb675",
+          "requirement_id": "ec706137-0091-4765-951f-45408eb77b13",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -8963,7 +9803,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:d947b5b9-1b6c-4bbb-b9c9-86a07a8bb675",
+          "finding_id": "C001_qualification_insufficient:unmatched:ec706137-0091-4765-951f-45408eb77b13",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -8971,7 +9811,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "d947b5b9-1b6c-4bbb-b9c9-86a07a8bb675",
+          "requirement_id": "ec706137-0091-4765-951f-45408eb77b13",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -9005,7 +9845,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:d947b5b9-1b6c-4bbb-b9c9-86a07a8bb675",
+          "finding_id": "C004_definitive_negative:unmatched:ec706137-0091-4765-951f-45408eb77b13",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -9013,7 +9853,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "d947b5b9-1b6c-4bbb-b9c9-86a07a8bb675",
+          "requirement_id": "ec706137-0091-4765-951f-45408eb77b13",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -9187,7 +10027,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -9276,7 +10150,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:2c1a7f0f-57bc-4cf9-a320-b65e8adaed21",
+          "finding_id": "A001_mandatory_coverage:b36855c6-806b-46d7-8dad-e87dc2053f0e",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -9284,13 +10158,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "2c1a7f0f-57bc-4cf9-a320-b65e8adaed21",
+          "requirement_id": "b36855c6-806b-46d7-8dad-e87dc2053f0e",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:2c1a7f0f-57bc-4cf9-a320-b65e8adaed21",
+          "finding_id": "A002_match_presence:b36855c6-806b-46d7-8dad-e87dc2053f0e",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -9298,7 +10172,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "2c1a7f0f-57bc-4cf9-a320-b65e8adaed21",
+          "requirement_id": "b36855c6-806b-46d7-8dad-e87dc2053f0e",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -9528,7 +10402,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:2c1a7f0f-57bc-4cf9-a320-b65e8adaed21",
+          "finding_id": "C001_qualification_insufficient:unmatched:b36855c6-806b-46d7-8dad-e87dc2053f0e",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -9536,7 +10410,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "2c1a7f0f-57bc-4cf9-a320-b65e8adaed21",
+          "requirement_id": "b36855c6-806b-46d7-8dad-e87dc2053f0e",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -9570,7 +10444,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:2c1a7f0f-57bc-4cf9-a320-b65e8adaed21",
+          "finding_id": "C004_definitive_negative:unmatched:b36855c6-806b-46d7-8dad-e87dc2053f0e",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -9578,7 +10452,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "2c1a7f0f-57bc-4cf9-a320-b65e8adaed21",
+          "requirement_id": "b36855c6-806b-46d7-8dad-e87dc2053f0e",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -9752,7 +10626,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "C003_invalid_bid_attention"
+      ],
+      "focus_rules_evaluated": [
         "C003_invalid_bid_attention"
       ],
       "findings": [
@@ -9855,7 +10763,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:33dee133-834a-4101-83bd-d97aacf9c483",
+          "finding_id": "A002_match_presence:7c29f561-7ab5-4b33-a574-96865945d441",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -9863,7 +10771,7 @@
           "status": "fail",
           "message": "要求「reference:invalid_bid」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "33dee133-834a-4101-83bd-d97aacf9c483",
+          "requirement_id": "7c29f561-7ab5-4b33-a574-96865945d441",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -9897,7 +10805,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A005_high_priority_uncovered:nomatch:33dee133-834a-4101-83bd-d97aacf9c483",
+          "finding_id": "A005_high_priority_uncovered:nomatch:7c29f561-7ab5-4b33-a574-96865945d441",
           "rule_id": "A005_high_priority_uncovered",
           "rule_name": "高优先级要求未覆盖",
           "category": "coverage",
@@ -9905,7 +10813,7 @@
           "status": "unknown",
           "message": "高优先级要求「reference:invalid_bid」尚无匹配，无法确认覆盖。",
           "remediation": "先运行材料匹配。",
-          "requirement_id": "33dee133-834a-4101-83bd-d97aacf9c483",
+          "requirement_id": "7c29f561-7ab5-4b33-a574-96865945d441",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -10093,7 +11001,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:33dee133-834a-4101-83bd-d97aacf9c483",
+          "finding_id": "C001_qualification_insufficient:unmatched:7c29f561-7ab5-4b33-a574-96865945d441",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -10101,7 +11009,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:invalid_bid」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "33dee133-834a-4101-83bd-d97aacf9c483",
+          "requirement_id": "7c29f561-7ab5-4b33-a574-96865945d441",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -10121,7 +11029,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C003_invalid_bid_attention:33dee133-834a-4101-83bd-d97aacf9c483",
+          "finding_id": "C003_invalid_bid_attention:7c29f561-7ab5-4b33-a574-96865945d441",
           "rule_id": "C003_invalid_bid_attention",
           "rule_name": "废标条款关注",
           "category": "qualification_risk",
@@ -10129,7 +11037,7 @@
           "status": "fail",
           "message": "存在废标/无效投标相关要求「reference:invalid_bid」，须人工重点核对。",
           "remediation": "逐条核对响应材料是否触碰废标条款；引擎不自动下结论。",
-          "requirement_id": "33dee133-834a-4101-83bd-d97aacf9c483",
+          "requirement_id": "7c29f561-7ab5-4b33-a574-96865945d441",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -10317,7 +11225,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -10406,7 +11348,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:8562b17b-cf1c-47bf-912e-51ba4a9453c2",
+          "finding_id": "A001_mandatory_coverage:05093c49-c76a-4325-912f-88317be1d2a6",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -10414,13 +11356,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "8562b17b-cf1c-47bf-912e-51ba4a9453c2",
+          "requirement_id": "05093c49-c76a-4325-912f-88317be1d2a6",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:8562b17b-cf1c-47bf-912e-51ba4a9453c2",
+          "finding_id": "A002_match_presence:05093c49-c76a-4325-912f-88317be1d2a6",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -10428,7 +11370,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "8562b17b-cf1c-47bf-912e-51ba4a9453c2",
+          "requirement_id": "05093c49-c76a-4325-912f-88317be1d2a6",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -10658,7 +11600,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:8562b17b-cf1c-47bf-912e-51ba4a9453c2",
+          "finding_id": "C001_qualification_insufficient:unmatched:05093c49-c76a-4325-912f-88317be1d2a6",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -10666,7 +11608,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "8562b17b-cf1c-47bf-912e-51ba4a9453c2",
+          "requirement_id": "05093c49-c76a-4325-912f-88317be1d2a6",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -10700,7 +11642,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:8562b17b-cf1c-47bf-912e-51ba4a9453c2",
+          "finding_id": "C004_definitive_negative:unmatched:05093c49-c76a-4325-912f-88317be1d2a6",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -10708,7 +11650,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "8562b17b-cf1c-47bf-912e-51ba4a9453c2",
+          "requirement_id": "05093c49-c76a-4325-912f-88317be1d2a6",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -10882,7 +11824,41 @@
         "C004_definitive_negative",
         "C005_structured_thresholds"
       ],
+      "rules_executed": [
+        "E001_status_vs_links",
+        "E002_review_lifecycle",
+        "E003_date_conflicts",
+        "E004_exclusive_match_statuses",
+        "E005_project_ownership",
+        "E006_gap_match_definitive_draft",
+        "A001_mandatory_coverage",
+        "A002_match_presence",
+        "A003_tender_evidence_link",
+        "A004_uncovered_match_status",
+        "A005_high_priority_uncovered",
+        "A006_draft_missing_mandatory",
+        "D001_unevidenced_manual",
+        "D002_forbidden_claims",
+        "D003_citation_integrity",
+        "D004_placeholders",
+        "D005_empty_or_short",
+        "D006_strong_claim_without_support",
+        "D007_cross_project_source",
+        "B001_quote_grounding",
+        "B002_company_doc_scope",
+        "B003_supported_needs_quote",
+        "B004_dangling_evidence",
+        "B005_conflicting_evidence_citation",
+        "C001_qualification_insufficient",
+        "C002_high_risk_unconfirmed",
+        "C003_invalid_bid_attention",
+        "C004_definitive_negative",
+        "C005_structured_thresholds"
+      ],
       "focus_rule_ids": [
+        "A001_mandatory_coverage"
+      ],
+      "focus_rules_evaluated": [
         "A001_mandatory_coverage"
       ],
       "findings": [
@@ -10971,7 +11947,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "A001_mandatory_coverage:237e9b58-f0bb-4a77-b0da-03c79af1d256",
+          "finding_id": "A001_mandatory_coverage:13c92465-70da-49a4-b64a-13013e49835b",
           "rule_id": "A001_mandatory_coverage",
           "rule_name": "强制要求匹配覆盖",
           "category": "coverage",
@@ -10979,13 +11955,13 @@
           "status": "fail",
           "message": "强制要求「reference:mandatory」尚无企业材料匹配记录。",
           "remediation": "在材料匹配工作区对该要求发起匹配。",
-          "requirement_id": "237e9b58-f0bb-4a77-b0da-03c79af1d256",
+          "requirement_id": "13c92465-70da-49a4-b64a-13013e49835b",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
         },
         {
-          "finding_id": "A002_match_presence:237e9b58-f0bb-4a77-b0da-03c79af1d256",
+          "finding_id": "A002_match_presence:13c92465-70da-49a4-b64a-13013e49835b",
           "rule_id": "A002_match_presence",
           "rule_name": "要求匹配存在性",
           "category": "coverage",
@@ -10993,7 +11969,7 @@
           "status": "fail",
           "message": "要求「reference:mandatory」尚无 active 匹配。",
           "remediation": "运行企业材料匹配或确认该要求不适用。",
-          "requirement_id": "237e9b58-f0bb-4a77-b0da-03c79af1d256",
+          "requirement_id": "13c92465-70da-49a4-b64a-13013e49835b",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -11223,7 +12199,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C001_qualification_insufficient:unmatched:237e9b58-f0bb-4a77-b0da-03c79af1d256",
+          "finding_id": "C001_qualification_insufficient:unmatched:13c92465-70da-49a4-b64a-13013e49835b",
           "rule_id": "C001_qualification_insufficient",
           "rule_name": "资格类材料不足",
           "category": "qualification_risk",
@@ -11231,7 +12207,7 @@
           "status": "unknown",
           "message": "资格相关要求「reference:mandatory」尚无匹配结果，无法判定材料是否充分。",
           "remediation": "先运行材料匹配再复查。",
-          "requirement_id": "237e9b58-f0bb-4a77-b0da-03c79af1d256",
+          "requirement_id": "13c92465-70da-49a4-b64a-13013e49835b",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null
@@ -11265,7 +12241,7 @@
           "metadata_json": null
         },
         {
-          "finding_id": "C004_definitive_negative:unmatched:237e9b58-f0bb-4a77-b0da-03c79af1d256",
+          "finding_id": "C004_definitive_negative:unmatched:13c92465-70da-49a4-b64a-13013e49835b",
           "rule_id": "C004_definitive_negative",
           "rule_name": "资格/强制要求明确负面匹配",
           "category": "qualification_risk",
@@ -11273,7 +12249,7 @@
           "status": "unknown",
           "message": "资格/强制要求「reference:mandatory」尚无匹配，无法判定负面结论。",
           "remediation": null,
-          "requirement_id": "237e9b58-f0bb-4a77-b0da-03c79af1d256",
+          "requirement_id": "13c92465-70da-49a4-b64a-13013e49835b",
           "match_id": null,
           "draft_id": null,
           "metadata_json": null

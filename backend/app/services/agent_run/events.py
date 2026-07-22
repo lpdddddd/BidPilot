@@ -7,10 +7,13 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.agent import AgentStep, ToolCall
+from app.models.agent import AgentRun, AgentStep, ToolCall
 from app.models.enums import AgentRunStatus
+
+_MAX_STEP_INDEX_RETRIES = 5
 
 
 def _now() -> datetime:
@@ -18,13 +21,18 @@ def _now() -> datetime:
 
 
 def next_step_index(db: Session, agent_run_id: UUID) -> int:
+    """Allocate the next step_index under a row lock on the agent run.
+
+    ``coalesce(max(...), -1)`` already handles empty rows; do not use
+    ``or -1`` because step_index 0 is falsy and would incorrectly reset.
+    """
+    # Serialize allocators for the same run (concurrent record_step / resume).
+    db.execute(select(AgentRun.id).where(AgentRun.id == agent_run_id).with_for_update())
     current = db.scalar(
         select(func.coalesce(func.max(AgentStep.step_index), -1)).where(
             AgentStep.agent_run_id == agent_run_id
         )
     )
-    # coalesce(..., -1) already handles empty rows; do not use `or -1`
-    # because step_index 0 is falsy and would incorrectly reset to 0.
     return int(current) + 1
 
 
@@ -39,21 +47,37 @@ def record_step(
     error_message: str | None = None,
     step_index: int | None = None,
 ) -> AgentStep:
-    idx = step_index if step_index is not None else next_step_index(db, agent_run_id)
-    step = AgentStep(
-        agent_run_id=agent_run_id,
-        step_index=idx,
-        node_name=node_name,
-        status=status,
-        input_json=input_json,
-        output_json=output_json,
-        error_message=error_message,
-        started_at=_now(),
-        finished_at=_now(),
-    )
-    db.add(step)
-    db.flush()
-    return step
+    last_err: Exception | None = None
+    for attempt in range(_MAX_STEP_INDEX_RETRIES):
+        idx = (
+            step_index
+            if step_index is not None and attempt == 0
+            else next_step_index(db, agent_run_id)
+        )
+        try:
+            with db.begin_nested():
+                step = AgentStep(
+                    agent_run_id=agent_run_id,
+                    step_index=idx,
+                    node_name=node_name,
+                    status=status,
+                    input_json=input_json,
+                    output_json=output_json,
+                    error_message=error_message,
+                    started_at=_now(),
+                    finished_at=_now(),
+                )
+                db.add(step)
+                db.flush()
+            return step
+        except IntegrityError as exc:
+            last_err = exc
+            if step_index is not None:
+                # Explicit index collision — do not silently renumber.
+                raise
+            continue
+    assert last_err is not None
+    raise last_err
 
 
 def record_tool_call(

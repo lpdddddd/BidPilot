@@ -62,11 +62,7 @@ class MandatoryRequirementCoverageRule:
 
         for req in mandatory:
             matches = ctx.matches_by_requirement_id.get(req.id) or []
-            positive = [
-                m
-                for m in matches
-                if enum_value(m.status) in POSITIVE_MATCH_STATUSES
-            ]
+            positive = [m for m in matches if enum_value(m.status) in POSITIVE_MATCH_STATUSES]
             if positive:
                 findings.append(
                     make_finding(
@@ -243,9 +239,7 @@ class UncoveredMatchStatusRule:
     rule_id = "A004_uncovered_match_status"
     name = "匹配仍为缺口/冲突"
     category = ComplianceRuleCategory.coverage
-    description = (
-        "active 匹配仍处于 insufficient_evidence / conflicting_evidence 时记为未覆盖。"
-    )
+    description = "active 匹配仍处于 insufficient_evidence / conflicting_evidence 时记为未覆盖。"
     default_severity = ComplianceSeverity.error
 
     def evaluate(self, ctx: ComplianceContext) -> list[ComplianceFinding]:
@@ -310,11 +304,7 @@ class HighPriorityUncoveredRule:
 
     def evaluate(self, ctx: ComplianceContext) -> list[ComplianceFinding]:
         findings: list[ComplianceFinding] = []
-        targets = [
-            r
-            for r in ctx.requirements
-            if enum_value(r.risk_level) in HIGH_RISK_LEVELS
-        ]
+        targets = [r for r in ctx.requirements if enum_value(r.risk_level) in HIGH_RISK_LEVELS]
         if not targets:
             findings.append(
                 make_finding(
@@ -331,9 +321,7 @@ class HighPriorityUncoveredRule:
 
         for req in targets:
             matches = ctx.matches_by_requirement_id.get(req.id) or []
-            positive = [
-                m for m in matches if enum_value(m.status) in POSITIVE_MATCH_STATUSES
-            ]
+            positive = [m for m in matches if enum_value(m.status) in POSITIVE_MATCH_STATUSES]
             if positive:
                 findings.append(
                     make_finding(
@@ -356,9 +344,7 @@ class HighPriorityUncoveredRule:
                         category=self.category,
                         severity=ComplianceSeverity.warning,
                         status=ComplianceFindingStatus.unknown,
-                        message=(
-                            f"高优先级要求「{req.title}」尚无匹配，无法确认覆盖。"
-                        ),
+                        message=(f"高优先级要求「{req.title}」尚无匹配，无法确认覆盖。"),
                         finding_suffix=f"nomatch:{req.id}",
                         requirement_id=req.id,
                         remediation="先运行材料匹配。",

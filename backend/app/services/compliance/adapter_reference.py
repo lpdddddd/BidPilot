@@ -276,14 +276,8 @@ def evaluate_adapted_sample(
     meta = ctx.metadata if isinstance(ctx.metadata, dict) else {}
     sample = sample or {}
     ref = sample.get("reference_output") or meta.get("reference_output") or {}
-    rule_type = str(
-        (sample.get("input") or {}).get("rule_type")
-        or meta.get("rule_type")
-        or ""
-    )
-    check_id = str(
-        (sample.get("input") or {}).get("check_id") or meta.get("check_id") or ""
-    )
+    rule_type = str((sample.get("input") or {}).get("rule_type") or meta.get("rule_type") or "")
+    check_id = str((sample.get("input") or {}).get("check_id") or meta.get("check_id") or "")
     ref_verdict = ref.get("verdict")
     focus_ids = relevant_rule_ids(rule_type, check_id)
 
@@ -292,7 +286,9 @@ def evaluate_adapted_sample(
     # Prefer canonical E003 id present in this engine version
     executed = list(stats.get("rule_ids") or [])
     focus_resolved = [rid for rid in focus_ids if rid in executed] or [
-        rid for rid in executed if any(f in rid for f in ("A001", "C003", "E003"))
+        rid
+        for rid in executed
+        if any(f in rid for f in ("A001", "C003", "E003"))
         and (
             (rule_type == "mandatory" and "A001" in rid)
             or (rule_type == "invalid_bid" and "C003" in rid)
@@ -310,6 +306,7 @@ def evaluate_adapted_sample(
         )
 
     finding_dicts = [_finding_to_dict(f) for f in findings]
+    focus = focus_resolved or focus_ids
     return {
         "sample_id": sample.get("sample_id") or meta.get("sample_id"),
         "rule_type": rule_type,
@@ -321,7 +318,9 @@ def evaluate_adapted_sample(
         "agreement": agreement,
         "mismatch_reason": mismatch_reason,
         "rule_ids_executed": executed,
-        "focus_rule_ids": focus_resolved or focus_ids,
+        "rules_executed": executed,
+        "focus_rule_ids": focus,
+        "focus_rules_evaluated": focus,
         "findings": finding_dicts,
         "severities": [f["severity"] for f in finding_dicts],
         "categories": [f["category"] for f in finding_dicts],
@@ -342,7 +341,9 @@ def evaluate_sample_online_parity(
 
 # Conservative auto-label correction when reference labels disagree with formal engine
 # semantics (keyword-era labels). Applied by rule_type only — never by sample_id.
-def maybe_correct_reference_verdict(rule_type: str, current: str | None, engine_verdict: str) -> str | None:
+def maybe_correct_reference_verdict(
+    rule_type: str, current: str | None, engine_verdict: str
+) -> str | None:
     """Return a corrected label when the auto_reference keyword-era label is wrong."""
     if current is None:
         return None

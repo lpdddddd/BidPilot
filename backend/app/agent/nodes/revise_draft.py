@@ -25,14 +25,10 @@ def revise_draft(state: AgentState) -> AgentState:
     meta = dict(state.get("metadata") or {})
     findings = list(state.get("draft_findings") or [])
     remediations = [
-        f.get("remediation")
-        for f in findings
-        if isinstance(f, dict) and f.get("remediation")
+        f.get("remediation") for f in findings if isinstance(f, dict) and f.get("remediation")
     ]
     failing_rules = [
-        f.get("rule_id")
-        for f in findings
-        if isinstance(f, dict) and f.get("status") == "fail"
+        f.get("rule_id") for f in findings if isinstance(f, dict) and f.get("status") == "fail"
     ]
     meta["remediation_hints"] = remediations[:20]
     meta["revise_from_rule_ids"] = [r for r in failing_rules if r][:20]
@@ -54,15 +50,16 @@ def revise_draft(state: AgentState) -> AgentState:
     meta["force_risk_only_draft"] = bool(meta.get("force_risk_only_draft") or risk_only)
 
     # Clear previous force_draft_validation fail on revise unless still forced.
-    if meta.get("force_draft_validation") is False and meta.get("revise_should_pass"):
-        if count >= int(meta.get("revise_pass_after", 1)):
-            meta["force_draft_validation"] = True
+    if (
+        meta.get("force_draft_validation") is False
+        and meta.get("revise_should_pass")
+        and count >= int(meta.get("revise_pass_after", 1))
+    ):
+        meta["force_draft_validation"] = True
 
     # Reset validation so the next validate_draft re-runs formal check.
     state["draft_validation_ok"] = None
-    completed = [
-        n for n in (state.get("completed_nodes") or []) if n != NODE_VALIDATE
-    ]
+    completed = [n for n in (state.get("completed_nodes") or []) if n != NODE_VALIDATE]
     state["completed_nodes"] = completed
     state["metadata"] = meta
 
@@ -104,17 +101,14 @@ def revise_draft(state: AgentState) -> AgentState:
                 title=f"Agent 响应准备草稿 (修订 {count})",
                 idempotency_key=idem,
                 risk_only=bool(
-                    meta.get("force_risk_only_draft")
-                    or meta.get("forbid_satisfaction_claims")
+                    meta.get("force_risk_only_draft") or meta.get("forbid_satisfaction_claims")
                 ),
             ),
             llm=runtime.llm,
         )
     except Exception as exc:  # noqa: BLE001
         mark_fatal_error(state, f"revise failed: {exc}", "revise_error")
-        record_tool_event(
-            state, name="generate_proposal_draft", status="error", summary=str(exc)
-        )
+        record_tool_event(state, name="generate_proposal_draft", status="error", summary=str(exc))
         return touch(state)
 
     record_tool_event(

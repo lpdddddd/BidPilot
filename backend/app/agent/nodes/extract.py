@@ -66,15 +66,11 @@ def extract_requirements_node(state: AgentState) -> AgentState:
         )
     except LlmError as exc:
         mark_fatal_error(state, f"LLM schema/error: {exc}", "llm_schema_error")
-        record_tool_event(
-            state, name="extract_requirements", status="error", summary=str(exc)
-        )
+        record_tool_event(state, name="extract_requirements", status="error", summary=str(exc))
         return touch(state)
     except Exception as exc:  # noqa: BLE001
         mark_retryable_error(state, f"{type(exc).__name__}: {exc}", "extract_error")
-        record_tool_event(
-            state, name="extract_requirements", status="error", summary=str(exc)
-        )
+        record_tool_event(state, name="extract_requirements", status="error", summary=str(exc))
         return touch(state)
 
     record_tool_event(

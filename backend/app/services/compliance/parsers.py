@@ -6,18 +6,10 @@ import re
 from datetime import date, datetime
 from typing import Any
 
-_AMOUNT_RE = re.compile(
-    r"(?P<num>\d+(?:\.\d+)?)\s*(?P<unit>万元|万|元|￥|人民币)?"
-)
-_YEARS_RE = re.compile(
-    r"(?P<num>\d+(?:\.\d+)?)\s*(?P<unit>年|个月|月)?"
-)
-_QTY_RE = re.compile(
-    r"(?P<num>\d+(?:\.\d+)?)\s*(?P<unit>个|项|套|台|人|名)?"
-)
-_DATE_RE = re.compile(
-    r"(?P<y>20\d{2}|19\d{2})[年\-/\.](?P<m>\d{1,2})[月\-/\.](?P<d>\d{1,2})"
-)
+_AMOUNT_RE = re.compile(r"(?P<num>\d+(?:\.\d+)?)\s*(?P<unit>万元|万|元|￥|人民币)?")
+_YEARS_RE = re.compile(r"(?P<num>\d+(?:\.\d+)?)\s*(?P<unit>年|个月|月)?")
+_QTY_RE = re.compile(r"(?P<num>\d+(?:\.\d+)?)\s*(?P<unit>个|项|套|台|人|名)?")
+_DATE_RE = re.compile(r"(?P<y>20\d{2}|19\d{2})[年\-/\.](?P<m>\d{1,2})[月\-/\.](?P<d>\d{1,2})")
 _ISO_DATE_RE = re.compile(r"^(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})")
 
 

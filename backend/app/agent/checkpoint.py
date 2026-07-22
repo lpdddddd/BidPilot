@@ -269,9 +269,7 @@ class DbCheckpointStore:
     def list_for_run(self, agent_run_id: UUID) -> list[AgentCheckpoint]:
         rows = list(
             self.db.scalars(
-                select(AgentCheckpoint).where(
-                    AgentCheckpoint.agent_run_id == agent_run_id
-                )
+                select(AgentCheckpoint).where(AgentCheckpoint.agent_run_id == agent_run_id)
             ).all()
         )
 
@@ -282,4 +280,6 @@ class DbCheckpointStore:
             except (TypeError, ValueError):
                 return 0
 
-        return sorted(rows, key=lambda r: (_seq(r), r.created_at or datetime.min.replace(tzinfo=UTC)))
+        return sorted(
+            rows, key=lambda r: (_seq(r), r.created_at or datetime.min.replace(tzinfo=UTC))
+        )
