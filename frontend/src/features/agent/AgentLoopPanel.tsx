@@ -189,7 +189,8 @@ export default function AgentLoopPanel({ projectId }: Props) {
     mutationFn: () => retryAgentRun(projectId, runId!),
     onSuccess: (data) => {
       setActiveRunId(data.id);
-      setReconnectToken(0);
+      // Same run_id retry: keep timeline; bump token to re-subscribe SSE (like resume).
+      setReconnectToken((n) => n + 1);
       setStickToBottom(true);
       void queryClient.invalidateQueries({ queryKey: ["agent-run-latest", projectId] });
       void queryClient.invalidateQueries({

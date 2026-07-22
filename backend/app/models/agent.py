@@ -101,6 +101,7 @@ class AgentStep(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     step_index: Mapped[int] = mapped_column(Integer, nullable=False)
     node_name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="pending")
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     input_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     output_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     error_message: Mapped[str | None] = mapped_column(Text)

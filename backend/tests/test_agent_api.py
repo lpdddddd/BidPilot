@@ -146,7 +146,7 @@ def test_agent_api_happy_and_idempotency(client: TestClient, db: Session, monkey
     assert again.status_code == 201
     assert again.json()["id"] == run_id
 
-    got = client.get(f"/api/v1/agent-runs/{run_id}")
+    got = client.get(f"/api/v1/agent-runs/{run_id}?project_id={project.id}")
     assert got.status_code == 200
     events = client.get(f"/api/v1/projects/{project.id}/agent-runs/{run_id}/events")
     assert events.status_code == 200
@@ -160,7 +160,7 @@ def test_agent_api_happy_and_idempotency(client: TestClient, db: Session, monkey
     assert hist.status_code == 200
     assert hist.json()["total"] >= 1
     # SSE stub
-    stream = client.get(f"/api/v1/agent-runs/{run_id}/events/stream")
+    stream = client.get(f"/api/v1/agent-runs/{run_id}/events/stream?project_id={project.id}")
     assert stream.status_code == 200
 
 

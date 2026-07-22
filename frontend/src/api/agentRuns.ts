@@ -7,7 +7,7 @@ import type {
 } from "../types/api";
 import { API_BASE_URL, http } from "./http";
 
-/** Start returns run_id immediately (async). Keep timeout short — do not block for full graph. */
+/** Start/resume/retry return quickly (async). Keep timeout short — do not block for full graph. */
 const START_TIMEOUT_MS = 30_000;
 
 export async function startAgentRun(
@@ -27,12 +27,8 @@ export async function startAgentRun(
   return data;
 }
 
-export async function getAgentRun(runId: string): Promise<AgentRun> {
-  const { data } = await http.get<AgentRun>(`/api/v1/agent-runs/${runId}`);
-  return data;
-}
-
-export async function getProjectAgentRun(
+/** Project-scoped get; prefer over bare `/api/v1/agent-runs/{id}`. */
+export async function getAgentRun(
   projectId: string,
   runId: string,
 ): Promise<AgentRun> {
@@ -40,6 +36,14 @@ export async function getProjectAgentRun(
     `/api/v1/projects/${projectId}/agent-runs/${runId}`,
   );
   return data;
+}
+
+/** @deprecated Prefer getAgentRun(projectId, runId). */
+export async function getProjectAgentRun(
+  projectId: string,
+  runId: string,
+): Promise<AgentRun> {
+  return getAgentRun(projectId, runId);
 }
 
 export async function getLatestAgentRun(
@@ -117,6 +121,11 @@ export async function resumeAgentRun(
 ): Promise<AgentRun> {
   const { data } = await http.post<AgentRun>(
     `/api/v1/projects/${projectId}/agent-runs/${runId}/resume`,
+    undefined,
+    {
+      timeout: START_TIMEOUT_MS,
+      // async by default — do not pass sync=true
+    },
   );
   return data;
 }
@@ -127,6 +136,11 @@ export async function retryAgentRun(
 ): Promise<AgentRun> {
   const { data } = await http.post<AgentRun>(
     `/api/v1/projects/${projectId}/agent-runs/${runId}/retry`,
+    undefined,
+    {
+      timeout: START_TIMEOUT_MS,
+      // async by default — do not pass sync=true
+    },
   );
   return data;
 }

@@ -284,15 +284,19 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 
 ## Agent 实时执行时间线（第 11 步）
 
-异步跑图 + 真实 tool 生命周期 + SSE/轮询时间线 UI。详见 [`docs/agent_workflow.md`](docs/agent_workflow.md)（Step 11 节）。
+异步跑图 + 真实 tool / 节点生命周期 + SSE/轮询时间线 UI。详见 [`docs/agent_workflow.md`](docs/agent_workflow.md)（Step 11 节）。
 
-- **异步启动**：`POST` 持久化 `AgentRun` 后立即返回 `run_id` / `thread_id` / `events_stream_path`；图在 FastAPI `BackgroundTasks` 执行；测试可用 `?sync=true`；同 run 重复启动去重
-- **真实 tool 生命周期**：`run_tool()` 在调用前发 `tool_started`（短 commit），调用后发 `tool_completed`/`tool_failed`；真实 `started_at`/`finished_at`/`duration_ms`、`attempt`、`idempotency_key`；`ToolCall` ↔ `AgentStep`
-- **中途可见**：节点/工具事件短提交后，另一 Session 可读到 mid-run 事件
-- **SSE**：`GET .../agent-runs/{run_id}/events/stream`（`sequence` 作 event id；`Last-Event-ID` / `after_sequence`；catch-up → 等待；heartbeat 不占序号；终态关流；仅安全字段）；轮询回退同一事件模型
+- **异步启动**：`POST` 持久化 `AgentRun` 后立即返回 `run_id` / `thread_id` / `events_stream_path`；图在 FastAPI `BackgroundTasks` 执行；**resume / retry** 默认 prepare + 后台；测试可用 `?sync=true`；同 run 重复启动去重
+- **事件持久化失败**：`*_started` 失败则不执行 tool/node 体、rollback、run failed（仅 `safe_error_summary`）、抛 `EventPersistError`（不 suppress）
+- **节点生命周期**：每次 attempt 发 `node_started`（attempt 从 1）；成功 → `node_completed`；失败/可重试 → `node_failed` 后再试；未捕获 → `node_failed` + `run_failed`；失败 attempt 无 `node_completed`
+- **真实 tool 生命周期**：`run_tool()` 调用前 `tool_started`（短 commit），调用后 `tool_completed`/`tool_failed`；逻辑 `call_id` 跨重试稳定；每 attempt 一条物理 `ToolCall`；`idempotency_key` 含 attempt
+- **`safe_error_summary`**：状态/checkpoint/事件/API/SSE 不含 secrets、tokens、URLs、路径、traceback、prompts、原始 args
+- **中途可见**：节点/工具事件短提交后另一 Session 可读；真实图 mid-run 测试用 **barrier**（不用 sleep）
+- **项目作用域**：项目路径与裸 `/agent-runs`（必填 `project_id`）归属不匹配 → 404
+- **SSE**：`GET .../events/stream`；前端 backoff 重连 3 次 → 轮询 → 周期性 SSE 恢复；终态/unmount 清理；轮询回退同一事件模型
 - **前端**：`AgentLoopPanel` — 状态栏、执行时间线、结果、引用深链、恢复/重试
 - **进程重启**：checkpoint 持久化，但 BackgroundTasks **不会**自动续跑，需显式 resume
-- **尚未实现**：WebSocket、CoT 流式展示、Step 12 评测中心、LoRA
+- **尚未实现**：WebSocket、CoT 流式展示、评测中心、LoRA
 
 ## 可追溯响应准备草稿
 
@@ -340,7 +344,7 @@ cd backend && alembic upgrade head && pytest
 
 `.github/workflows/ci.yml`：
 
-- **frontend**：Node 20 — `npm ci` / lint / test / build
+- **frontend**：Node 20 — `npm ci` / lint / **`npm test` 跑 3 次** / build
 - **backend-postgres**：Postgres **16**（`postgres:16-alpine` service）— ruff、alembic upgrade/downgrade、Agent/合规/可见性等 pytest 后再跑全量 backend suite
 
 ## 数据流水线：从原始文件到 LLaMAFactory
@@ -439,7 +443,7 @@ llamafactory-cli train /absolute/path/to/bidpilot/training/llamafactory/configs/
 ## 后续开发顺序建议
 
 1. 人工审核沉淀 gold 需求 / Match / RAG / SFT
-2. Step 12 评测中心
+2. 评测中心
 3. 合规公开源采集规模化 + OCR
 4. 认证授权与组织权限
 5. 多 GPU QLoRA 正式训练

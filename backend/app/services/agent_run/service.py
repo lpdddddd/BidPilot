@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -45,11 +46,44 @@ from app.services.agent_run.events import (
     record_tool_started,
     status_from_str,
 )
+from app.services.agent_run.safe_errors import EventPersistError, safe_error_summary, safe_text
 from app.tools.agent_tools import RetrievalFn
+
+logger = logging.getLogger("bidpilot.agent")
 
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _sanitize_state_for_persist(state: dict[str, Any]) -> dict[str, Any]:
+    """Redact secrets / paths from error and tool_event fields before DB persist."""
+    out = {k: v for k, v in dict(state).items() if k != "lg_memory"}
+    if out.get("error_summary"):
+        out["error_summary"] = safe_error_summary(out["error_summary"])
+    errors = out.get("errors")
+    if isinstance(errors, list):
+        out["errors"] = [safe_error_summary(e) for e in errors]
+    warnings = out.get("warnings")
+    if isinstance(warnings, list):
+        out["warnings"] = [safe_text(w) or "" for w in warnings]
+    tool_events = out.get("tool_events")
+    if isinstance(tool_events, list):
+        cleaned: list[Any] = []
+        for ev in tool_events:
+            if isinstance(ev, dict):
+                item = dict(ev)
+                if item.get("summary") is not None:
+                    item["summary"] = safe_text(item.get("summary"))
+                cleaned.append(item)
+            else:
+                cleaned.append(ev)
+        out["tool_events"] = cleaned
+    return out
+
+
+def _state_json(state: dict[str, Any]) -> dict[str, Any]:
+    return json.loads(json.dumps(_sanitize_state_for_persist(state), default=str))
 
 
 def _safe_summary(state: AgentState) -> dict[str, Any]:
@@ -61,8 +95,8 @@ def _safe_summary(state: AgentState) -> dict[str, Any]:
         "compliance_summary": state.get("compliance_summary") or {},
         "draft_ids": state.get("draft_ids") or [],
         "draft_finding_count": len(state.get("draft_findings") or []),
-        "warnings": state.get("warnings") or [],
-        "errors": state.get("errors") or [],
+        "warnings": [safe_text(w) or "" for w in (state.get("warnings") or [])],
+        "errors": [safe_error_summary(e) for e in (state.get("errors") or [])],
         "requirement_count": len(state.get("requirements") or []),
         "match_count": len(state.get("requirement_matches") or []),
         "citation_count": len(state.get("citations") or []),
@@ -136,7 +170,7 @@ class AgentRunService:
             selected_document_ids=[str(x) for x in (req.selected_document_ids or [])],
             metadata=req.metadata or {},
         )
-        run.state_json = json.loads(json.dumps(state, default=str))
+        run.state_json = _state_json(state)  # type: ignore[arg-type]
         run.started_at = _now()
         run.status = AgentRunStatus.running
         self.db.commit()
@@ -159,7 +193,7 @@ class AgentRunService:
             )
         return self._continue_from_state(run.id, state, memory=MemorySaver())
 
-    def resume_run(self, run_id: UUID) -> AgentRunRead:
+    def resume_run(self, run_id: UUID, *, execute: bool = True) -> AgentRunRead:
         run = self.db.get(AgentRun, run_id)
         if run is None:
             raise HTTPException(status_code=404, detail="agent run not found")
@@ -197,7 +231,7 @@ class AgentRunService:
         state["interrupt_requested"] = False
         if state.get("status") == "waiting_for_user":
             state["status"] = "running"
-        run.state_json = json.loads(json.dumps(state, default=str))
+        run.state_json = _state_json(state)  # type: ignore[arg-type]
         run.status = AgentRunStatus.running
         record_event(
             self.db,
@@ -208,21 +242,13 @@ class AgentRunService:
             safe_summary="run resumed",
         )
         self.db.commit()
+        self.db.refresh(run)
 
-        # Prefer true LangGraph continue when a full MemorySaver dump exists;
-        # otherwise re-stream from START with completed_nodes skip.
-        lg_payload = self.checkpoints.load_lg_memory(str(run.id))
-        if lg_memory_is_full(lg_payload):
-            restored = restore_memory_saver(lg_payload)
-            return self._continue_from_state(
-                run.id,
-                state,
-                memory=restored,
-                continue_from_checkpointer=True,
-            )
-        return self._continue_from_state(run.id, state, memory=MemorySaver())
+        if not execute:
+            return self._to_read(run)
+        return self.continue_prepared_run(run_id, mode="resume")
 
-    def retry_run(self, run_id: UUID) -> AgentRunRead:
+    def retry_run(self, run_id: UUID, *, execute: bool = True) -> AgentRunRead:
         """Controlled retry on the same run_id.
 
         Semantics:
@@ -256,15 +282,43 @@ class AgentRunService:
                 n for n in (state.get("completed_nodes") or []) if n != failed_node
             ]
 
-        run.state_json = json.loads(json.dumps(state, default=str))
+        run.state_json = _state_json(state)  # type: ignore[arg-type]
         run.status = AgentRunStatus.running
         run.error_code = None
         run.error_summary = None
         run.error_message = None
         self.db.commit()
+        self.db.refresh(run)
 
-        # Retry always re-injects AgentState from START with completed_nodes skip
-        # (failed node removed). Fresh MemorySaver; lg_memory is observational.
+        if not execute:
+            return self._to_read(run)
+        return self.continue_prepared_run(run_id, mode="retry")
+
+    def continue_prepared_run(self, run_id: UUID, *, mode: str = "resume") -> AgentRunRead:
+        """Continue a run already prepared (status=running, state_json ready).
+
+        Does not emit another ``run_resumed`` event — callers must prepare first
+        via ``resume_run(execute=False)`` / ``retry_run(execute=False)``.
+        """
+        run = self.db.get(AgentRun, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="agent run not found")
+        state: AgentState = dict(run.state_json or {})  # type: ignore[assignment]
+        state.pop("lg_memory", None)  # type: ignore[arg-type]
+
+        if mode == "resume":
+            # Prefer true LangGraph continue when a full MemorySaver dump exists;
+            # otherwise re-stream from START with completed_nodes skip.
+            lg_payload = self.checkpoints.load_lg_memory(str(run.id))
+            if lg_memory_is_full(lg_payload):
+                restored = restore_memory_saver(lg_payload)
+                return self._continue_from_state(
+                    run.id,
+                    state,
+                    memory=restored,
+                    continue_from_checkpointer=True,
+                )
+        # Retry (and resume without full lg_memory) re-injects AgentState from START.
         return self._continue_from_state(run.id, state, memory=MemorySaver())
 
     def _continue_from_state(
@@ -297,6 +351,7 @@ class AgentRunService:
             llm=self.llm,
             retrieval_fn=self.retrieval_fn,
             commit_fn=lambda: commit_visible(self.db),
+            rollback_fn=lambda: self.db.rollback(),
             persist_node_start=lambda **kw: record_node_started(
                 self.db,
                 agent_run_id=run.id,
@@ -321,7 +376,7 @@ class AgentRunService:
                 agent_run_id=run.id,
                 thread_id=thread_id,
                 node_name=node,
-                state=st,
+                state=_sanitize_state_for_persist(st),
                 lg_memory=serialize_memory_saver(memory),
             ),
         )
@@ -348,14 +403,38 @@ class AgentRunService:
 
             def _stream_updates(inp: AgentState | None) -> AgentState:
                 out_state = final_state
-                for event in graph.stream(inp, config=config, stream_mode="updates"):
-                    for node_name, partial in event.items():
-                        if isinstance(partial, dict):
-                            out_state = {**out_state, **partial}  # type: ignore[misc]
-                        self._after_node(run, node_name, out_state, memory=memory)
-                        if out_state.get("interrupt_requested"):
-                            raise AgentInterrupt(node_name)
-                return out_state
+                try:
+                    for event in graph.stream(inp, config=config, stream_mode="updates"):
+                        for node_name, partial in event.items():
+                            if isinstance(partial, dict):
+                                out_state = {**out_state, **partial}  # type: ignore[misc]
+                            self._after_node(run, node_name, out_state, memory=memory)
+                            if out_state.get("interrupt_requested"):
+                                raise AgentInterrupt(node_name)
+                    return out_state
+                except AgentInterrupt:
+                    raise
+                except EventPersistError:
+                    raise
+                except Exception as exc:
+                    # Finish current node as failed if started, then re-raise.
+                    if runtime and runtime.current_node_name:
+                        try:
+                            record_node_finished(
+                                self.db,
+                                agent_run_id=run.id,
+                                node_name=runtime.current_node_name,
+                                status="failed",
+                                agent_step_id=runtime.current_step_id,
+                                error_message=safe_error_summary(exc),
+                                attempt=runtime.current_node_attempt,
+                            )
+                            commit_visible(self.db)
+                        except Exception:  # noqa: BLE001
+                            self.db.rollback()
+                        runtime.current_node_name = None
+                        runtime.current_step_id = None
+                    raise
 
             try:
                 try:
@@ -365,7 +444,7 @@ class AgentRunService:
                     if (
                         continue_from_checkpointer
                         and stream_input is None
-                        and not isinstance(stream_exc, AgentInterrupt)
+                        and not isinstance(stream_exc, (AgentInterrupt, EventPersistError))
                     ):
                         memory = MemorySaver()
                         graph = build_graph(checkpointer=memory)
@@ -381,13 +460,13 @@ class AgentRunService:
                 # Node already persisted via _after_node in the stream loop;
                 # refresh status fields without a duplicate AgentStep.
                 run.current_node = exc.node
-                run.state_json = json.loads(json.dumps(final_state, default=str))
+                run.state_json = _state_json(final_state)  # type: ignore[arg-type]
                 run.status = AgentRunStatus.waiting_for_user
                 self.checkpoints.save(
                     agent_run_id=run.id,
                     thread_id=thread_id,
                     node_name=exc.node,
-                    state=dict(final_state),
+                    state=_sanitize_state_for_persist(dict(final_state)),
                     lg_memory=serialize_memory_saver(memory),
                 )
                 self._persist_run(run, final_state)
@@ -402,9 +481,14 @@ class AgentRunService:
         except HTTPException:
             raise
         except Exception as exc:  # noqa: BLE001
+            summary = safe_error_summary(
+                exc,
+                error_type=type(exc).__name__,
+                error_code=getattr(exc, "code", None) or "execute_error",
+            )
             state["status"] = "failed"
-            state["error_code"] = "execute_error"
-            state["error_summary"] = f"{type(exc).__name__}: {exc}"
+            state["error_code"] = getattr(exc, "code", None) or "execute_error"
+            state["error_summary"] = summary
             self._persist_run(run, state)
             self.db.commit()
             self.db.refresh(run)
@@ -431,23 +515,61 @@ class AgentRunService:
             runtime = None
         started = runtime is not None and runtime.current_node_name == node_name
         if started:
-            node_status = "failed" if state.get("status") == "failed" else "succeeded"
+            outcome = getattr(runtime, "node_attempt_outcome", None) if runtime else None
+            if outcome == "succeeded":
+                node_status = "succeeded"
+            elif (
+                outcome == "failed"
+                or state.get("last_error_retryable")
+                or state.get("status") == "failed"
+            ):
+                node_status = "failed"
+            elif node_name in (state.get("completed_nodes") or []):
+                node_status = "succeeded"
+            else:
+                # Node returned without finish_node and without marking error —
+                # treat as failed attempt.
+                node_status = "failed"
             finish_kw = {
                 "node_name": node_name,
                 "status": node_status,
                 "agent_step_id": runtime.current_step_id,
+                "attempt": getattr(runtime, "current_node_attempt", 1),
                 "output_json": {
                     "status": state.get("status"),
                     "warnings": state.get("warnings"),
                     "route_decision": state.get("route_decision"),
                     "completed_nodes": state.get("completed_nodes"),
                 },
-                "error_message": state.get("error_summary"),
+                "error_message": (
+                    safe_error_summary(state.get("error_summary"))
+                    if state.get("error_summary")
+                    else None
+                ),
             }
-            if runtime.persist_node_finish:
-                runtime.persist_node_finish(**finish_kw)
-            else:
-                record_node_finished(self.db, agent_run_id=run.id, **finish_kw)
+            try:
+                if runtime.persist_node_finish:
+                    runtime.persist_node_finish(**finish_kw)
+                else:
+                    record_node_finished(self.db, agent_run_id=run.id, **finish_kw)
+            except Exception as exc:
+                logger.exception("node finish persist failed for %s", node_name)
+                summary = safe_error_summary(
+                    exc,
+                    error_type=type(exc).__name__,
+                    error_code="event_persist_failed",
+                )
+                state["status"] = "failed"
+                state["error_code"] = "event_persist_failed"
+                state["error_summary"] = summary
+                run.status = AgentRunStatus.failed
+                run.error_code = "event_persist_failed"
+                run.error_summary = summary
+                run.error_message = summary
+                if runtime is not None:
+                    runtime.current_step_id = None
+                    runtime.current_node_name = None
+                raise EventPersistError(summary) from exc
         if runtime is not None:
             runtime.current_step_id = None
             runtime.current_node_name = None
@@ -456,27 +578,29 @@ class AgentRunService:
             agent_run_id=run.id,
             thread_id=str(run.id),
             node_name=node_name,
-            state=dict(state),
+            state=_sanitize_state_for_persist(dict(state)),
             next_node=None,
             lg_memory=lg_memory,
         )
         run.current_node = node_name
-        run.state_json = json.loads(json.dumps(state, default=str))
+        run.state_json = _state_json(state)  # type: ignore[arg-type]
         run.status = status_from_str(str(state.get("status") or "running"))
         self.db.flush()
         # Mid-run visibility: independent sessions must see node_completed now.
         commit_visible(self.db)
 
     def _persist_run(self, run: AgentRun, state: AgentState) -> None:
-        run.state_json = json.loads(json.dumps(state, default=str))
+        run.state_json = _state_json(state)  # type: ignore[arg-type]
         run.current_node = state.get("current_node")
         run.graph_version = state.get("graph_version") or GRAPH_VERSION
         run.output_summary_json = _safe_summary(state)
         previous = run.status
         run.status = status_from_str(str(state.get("status") or "running"))
         run.error_code = state.get("error_code")
-        run.error_summary = state.get("error_summary")
-        run.error_message = state.get("error_summary")
+        run.error_summary = (
+            safe_error_summary(state.get("error_summary")) if state.get("error_summary") else None
+        )
+        run.error_message = run.error_summary
         if run.status in {
             AgentRunStatus.completed,
             AgentRunStatus.completed_with_warnings,

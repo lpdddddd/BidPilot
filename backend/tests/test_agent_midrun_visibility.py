@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
@@ -91,7 +90,6 @@ def test_tool_started_visible_before_tool_completes(db: Session, engine):
             token = set_runtime(runtime)
 
             def body():
-                time.sleep(0.01)
                 return "hits"
 
             return run_tool(state, "search_evidence", body, summary_on_ok=lambda x: x)
@@ -160,7 +158,7 @@ def test_record_tool_start_finish_times_differ(db: Session):
     db.flush()
     row = record_tool_started(db, agent_run_id=run.id, tool_name="t", node_name="n")
     db.commit()
-    time.sleep(0.02)
+    # events.record_tool_finished guarantees finished_at > started_at without sleep.
     record_tool_finished(db, agent_run_id=run.id, tool_call_id=row.id, status="ok", summary="done")
     db.commit()
     db.refresh(row)
@@ -184,6 +182,7 @@ def test_node_started_visible_before_finish(db: Session, engine):
     run_id = run.id
 
     gate = threading.Event()
+    release = threading.Event()
 
     def worker():
         s = SessionLocal()
@@ -191,7 +190,7 @@ def test_node_started_visible_before_finish(db: Session, engine):
             step = record_node_started(s, agent_run_id=run_id, node_name="match")
             s.commit()
             gate.set()
-            time.sleep(0.05)
+            assert release.wait(timeout=10)
             from app.services.agent_run.events import record_node_finished
 
             record_node_finished(
@@ -221,4 +220,5 @@ def test_node_started_visible_before_finish(db: Session, engine):
             assert peer.scalar(select(AgentStep).where(AgentStep.agent_run_id == run_id))
         finally:
             peer.close()
+        release.set()
         fut.result(timeout=10)

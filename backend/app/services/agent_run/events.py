@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.agent import AgentEvent, AgentRun, AgentStep, ToolCall
 from app.models.enums import AgentRunStatus
+from app.services.agent_run.safe_errors import safe_error_summary, safe_text
 
 _MAX_SEQUENCE_RETRIES = 8
 
@@ -28,19 +29,6 @@ EVENT_RUN_FAILED = "run_failed"
 
 def _now() -> datetime:
     return datetime.now(UTC)
-
-
-def _safe_text(value: str | None, *, limit: int = 500) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text:
-        return None
-    secret_markers = ("password=", "secret=", "api_key", "postgresql://", "private_key")
-    lowered = text.lower()
-    if any(k in lowered for k in secret_markers):
-        return "[redacted]"
-    return text[:limit]
 
 
 def commit_visible(db: Session) -> None:
@@ -108,7 +96,7 @@ def record_event(
                     tool_name=tool_name,
                     status=status,
                     duration_ms=duration_ms,
-                    safe_summary=_safe_text(safe_summary),
+                    safe_summary=safe_text(safe_summary),
                     agent_step_id=agent_step_id,
                     tool_call_id=tool_call_id,
                     call_id=call_id,
@@ -155,10 +143,12 @@ def record_node_started(
     *,
     agent_run_id: UUID,
     node_name: str,
+    attempt: int = 1,
     idempotency_key: str | None = None,
 ) -> AgentStep:
     """Create AgentStep (running) + ``node_started`` event."""
-    key = idempotency_key or f"node_started:{agent_run_id}:{node_name}:{uuid4().hex[:8]}"
+    attempt = max(1, int(attempt or 1))
+    key = idempotency_key or f"node_started:{agent_run_id}:{node_name}:a{attempt}:{uuid4().hex[:8]}"
     # If a running step already exists for this exact idempotency, reuse.
     existing_ev = db.scalar(
         select(AgentEvent).where(
@@ -181,6 +171,7 @@ def record_node_started(
                     step_index=idx,
                     node_name=node_name,
                     status="running",
+                    attempt=attempt,
                     started_at=_now(),
                 )
                 db.add(step)
@@ -192,7 +183,8 @@ def record_node_started(
                 node_name=node_name,
                 status="running",
                 agent_step_id=step.id,
-                safe_summary=f"node {node_name} started",
+                attempt=attempt,
+                safe_summary=f"node {node_name} started (attempt {attempt})",
                 idempotency_key=key,
             )
             return step
@@ -212,6 +204,7 @@ def record_node_finished(
     agent_step_id: UUID | None = None,
     output_json: dict[str, Any] | None = None,
     error_message: str | None = None,
+    attempt: int | None = None,
     idempotency_key: str | None = None,
 ) -> AgentEvent:
     """Update AgentStep and emit ``node_completed`` / ``node_failed``."""
@@ -236,15 +229,20 @@ def record_node_finished(
         final_status = "succeeded"
     else:
         final_status = status
+    resolved_attempt = attempt
+    if resolved_attempt is None and step is not None:
+        resolved_attempt = getattr(step, "attempt", None) or 1
     if step is not None:
         step.status = final_status
         step.output_json = output_json
-        step.error_message = _safe_text(error_message)
+        step.error_message = safe_text(error_message)
         step.finished_at = _now()
         db.flush()
     event_type = EVENT_NODE_FAILED if final_status == "failed" else EVENT_NODE_COMPLETED
     step_id = step.id if step else agent_step_id
-    key = idempotency_key or (f"{event_type}:{agent_run_id}:{step_id}" if step_id else None)
+    key = idempotency_key or (
+        f"{event_type}:{agent_run_id}:{step_id}:a{resolved_attempt or 1}" if step_id else None
+    )
     return record_event(
         db,
         agent_run_id=agent_run_id,
@@ -252,7 +250,8 @@ def record_node_finished(
         node_name=node_name,
         status=final_status,
         agent_step_id=step_id,
-        safe_summary=_safe_text(error_message) or f"node {node_name} {final_status}",
+        attempt=resolved_attempt,
+        safe_summary=safe_text(error_message) or f"node {node_name} {final_status}",
         payload_json={"output_status": (output_json or {}).get("status")} if output_json else None,
         idempotency_key=key,
     )
@@ -271,8 +270,9 @@ def record_tool_started(
     idempotency_key: str | None = None,
 ) -> ToolCall:
     """Create ToolCall + ``tool_started`` BEFORE the real tool invocation."""
+    attempt = max(1, int(attempt or 1))
     cid = call_id or uuid4().hex
-    key = idempotency_key or f"tool_started:{agent_run_id}:{cid}"
+    key = idempotency_key or f"tool_started:{agent_run_id}:{cid}:a{attempt}"
     existing = db.scalar(
         select(AgentEvent).where(
             AgentEvent.agent_run_id == agent_run_id,
@@ -316,7 +316,7 @@ def record_tool_started(
         tool_call_id=row.id,
         call_id=cid,
         attempt=attempt,
-        safe_summary=f"tool {tool_name} started",
+        safe_summary=f"tool {tool_name} started (attempt {attempt})",
         occurred_at=now,
         idempotency_key=key,
     )
@@ -354,9 +354,12 @@ def record_tool_finished(
 
         now = started + timedelta(milliseconds=1)
     duration_ms = max(0, int((now - started).total_seconds() * 1000))
-    safe = _safe_text(summary)
+    safe = safe_text(summary)
     if error_type and failed:
-        safe = _safe_text(f"{error_type}: {safe or ''}".strip(": "))
+        safe = safe_error_summary(
+            safe or "",
+            error_type=error_type,
+        )
 
     row.status = tool_status
     row.finished_at = now
@@ -366,7 +369,7 @@ def record_tool_finished(
     db.flush()
 
     end_type = EVENT_TOOL_FAILED if failed else EVENT_TOOL_COMPLETED
-    key = idempotency_key or f"{end_type}:{agent_run_id}:{row.id}"
+    key = idempotency_key or f"{end_type}:{agent_run_id}:{row.call_id}:a{row.attempt}:{row.id}"
     record_event(
         db,
         agent_run_id=agent_run_id,
@@ -469,7 +472,7 @@ def record_step(
             node_name=node_name,
             status=status,
             output_json=output_json,
-            error_message=_safe_text(error_message),
+            error_message=safe_text(error_message),
             started_at=_now(),
             finished_at=_now(),
         )
@@ -490,7 +493,7 @@ def record_step(
             node_name=node_name,
             status=status,
             agent_step_id=step.id,
-            safe_summary=_safe_text(error_message),
+            safe_summary=safe_text(error_message),
         )
         return step
     step = record_node_started(db, agent_run_id=agent_run_id, node_name=node_name)

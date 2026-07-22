@@ -15,7 +15,11 @@ import {
   toTimelineEvent,
 } from "./agentTimeline";
 
-const POLL_INTERVAL_MS = 2000;
+/** Exported for tests. */
+export const MAX_SSE_RECONNECT_ATTEMPTS = 3;
+export const SSE_BACKOFF_MS = [500, 1000, 2000] as const;
+export const POLL_INTERVAL_MS = 2000;
+export const SSE_RECOVERY_EVERY_N_POLLS = 5;
 
 type Options = {
   projectId: string;
@@ -45,28 +49,44 @@ export function useAgentEventStream({
   const eventsRef = useRef<TimelineEvent[]>([]);
   const esRef = useRef<EventSource | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const backoffRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closedRef = useRef(false);
+  const reconnectAttemptRef = useRef(0);
+  const pollTickRef = useRef(0);
   const onRunStatusRef = useRef(onRunStatus);
   onRunStatusRef.current = onRunStatus;
 
+  // Latest callbacks via refs to avoid stale closures in timers / ES handlers.
+  const connectSseRef = useRef<() => void>(() => {});
+  const startPollingRef = useRef<() => void>(() => {});
+  const handleTransportErrorRef = useRef<() => void>(() => {});
+
   const setEventsSafe = useCallback((updater: (prev: TimelineEvent[]) => TimelineEvent[]) => {
-    setEvents((prev) => {
-      const next = updater(prev);
-      eventsRef.current = next;
-      return next;
-    });
+    const next = updater(eventsRef.current);
+    eventsRef.current = next;
+    setEvents(next);
   }, []);
 
   const clearTimers = useCallback(() => {
+    if (backoffRef.current != null) {
+      clearTimeout(backoffRef.current);
+      backoffRef.current = null;
+    }
     if (pollRef.current != null) {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
     if (esRef.current) {
-      esRef.current.close();
+      const es = esRef.current;
       esRef.current = null;
+      es.close();
     }
   }, []);
+
+  const markCompleted = useCallback(() => {
+    clearTimers();
+    setConnection("completed");
+  }, [clearTimers]);
 
   const ingest = useCallback(
     (incoming: TimelineEvent[], opts?: { checkGap?: boolean }) => {
@@ -88,41 +108,120 @@ export function useAgentEventStream({
         const mapped = res.items.map((item) => toTimelineEvent(item, runId));
         ingest(mapped);
       } catch (err) {
-        setError((err as Error)?.message || "拉取事件失败");
+        setError((err as Error)?.message || "补齐事件失败");
       }
     },
     [ingest, projectId, runId],
   );
 
+  const catchUp = useCallback(async () => {
+    if (!runId || closedRef.current) return;
+    const after = lastSequence(eventsRef.current);
+    try {
+      const res = await getAgentEvents(projectId, runId, after >= 0 ? after : undefined);
+      if (closedRef.current) return;
+      const mapped = res.items.map((item) => toTimelineEvent(item, runId));
+      ingest(mapped);
+    } catch (err) {
+      if (!closedRef.current) {
+        setError((err as Error)?.message || "补齐事件失败");
+      }
+    }
+  }, [ingest, projectId, runId]);
+
   const startPolling = useCallback(() => {
     if (!runId || closedRef.current) return;
     clearTimers();
+    reconnectAttemptRef.current = 0;
+    pollTickRef.current = 0;
     setConnection("polling");
+
     const tick = () => {
       void (async () => {
         if (closedRef.current || !runId) return;
+        pollTickRef.current += 1;
+        if (pollTickRef.current % SSE_RECOVERY_EVERY_N_POLLS === 0) {
+          // Periodic SSE recovery — connectSse clears poll loop on entry.
+          connectSseRef.current();
+          return;
+        }
         const after = lastSequence(eventsRef.current);
         try {
-          const res = await getAgentEvents(projectId, runId, after);
+          const res = await getAgentEvents(projectId, runId, after >= 0 ? after : undefined);
+          if (closedRef.current) return;
           const mapped = res.items.map((item) => toTimelineEvent(item, runId));
           ingest(mapped);
         } catch (err) {
-          setError((err as Error)?.message || "轮询事件失败");
+          if (!closedRef.current) {
+            setError((err as Error)?.message || "轮询事件失败");
+          }
         }
       })();
     };
+
     tick();
     pollRef.current = setInterval(tick, POLL_INTERVAL_MS);
   }, [clearTimers, ingest, projectId, runId]);
 
+  const scheduleReconnect = useCallback(() => {
+    if (closedRef.current || !runId) return;
+    const attempt = reconnectAttemptRef.current;
+    const delay =
+      SSE_BACKOFF_MS[Math.min(attempt - 1, SSE_BACKOFF_MS.length - 1)] ??
+      SSE_BACKOFF_MS[SSE_BACKOFF_MS.length - 1]!;
+    if (backoffRef.current != null) {
+      clearTimeout(backoffRef.current);
+      backoffRef.current = null;
+    }
+    backoffRef.current = setTimeout(() => {
+      backoffRef.current = null;
+      if (closedRef.current) return;
+      connectSseRef.current();
+    }, delay);
+  }, [runId]);
+
+  const handleTransportError = useCallback(() => {
+    if (closedRef.current || !runId) return;
+    // Idempotent: onerror + named "error" may both fire; only the first owns the ES.
+    if (!esRef.current) return;
+    const es = esRef.current;
+    esRef.current = null;
+    es.close();
+
+    if (backoffRef.current != null) {
+      clearTimeout(backoffRef.current);
+      backoffRef.current = null;
+    }
+    if (pollRef.current != null) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+
+    setConnection("reconnecting");
+
+    void (async () => {
+      await catchUp();
+      if (closedRef.current) return;
+
+      if (reconnectAttemptRef.current < MAX_SSE_RECONNECT_ATTEMPTS) {
+        reconnectAttemptRef.current += 1;
+        scheduleReconnect();
+      } else {
+        startPollingRef.current();
+      }
+    })();
+  }, [catchUp, runId, scheduleReconnect]);
+
   const connectSse = useCallback(() => {
     if (!runId || closedRef.current) return;
     clearTimers();
-    setConnection((c) => (c === "live" ? "reconnecting" : "connecting"));
+
+    const isRetry = reconnectAttemptRef.current > 0;
+    setConnection(isRetry ? "reconnecting" : "connecting");
 
     const after = lastSequence(eventsRef.current);
     const url = buildAgentEventsStreamUrl(projectId, runId, {
-      afterSequence: after,
+      afterSequence: after >= 0 ? after : undefined,
       streamPath,
     });
 
@@ -130,7 +229,7 @@ export function useAgentEventStream({
     try {
       es = new EventSource(url);
     } catch {
-      startPolling();
+      startPollingRef.current();
       return;
     }
     esRef.current = es;
@@ -138,20 +237,20 @@ export function useAgentEventStream({
     const onAgentEvent = (msg: MessageEvent) => {
       const parsed = parseSseAgentEventData(String(msg.data || ""), runId);
       if (!parsed) return;
-      // Heartbeat never carries sequence into this handler.
       const prevLast = lastSequence(eventsRef.current);
       const gap = prevLast >= 0 && parsed.sequence > prevLast + 1;
       ingest([parsed]);
       setConnection("live");
       setError(null);
+      reconnectAttemptRef.current = 0;
       if (gap) {
         void refetchAfter(prevLast);
       }
     };
 
     const onHeartbeat = () => {
-      // Ignored for sequence tracking.
       setConnection((c) => (c === "polling" ? c : "live"));
+      reconnectAttemptRef.current = 0;
     };
 
     const onRunStatus = (msg: MessageEvent) => {
@@ -159,7 +258,7 @@ export function useAgentEventStream({
         const data = JSON.parse(String(msg.data || "{}")) as { status?: string };
         if (data.status) onRunStatusRef.current?.(data.status);
         if (isTerminalRunStatus(data.status)) {
-          setConnection("completed");
+          markCompleted();
         }
       } catch {
         /* ignore */
@@ -167,14 +266,12 @@ export function useAgentEventStream({
     };
 
     const onDone = () => {
-      setConnection("completed");
-      clearTimers();
+      markCompleted();
     };
 
     const onErrorEvent = () => {
-      // Named SSE error event from server — fall back to polling.
-      if (closedRef.current) return;
-      startPolling();
+      // Named SSE error event from server — same reconnect path as transport failure.
+      handleTransportErrorRef.current();
     };
 
     es.addEventListener("agent_event", onAgentEvent as EventListener);
@@ -184,33 +281,34 @@ export function useAgentEventStream({
     es.addEventListener("error", onErrorEvent as EventListener);
 
     es.onopen = () => {
+      if (closedRef.current) return;
       setConnection("live");
       setError(null);
     };
 
     es.onerror = () => {
-      if (closedRef.current) return;
-      // Transport failure → polling fallback
-      if (esRef.current === es) {
-        es.close();
-        esRef.current = null;
-      }
-      startPolling();
+      handleTransportErrorRef.current();
     };
   }, [
     clearTimers,
     ingest,
+    markCompleted,
     projectId,
     refetchAfter,
     runId,
-    startPolling,
     streamPath,
   ]);
+
+  connectSseRef.current = connectSse;
+  startPollingRef.current = startPolling;
+  handleTransportErrorRef.current = handleTransportError;
 
   // Reset when run changes
   useEffect(() => {
     closedRef.current = false;
     eventsRef.current = [];
+    reconnectAttemptRef.current = 0;
+    pollTickRef.current = 0;
     setEvents([]);
     setHistoryLoaded(false);
     setError(null);
@@ -230,10 +328,15 @@ export function useAgentEventStream({
     const isReconnect = reconnectToken > 0 && eventsRef.current.length > 0;
 
     void (async () => {
+      reconnectAttemptRef.current = 0;
       setConnection(isReconnect ? "reconnecting" : "connecting");
       try {
         const after = isReconnect ? lastSequence(eventsRef.current) : undefined;
-        const res = await getAgentEvents(projectId, runId, after);
+        const res = await getAgentEvents(
+          projectId,
+          runId,
+          after != null && after >= 0 ? after : undefined,
+        );
         if (cancelled || closedRef.current) return;
         const mapped = res.items.map((item) => toTimelineEvent(item, runId));
         if (isReconnect) {
@@ -273,10 +376,9 @@ export function useAgentEventStream({
   // When status becomes terminal while streaming, mark completed
   useEffect(() => {
     if (isTerminalRunStatus(runStatus) && historyLoaded) {
-      setConnection("completed");
-      clearTimers();
+      markCompleted();
     }
-  }, [runStatus, historyLoaded, clearTimers]);
+  }, [runStatus, historyLoaded, markCompleted]);
 
   return {
     events,

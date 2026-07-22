@@ -428,7 +428,7 @@ describe("AgentLoopPanel", () => {
     expect(screen.getByTestId("agent-event-2").getAttribute("data-nested")).toBe("true");
   });
 
-  it("falls back to polling when SSE errors", async () => {
+  it("falls back to polling when SSE errors after reconnect budget", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const running = { ...baseRun, status: "running" as const, finished_at: null };
     getLatest.mockResolvedValue(running);
@@ -443,7 +443,24 @@ describe("AgentLoopPanel", () => {
     getEvents.mockResolvedValue({ run_id: "run-1", items: [], total: 0 });
     renderPanel();
     await waitFor(() => expect(MockEventSource.instances.length).toBeGreaterThan(0));
-    const es = MockEventSource.instances[0]!;
+
+    const backoffMs = [500, 1000, 2000];
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        MockEventSource.instances[MockEventSource.instances.length - 1]!.onerror?.(
+          new Event("error"),
+        );
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("agent-connection").textContent).toContain("重连");
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(backoffMs[i]!);
+      });
+      await waitFor(() =>
+        expect(MockEventSource.instances.length).toBeGreaterThan(i + 1),
+      );
+    }
 
     getEvents.mockResolvedValue({
       run_id: "run-1",
@@ -459,7 +476,9 @@ describe("AgentLoopPanel", () => {
     });
 
     await act(async () => {
-      es.onerror?.(new Event("error"));
+      MockEventSource.instances[MockEventSource.instances.length - 1]!.onerror?.(
+        new Event("error"),
+      );
     });
 
     await waitFor(() => {
@@ -508,6 +527,42 @@ describe("AgentLoopPanel", () => {
     await user.click(await screen.findByTestId("agent-resume"));
     await waitFor(() => expect(resumeRun).toHaveBeenCalled());
     expect(screen.getByTestId("agent-event-3")).toBeTruthy();
+  });
+
+  it("keeps timeline events after retry on same run", async () => {
+    const user = userEvent.setup();
+    const failed = {
+      ...baseRun,
+      status: "failed" as const,
+      error_summary: "boom",
+    };
+    getLatest.mockResolvedValue(failed);
+    getResult.mockResolvedValue({
+      run: failed,
+      citations: [],
+      warnings: [],
+      errors: ["boom"],
+      draft_ids: [],
+      summary: {},
+    });
+    getEvents.mockResolvedValue({
+      run_id: "run-1",
+      total: 1,
+      items: [
+        historyEvent({
+          sequence: 4,
+          event_type: "node_failed",
+          node_name: "match_company_evidence",
+          agent_step_id: "step-m",
+        }),
+      ],
+    });
+    retryRun.mockResolvedValue({ ...failed, status: "running", finished_at: null });
+    renderPanel();
+    expect(await screen.findByTestId("agent-event-4")).toBeTruthy();
+    await user.click(await screen.findByTestId("agent-retry"));
+    await waitFor(() => expect(retryRun).toHaveBeenCalled());
+    expect(screen.getByTestId("agent-event-4")).toBeTruthy();
   });
 
   it("pauses auto-scroll when user scrolls up and shows 回到最新", async () => {

@@ -35,6 +35,44 @@ def run_agent_execute(run_id: UUID) -> None:
             _running.discard(run_id)
 
 
+def run_agent_resume(run_id: UUID) -> None:
+    """Continue a run prepared via ``resume_run(execute=False)``."""
+    with _lock:
+        if run_id in _running:
+            logger.info("agent resume already running for %s — skip", run_id)
+            return
+        _running.add(run_id)
+    session = SESSION_FACTORY()
+    try:
+        AgentRunService(session).continue_prepared_run(run_id, mode="resume")
+    except Exception:
+        logger.exception("agent resume failed for %s", run_id)
+        session.rollback()
+    finally:
+        session.close()
+        with _lock:
+            _running.discard(run_id)
+
+
+def run_agent_retry(run_id: UUID) -> None:
+    """Continue a run prepared via ``retry_run(execute=False)``."""
+    with _lock:
+        if run_id in _running:
+            logger.info("agent retry already running for %s — skip", run_id)
+            return
+        _running.add(run_id)
+    session = SESSION_FACTORY()
+    try:
+        AgentRunService(session).continue_prepared_run(run_id, mode="retry")
+    except Exception:
+        logger.exception("agent retry failed for %s", run_id)
+        session.rollback()
+    finally:
+        session.close()
+        with _lock:
+            _running.discard(run_id)
+
+
 def is_execute_running(run_id: UUID) -> bool:
     with _lock:
         return run_id in _running

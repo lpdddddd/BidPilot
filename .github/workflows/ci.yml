@@ -22,7 +22,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
-      - run: npm test
+      - name: Frontend tests (run 1/3)
+        run: npm test
+      - name: Frontend tests (run 2/3)
+        run: npm test
+      - name: Frontend tests (run 3/3)
+        run: npm test
       - run: npm run build
 
   backend-postgres:
@@ -81,6 +86,8 @@ jobs:
             tests/test_agent_unified_events.py \
             tests/test_agent_event_sequence.py \
             tests/test_agent_midrun_visibility.py \
+            tests/test_agent_lifecycle_hardening.py \
+            tests/test_agent_async_permissions.py \
             tests/test_agent_api.py \
             tests/test_agent_sse.py \
             tests/test_compliance_api.py \
