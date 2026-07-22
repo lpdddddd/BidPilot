@@ -80,9 +80,17 @@ datasets/fixtures/**
 !datasets/eval/
 !datasets/eval/reference/
 !datasets/eval/reference/.gitkeep
+!datasets/eval/reference/reference_dataset.jsonl
 !datasets/eval/reference/reference_dataset_summary.md
 !datasets/eval/reference/reference_dataset_report.json
 !datasets/eval/reference/splits.json
+!datasets/eval/reference/rag_reference.jsonl
+!datasets/eval/reference/extraction_reference.jsonl
+!datasets/eval/reference/matching_reference.jsonl
+!datasets/eval/reference/compliance_reference.jsonl
+!datasets/eval/reference/drafting_reference.jsonl
+!datasets/eval/reference/unanswerable_reference.jsonl
+!datasets/eval/reference/rejected_samples.jsonl
 !datasets/eval/reference/fixtures/
 !datasets/eval/reference/fixtures/.gitkeep
 !datasets/eval/reference/fixtures/compliance_reference.min.jsonl
