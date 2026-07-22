@@ -10,6 +10,9 @@ const CapabilityPlaceholderPage = lazy(() => import("../pages/CapabilityPlacehol
 const ComplianceReviewPage = lazy(
   () => import("../features/compliance/ComplianceReviewPage"),
 );
+const EvaluationCenterPage = lazy(
+  () => import("../features/evaluation/EvaluationCenterPage"),
+);
 const NotFoundPage = lazy(() => import("../pages/NotFoundPage"));
 
 function RouteFallback() {
@@ -38,15 +41,7 @@ export default function App() {
             }
           />
           <Route path="/review" element={<ComplianceReviewPage />} />
-          <Route
-            path="/evaluation"
-            element={
-              <CapabilityPlaceholderPage
-                title="评估中心"
-                description="检索与生成质量的自动评估能力将在后续步骤接入。届时可在此查看评测集与指标报告。"
-              />
-            }
-          />
+          <Route path="/evaluation" element={<EvaluationCenterPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>

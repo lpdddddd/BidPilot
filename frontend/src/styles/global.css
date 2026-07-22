@@ -1534,3 +1534,53 @@ body {
     backdrop-filter: none;
   }
 }
+
+/* ----------------------------------------------------------- evaluation */
+
+.bp-score-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bp-score-bar-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--bp-text-muted);
+}
+
+.bp-score-bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.bp-score-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--bp-primary), var(--bp-accent));
+  transition: width var(--bp-transition);
+}
+
+.bp-citation-invalid {
+  color: var(--bp-danger) !important;
+}
+
+.bp-code-block {
+  margin: 0;
+  padding: 12px 14px;
+  max-height: 320px;
+  overflow: auto;
+  font-family: var(--bp-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--bp-text-muted);
+  background: var(--bp-surface-2);
+  border: 1px solid var(--bp-border);
+  border-radius: var(--bp-radius-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

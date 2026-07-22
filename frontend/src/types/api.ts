@@ -1101,3 +1101,272 @@ export type AgentResultResponse = {
   errors: string[];
 };
 
+/* ------------------------------------------------------------------ Step 12 evaluation center */
+
+export type EvaluationRunStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "partial"
+  | "failed"
+  | "cancelled";
+
+export type EvaluationCaseStatus =
+  | "pending"
+  | "running"
+  | "passed"
+  | "failed"
+  | "error"
+  | "skipped"
+  | "cancelled";
+
+export type EvaluationTargetType =
+  | "deterministic_fake"
+  | "rag"
+  | "extraction"
+  | "matching"
+  | "compliance"
+  | "drafting"
+  | "agent_pipeline";
+
+export type EvaluationReferenceKind =
+  | "auto_reference"
+  | "rule_expected"
+  | "human_gold"
+  | "no_direct_reference"
+  | "executed_without_direct_reference"
+  | "not_applicable"
+  | "metric_error";
+
+export type EvaluationCapability = {
+  target_type: EvaluationTargetType | string;
+  available: boolean;
+  reason?: string | null;
+  label?: string | null;
+};
+
+export type EvaluationProfileInfo = {
+  id: string;
+  version: string;
+  name?: string | null;
+};
+
+export type EvaluationDatasetInfo = {
+  name: string;
+  version: string;
+  dataset_hash: string;
+  total_cases?: number | null;
+  task_family_counts?: Record<string, number> | null;
+  split_counts?: Record<string, number> | null;
+  reference_kind_counts?: Record<string, number> | null;
+  direct_reference_coverage?: number | null;
+};
+
+export type EvaluationCapabilitiesResponse = {
+  items: EvaluationCapability[];
+  evaluator_version: string;
+  profiles?: EvaluationProfileInfo[];
+  dataset?: EvaluationDatasetInfo | null;
+  task_families?: string[];
+  splits?: string[];
+};
+
+export type EvaluationSuite = {
+  id: string;
+  project_id?: string | null;
+  name: string;
+  version: string;
+  description?: string | null;
+  dataset_hash: string;
+  evaluator_profile_version: string;
+  task_family_config?: Record<string, unknown> | null;
+  manifest_snapshot?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EvaluationSuiteListResponse = {
+  items: EvaluationSuite[];
+  total: number;
+};
+
+export type EvaluationRunSummary = {
+  overall_score?: number | null;
+  pass_rate?: number | null;
+  error_rate?: number | null;
+  direct_reference_coverage?: number | null;
+  task_family_scores?: Record<string, number | null> | null;
+  metric_averages?: Record<string, number | null> | null;
+  hard_gate_failure_count?: number | null;
+  hard_gate_failures?: Array<string | Record<string, unknown>> | null;
+};
+
+export type EvaluationRun = {
+  id: string;
+  project_id: string;
+  suite_id: string;
+  suite_name?: string | null;
+  suite_version?: string | null;
+  status: EvaluationRunStatus | string;
+  target_type: EvaluationTargetType | string;
+  target_config_snapshot?: Record<string, unknown> | null;
+  dataset_hash: string;
+  evaluator_version: string;
+  seed: number;
+  total_cases: number;
+  completed_cases: number;
+  passed_cases: number;
+  failed_cases: number;
+  error_cases: number;
+  overall_score?: number | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  duration_ms?: number | null;
+  safe_error_summary?: string | null;
+  source_commit_sha?: string | null;
+  created_by?: string | null;
+  idempotency_key?: string | null;
+  summary_json?: EvaluationRunSummary | null;
+  filter_json?: Record<string, unknown> | null;
+  cancel_requested?: boolean;
+  detail_url?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EvaluationRunCreatePayload = {
+  suite_id: string;
+  target_type: EvaluationTargetType | string;
+  split?: string | null;
+  task_family?: string | null;
+  profile?: string | null;
+  seed?: number;
+  case_limit?: number | null;
+  target_config?: Record<string, unknown> | null;
+};
+
+export type EvaluationRunListParams = {
+  status?: EvaluationRunStatus | string;
+  suite_id?: string;
+  task_family?: string;
+  target_type?: EvaluationTargetType | string;
+  limit?: number;
+  offset?: number;
+  started_after?: string;
+  started_before?: string;
+};
+
+export type EvaluationRunListResponse = {
+  items: EvaluationRun[];
+  total: number;
+  limit?: number;
+  offset?: number;
+};
+
+export type EvaluationMetricResult = {
+  id?: string;
+  metric_name: string;
+  metric_version: string;
+  value?: number | null;
+  applicable: boolean;
+  weight: number;
+  threshold?: number | null;
+  passed?: boolean | null;
+  evidence_summary?: string | null;
+  reference_kind: EvaluationReferenceKind | string;
+};
+
+export type EvaluationCitation = {
+  document_id?: string | null;
+  document_title?: string | null;
+  file_name?: string | null;
+  page?: number | null;
+  page_start?: number | null;
+  section?: string | null;
+  chunk_id?: string | null;
+  project_id?: string | null;
+  /** Server-side validation; false means deep-link is invalid. */
+  valid?: boolean | null;
+  validation_error?: string | null;
+  summary?: string | null;
+};
+
+export type EvaluationReferenceSummary = {
+  reference_kind?: string | null;
+  label_source?: string | null;
+  has_reference?: boolean | null;
+  source_description?: string | null;
+  /** Never render full test reference_output even if present. */
+  reference_output?: unknown;
+};
+
+export type EvaluationCaseResult = {
+  id: string;
+  evaluation_run_id: string;
+  case_key: string;
+  case_content_hash: string;
+  task_family: string;
+  split: string;
+  status: EvaluationCaseStatus | string;
+  response_snapshot?: Record<string, unknown> | null;
+  reference_kind: EvaluationReferenceKind | string;
+  score?: number | null;
+  passed?: boolean | null;
+  hard_gate_failures?: Array<string | Record<string, unknown>> | null;
+  safe_error_summary?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  duration_ms?: number | null;
+  agent_run_id?: string | null;
+  input_snapshot?: Record<string, unknown> | null;
+  reference_summary?: EvaluationReferenceSummary | null;
+  metric_results?: EvaluationMetricResult[];
+  citations?: EvaluationCitation[];
+};
+
+export type EvaluationCaseResultListParams = {
+  status?: EvaluationCaseStatus | string;
+  passed?: boolean;
+  failed?: boolean;
+  error?: boolean;
+  hard_gate?: boolean;
+  task_family?: string;
+  metric?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type EvaluationCaseResultListResponse = {
+  items: EvaluationCaseResult[];
+  total: number;
+  limit?: number;
+  offset?: number;
+};
+
+export type EvaluationCaseCompareRow = {
+  case_key: string;
+  left_score?: number | null;
+  right_score?: number | null;
+  left_status?: string | null;
+  right_status?: string | null;
+  delta?: number | null;
+};
+
+export type EvaluationCompareResponse = {
+  left: EvaluationRun;
+  right: EvaluationRun;
+  warnings: string[];
+  overall_score_delta?: number | null;
+  pass_rate_delta?: number | null;
+  task_family_deltas?: Record<string, number | null> | null;
+  metric_deltas?: Record<string, number | null> | null;
+  improved_cases?: EvaluationCaseCompareRow[];
+  regressed_cases?: EvaluationCaseCompareRow[];
+  unchanged_cases?: EvaluationCaseCompareRow[];
+  left_only_cases?: string[];
+  right_only_cases?: string[];
+  config_diff?: Record<string, unknown> | null;
+};
+
+export type EvaluationExportFormat = "json" | "csv" | "markdown";
+
