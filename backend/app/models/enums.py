@@ -142,3 +142,36 @@ class MatchReviewReasonCode(StrEnum):
 class ActorAuthn(StrEnum):
     authenticated = "authenticated"
     unverified_local_operator = "unverified_local_operator"
+
+
+class ProposalDraftStatus(StrEnum):
+    draft_pending_review = "draft_pending_review"
+    reviewed = "reviewed"
+    reopened = "reopened"
+    archived = "archived"
+
+
+class ProposalDraftVersionKind(StrEnum):
+    generated = "generated"
+    manual_revision = "manual_revision"
+
+
+class ProposalDraftSourceRole(StrEnum):
+    tender_requirement = "tender_requirement"
+    company_support = "company_support"
+    company_conflict = "company_conflict"
+    company_scope_exclusion = "company_scope_exclusion"
+
+
+class ProposalDraftReviewAction(StrEnum):
+    mark_reviewed = "mark_reviewed"
+    reopen = "reopen"
+
+
+class ProposalDraftGenerationMode(StrEnum):
+    response_outline = "response_outline"
+    compliance_preparation_pack = "compliance_preparation_pack"
+
+
+# Generation runs reuse ExtractionRunStatus values.
+ProposalDraftRunStatus = ExtractionRunStatus

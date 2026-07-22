@@ -25,6 +25,13 @@ if TYPE_CHECKING:
         RequirementMatchRun,
     )
     from app.models.organization import Organization
+    from app.models.proposal_draft import (
+        ProposalDraft,
+        ProposalDraftGenerationRun,
+        ProposalDraftReview,
+        ProposalDraftSource,
+        ProposalDraftVersion,
+    )
     from app.models.requirement import Requirement
 
 
@@ -73,5 +80,20 @@ class BidProject(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         back_populates="project"
     )
     match_reviews: Mapped[list[RequirementMatchReview]] = relationship(
+        back_populates="project"
+    )
+    proposal_drafts: Mapped[list[ProposalDraft]] = relationship(
+        back_populates="project"
+    )
+    proposal_draft_versions: Mapped[list[ProposalDraftVersion]] = relationship(
+        back_populates="project"
+    )
+    proposal_draft_sources: Mapped[list[ProposalDraftSource]] = relationship(
+        back_populates="project"
+    )
+    proposal_draft_reviews: Mapped[list[ProposalDraftReview]] = relationship(
+        back_populates="project"
+    )
+    proposal_draft_runs: Mapped[list[ProposalDraftGenerationRun]] = relationship(
         back_populates="project"
     )

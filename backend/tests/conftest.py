@@ -34,6 +34,11 @@ ENUM_TYPE_NAMES = [
     "match_review_action",
     "match_review_reason_code",
     "actor_authn",
+    "proposal_draft_status",
+    "proposal_draft_version_kind",
+    "proposal_draft_source_role",
+    "proposal_draft_review_action",
+    "proposal_draft_generation_mode",
 ]
 
 

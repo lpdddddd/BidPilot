@@ -710,3 +710,181 @@ export type MatchReviewListResponse = {
   items: MatchReview[];
   total: number;
 };
+
+export type ProposalDraftStatus =
+  | "draft_pending_review"
+  | "reviewed"
+  | "reopened"
+  | "archived";
+
+export type ProposalDraftVersionKind = "generated" | "manual_revision";
+
+export type ProposalDraftGenerationMode =
+  | "response_outline"
+  | "compliance_preparation_pack";
+
+export type ProposalDraftRun = {
+  id: string;
+  project_id: string;
+  status: ExtractionRunStatus;
+  mode: ProposalDraftGenerationMode;
+  title: string;
+  requested_requirement_ids?: string[] | null;
+  eligible_requirement_count: number;
+  excluded_requirement_count: number;
+  excluded_reason_summary?: string | null;
+  draft_id?: string | null;
+  draft_version_id?: string | null;
+  error_summary?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  cancel_requested_at?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  config_json?: Record<string, unknown> | null;
+};
+
+export type ProposalDraftSource = {
+  id: string;
+  project_id: string;
+  draft_version_id: string;
+  requirement_id?: string | null;
+  match_id?: string | null;
+  evidence_link_id?: string | null;
+  source_role: string;
+  source_quote?: string | null;
+  location_json?: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type ProposalDraftVersionSummary = {
+  id: string;
+  project_id: string;
+  draft_id: string;
+  parent_version_id?: string | null;
+  version_number: number;
+  version_kind: ProposalDraftVersionKind;
+  generation_run_id?: string | null;
+  source_snapshot_hash?: string | null;
+  created_by?: string | null;
+  supersedes_version_id?: string | null;
+  is_current: boolean;
+  created_at: string;
+  has_unevidenced_manual_content?: boolean;
+};
+
+export type ProposalDraftVersionDetail = ProposalDraftVersionSummary & {
+  content_json: Record<string, unknown>;
+  content_markdown?: string | null;
+  sources: ProposalDraftSource[];
+};
+
+export type ProposalDraftReview = {
+  id: string;
+  project_id: string;
+  draft_id: string;
+  draft_version_id: string;
+  action: "mark_reviewed" | "reopen";
+  comment?: string | null;
+  actor_id?: string | null;
+  actor_label: string;
+  actor_authn: ActorAuthn;
+  idempotency_key?: string | null;
+  created_at: string;
+};
+
+export type ProposalDraftSummary = {
+  id: string;
+  project_id: string;
+  title: string;
+  status: ProposalDraftStatus;
+  current_version_id?: string | null;
+  current_version_number?: number | null;
+  created_by?: string | null;
+  review_lock_version: number;
+  created_at: string;
+  updated_at: string;
+  last_reviewed_at?: string | null;
+  eligible_requirement_count?: number;
+  material_gap_count?: number;
+  risk_count?: number;
+  scope_count?: number;
+  has_unevidenced_manual_content?: boolean;
+  export_allowed?: boolean;
+  disclaimer?: string;
+};
+
+export type ProposalDraftDetail = ProposalDraftSummary & {
+  current_version?: ProposalDraftVersionDetail | null;
+  recent_reviews?: ProposalDraftReview[];
+  latest_run?: ProposalDraftRun | null;
+};
+
+export type ProposalDraftListResponse = {
+  items: ProposalDraftSummary[];
+  total: number;
+};
+
+export type ProposalDraftVersionListResponse = {
+  items: ProposalDraftVersionSummary[];
+  total: number;
+};
+
+export type EligibilityRequirementItem = {
+  requirement_id: string;
+  title: string;
+  category?: RequirementCategory | null;
+  match_id?: string | null;
+  match_status?: EvidenceMatchStatus | null;
+  review_status?: MatchReviewStatus | null;
+  eligibility:
+    | "positive"
+    | "material_gap"
+    | "risk"
+    | "scope"
+    | "excluded"
+    | "no_match";
+  reason: string;
+  draft_handling: string;
+};
+
+export type ProposalDraftEligibilityResponse = {
+  project_id: string;
+  eligible: EligibilityRequirementItem[];
+  excluded: EligibilityRequirementItem[];
+  material_gaps: EligibilityRequirementItem[];
+  risks: EligibilityRequirementItem[];
+  scope_items: EligibilityRequirementItem[];
+  disclaimer: string;
+};
+
+export type ProposalDraftCreatePayload = {
+  title: string;
+  requirement_ids: string[];
+  mode: ProposalDraftGenerationMode;
+  created_by?: string;
+};
+
+export type ProposalDraftManualRevisionPayload = {
+  content_json: Record<string, unknown>;
+  created_by?: string;
+  comment?: string;
+};
+
+export type ProposalDraftReviewPayload = {
+  action?: "mark_reviewed";
+  actor_label: string;
+  comment: string;
+  review_lock_version: number;
+};
+
+export type ProposalDraftReopenPayload = {
+  actor_label: string;
+  comment: string;
+  review_lock_version: number;
+};
+
+export const PROPOSAL_DRAFT_DISCLAIMER =
+  "本文件为基于已审核材料生成的响应准备草稿，须经人工复核、补充、签署和法务或业务确认后方可使用，不构成投标结论或投标提交文件。";
+

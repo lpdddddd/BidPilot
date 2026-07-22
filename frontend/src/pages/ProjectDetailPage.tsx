@@ -6,10 +6,12 @@ import { Link, useParams } from "react-router-dom";
 import { getProject } from "../api/client";
 import DocumentCenter from "../features/documents/DocumentCenter";
 import MatchingWorkspace from "../features/matching/MatchingWorkspace";
+import ProposalDraftsWorkspace from "../features/proposalDrafts/ProposalDraftsWorkspace";
 import RequirementsWorkspace from "../features/requirements/RequirementsWorkspace";
 import KnowledgeSearch from "../features/search/KnowledgeSearch";
 import type { Project } from "../types/api";
 import { usePageTitle } from "../components/usePageTitle";
+
 
 const PROJECT_STATUS_LABELS: Record<string, string> = {
   draft: "草稿",
@@ -199,6 +201,21 @@ export default function ProjectDetailPage() {
             children: (
               <div className="bp-workspace-body">
                 <MatchingWorkspace
+                  projectId={project.id}
+                  onOpenSource={(documentId) => {
+                    setChunkFocusDocumentId(documentId);
+                    setActiveTab("documents");
+                  }}
+                />
+              </div>
+            ),
+          },
+          {
+            key: "proposal-drafts",
+            label: "响应草稿",
+            children: (
+              <div className="bp-workspace-body">
+                <ProposalDraftsWorkspace
                   projectId={project.id}
                   onOpenSource={(documentId) => {
                     setChunkFocusDocumentId(documentId);

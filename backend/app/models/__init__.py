@@ -17,6 +17,12 @@ from app.models.enums import (
     MessageRole,
     ParseStatus,
     ProjectStatus,
+    ProposalDraftGenerationMode,
+    ProposalDraftReviewAction,
+    ProposalDraftRunStatus,
+    ProposalDraftSourceRole,
+    ProposalDraftStatus,
+    ProposalDraftVersionKind,
     QualityLevel,
     RequirementCategory,
     ReviewStatus,
@@ -31,6 +37,13 @@ from app.models.match_run import (
 )
 from app.models.organization import Organization, OrganizationMember, User
 from app.models.project import BidProject
+from app.models.proposal_draft import (
+    ProposalDraft,
+    ProposalDraftGenerationRun,
+    ProposalDraftReview,
+    ProposalDraftSource,
+    ProposalDraftVersion,
+)
 from app.models.requirement import (
     EvidenceLink,
     Requirement,
@@ -65,6 +78,17 @@ __all__ = [
     "OrganizationMember",
     "ParseStatus",
     "ProjectStatus",
+    "ProposalDraft",
+    "ProposalDraftGenerationMode",
+    "ProposalDraftGenerationRun",
+    "ProposalDraftReview",
+    "ProposalDraftReviewAction",
+    "ProposalDraftRunStatus",
+    "ProposalDraftSource",
+    "ProposalDraftSourceRole",
+    "ProposalDraftStatus",
+    "ProposalDraftVersion",
+    "ProposalDraftVersionKind",
     "QualityLevel",
     "Requirement",
     "RequirementCategory",

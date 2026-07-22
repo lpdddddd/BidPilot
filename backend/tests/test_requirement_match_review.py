@@ -967,6 +967,7 @@ def test_invalid_result_keeps_reopened_match_active(db):
 def test_concurrent_reopened_match_successor_at_most_one(engine):
     """Two sessions racing persist for one reopened Requirement → one active successor."""
     import threading
+
     from sqlalchemy.orm import sessionmaker
 
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -1068,6 +1069,7 @@ def test_concurrent_reopened_match_successor_at_most_one(engine):
 def test_concurrent_confirm_one_wins(engine):
     """Real concurrent confirm with FOR UPDATE: one 200-equivalent, one 409."""
     import threading
+
     from sqlalchemy.orm import sessionmaker
 
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -1158,6 +1160,7 @@ def test_concurrent_confirm_one_wins(engine):
 def test_concurrent_confirm_vs_reopen(engine):
     """Race confirm vs reopen on pending→terminal path vs invalid reopen."""
     import threading
+
     from sqlalchemy.orm import sessionmaker
 
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)

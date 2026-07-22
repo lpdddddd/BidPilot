@@ -21,6 +21,16 @@ import type {
   Project,
   ProjectCreatePayload,
   ProjectListResponse,
+  ProposalDraftCreatePayload,
+  ProposalDraftDetail,
+  ProposalDraftEligibilityResponse,
+  ProposalDraftListResponse,
+  ProposalDraftManualRevisionPayload,
+  ProposalDraftReopenPayload,
+  ProposalDraftReviewPayload,
+  ProposalDraftRun,
+  ProposalDraftVersionDetail,
+  ProposalDraftVersionListResponse,
   ReadyResponse,
   ReindexResponse,
   RequirementDetail,
@@ -342,6 +352,152 @@ export async function reopenRequirementMatch(
     },
   );
   return data;
+}
+
+export async function getProposalDraftEligibility(
+  projectId: string,
+): Promise<ProposalDraftEligibilityResponse> {
+  const { data } = await http.get<ProposalDraftEligibilityResponse>(
+    `/api/v1/projects/${projectId}/proposal-drafts/eligibility`,
+  );
+  return data;
+}
+
+export async function listProposalDrafts(
+  projectId: string,
+): Promise<ProposalDraftListResponse> {
+  const { data } = await http.get<ProposalDraftListResponse>(
+    `/api/v1/projects/${projectId}/proposal-drafts`,
+  );
+  return data;
+}
+
+export async function createProposalDraft(
+  projectId: string,
+  payload: ProposalDraftCreatePayload,
+  idempotencyKey?: string,
+): Promise<ProposalDraftRun> {
+  const { data } = await http.post<ProposalDraftRun>(
+    `/api/v1/projects/${projectId}/proposal-drafts`,
+    payload,
+    {
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      timeout: 60000,
+    },
+  );
+  return data;
+}
+
+export async function getProposalDraft(
+  projectId: string,
+  draftId: string,
+): Promise<ProposalDraftDetail> {
+  const { data } = await http.get<ProposalDraftDetail>(
+    `/api/v1/projects/${projectId}/proposal-drafts/${draftId}`,
+  );
+  return data;
+}
+
+export async function listProposalDraftVersions(
+  projectId: string,
+  draftId: string,
+): Promise<ProposalDraftVersionListResponse> {
+  const { data } = await http.get<ProposalDraftVersionListResponse>(
+    `/api/v1/projects/${projectId}/proposal-drafts/${draftId}/versions`,
+  );
+  return data;
+}
+
+export async function getProposalDraftVersion(
+  projectId: string,
+  draftId: string,
+  versionId: string,
+): Promise<ProposalDraftVersionDetail> {
+  const { data } = await http.get<ProposalDraftVersionDetail>(
+    `/api/v1/projects/${projectId}/proposal-drafts/${draftId}/versions/${versionId}`,
+  );
+  return data;
+}
+
+export async function createProposalDraftManualRevision(
+  projectId: string,
+  draftId: string,
+  payload: ProposalDraftManualRevisionPayload,
+  idempotencyKey?: string,
+): Promise<ProposalDraftDetail> {
+  const { data } = await http.post<ProposalDraftDetail>(
+    `/api/v1/projects/${projectId}/proposal-drafts/${draftId}/manual-revisions`,
+    payload,
+    {
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      timeout: 60000,
+    },
+  );
+  return data;
+}
+
+export async function reviewProposalDraft(
+  projectId: string,
+  draftId: string,
+  payload: ProposalDraftReviewPayload,
+  idempotencyKey?: string,
+): Promise<ProposalDraftDetail> {
+  const { data } = await http.post<ProposalDraftDetail>(
+    `/api/v1/projects/${projectId}/proposal-drafts/${draftId}/review`,
+    payload,
+    {
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      timeout: 60000,
+    },
+  );
+  return data;
+}
+
+export async function reopenProposalDraft(
+  projectId: string,
+  draftId: string,
+  payload: ProposalDraftReopenPayload,
+  idempotencyKey?: string,
+): Promise<ProposalDraftDetail> {
+  const { data } = await http.post<ProposalDraftDetail>(
+    `/api/v1/projects/${projectId}/proposal-drafts/${draftId}/reopen`,
+    payload,
+    {
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      timeout: 60000,
+    },
+  );
+  return data;
+}
+
+export async function getProposalDraftRun(
+  projectId: string,
+  runId: string,
+): Promise<ProposalDraftRun> {
+  const { data } = await http.get<ProposalDraftRun>(
+    `/api/v1/projects/${projectId}/proposal-draft-runs/${runId}`,
+  );
+  return data;
+}
+
+export async function cancelProposalDraftRun(
+  projectId: string,
+  runId: string,
+): Promise<ProposalDraftRun> {
+  const { data } = await http.post<ProposalDraftRun>(
+    `/api/v1/projects/${projectId}/proposal-draft-runs/${runId}/cancel`,
+    {},
+    { timeout: 60000 },
+  );
+  return data;
+}
+
+export function proposalDraftExportUrl(
+  projectId: string,
+  draftId: string,
+  format: "markdown" | "docx",
+): string {
+  return `/api/v1/projects/${projectId}/proposal-drafts/${draftId}/export?format=${format}`;
 }
 
 export { askProject, askProjectStream, getLlmHealth } from "./ask";

@@ -6,6 +6,7 @@ Never mutates EvidenceMatchStatus, summary, EvidenceLinks, or match-run records.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -156,18 +157,14 @@ def _has_conflict(match: RequirementEvidenceMatch) -> bool:
     if meta.get("requirement_potential_conflict") or meta.get("conflict_dimension"):
         return True
     req = match.requirement
-    if req is not None and bool((req.metadata_json or {}).get("potential_conflict")):
-        return True
-    return False
+    return bool(req is not None and (req.metadata_json or {}).get("potential_conflict"))
 
 
 def _has_scope_exclusion(match: RequirementEvidenceMatch) -> bool:
     if match.status == EvidenceMatchStatus.not_applicable:
         return True
     meta = match.metadata_json or {}
-    if meta.get("not_applicable_basis") or meta.get("requirement_scope_chunk_id"):
-        return True
-    return False
+    return bool(meta.get("not_applicable_basis") or meta.get("requirement_scope_chunk_id"))
 
 
 class RequirementMatchReviewService:
@@ -331,20 +328,19 @@ class RequirementMatchReviewService:
         )
 
         counts = ReviewQueueCounts()
-        aggregate_lifecycle = (
-            True
-            if include_superseded
-            else RequirementEvidenceMatch.lifecycle_status == "active"
-        )
+        aggregate_filters: list[Any] = [
+            RequirementEvidenceMatch.project_id == project_id,
+        ]
+        if not include_superseded:
+            aggregate_filters.append(
+                RequirementEvidenceMatch.lifecycle_status == "active"
+            )
         status_rows = self.db.execute(
             select(
                 RequirementEvidenceMatch.review_status,
                 func.count(),
             )
-            .where(
-                RequirementEvidenceMatch.project_id == project_id,
-                aggregate_lifecycle,
-            )
+            .where(*aggregate_filters)
             .group_by(RequirementEvidenceMatch.review_status)
         ).all()
         for rs, n in status_rows:
@@ -364,10 +360,7 @@ class RequirementMatchReviewService:
                 RequirementEvidenceMatch.status,
                 func.count(),
             )
-            .where(
-                RequirementEvidenceMatch.project_id == project_id,
-                aggregate_lifecycle,
-            )
+            .where(*aggregate_filters)
             .group_by(RequirementEvidenceMatch.status)
         ).all()
         counts.by_match_status = {
@@ -380,10 +373,7 @@ class RequirementMatchReviewService:
                 RequirementEvidenceMatch.risk_level,
                 func.count(),
             )
-            .where(
-                RequirementEvidenceMatch.project_id == project_id,
-                aggregate_lifecycle,
-            )
+            .where(*aggregate_filters)
             .group_by(RequirementEvidenceMatch.risk_level)
         ).all()
         counts.by_risk_level = {

@@ -9,6 +9,11 @@ from app.models.enums import (
     MatchReviewAction,
     MatchReviewReasonCode,
     MatchReviewStatus,
+    ProposalDraftGenerationMode,
+    ProposalDraftReviewAction,
+    ProposalDraftSourceRole,
+    ProposalDraftStatus,
+    ProposalDraftVersionKind,
     QualityLevel,
     ReviewStatus,
     RiskLevel,
@@ -40,6 +45,19 @@ match_review_reason_code_enum = EnumType(
     MatchReviewReasonCode, name="match_review_reason_code"
 )
 actor_authn_enum = EnumType(ActorAuthn, name="actor_authn")
+proposal_draft_status_enum = EnumType(ProposalDraftStatus, name="proposal_draft_status")
+proposal_draft_version_kind_enum = EnumType(
+    ProposalDraftVersionKind, name="proposal_draft_version_kind"
+)
+proposal_draft_source_role_enum = EnumType(
+    ProposalDraftSourceRole, name="proposal_draft_source_role"
+)
+proposal_draft_review_action_enum = EnumType(
+    ProposalDraftReviewAction, name="proposal_draft_review_action"
+)
+proposal_draft_generation_mode_enum = EnumType(
+    ProposalDraftGenerationMode, name="proposal_draft_generation_mode"
+)
 
 
 def empty_json() -> dict[str, Any]:

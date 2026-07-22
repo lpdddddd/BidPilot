@@ -241,6 +241,8 @@ POST /api/v1/projects/{project_id}/requirement-matches/{match_id}/reopen
 ## 当前限制
 
 - 匹配结论为自动生成，经第 9 步人工审核后方可标记为受保护；
+- 第 10 步「响应草稿」仅消费 **confirmed + active** Match 作为证据输入，生成待人工复核的响应准备草稿；
+  详见 [proposal_drafting.md](./proposal_drafting.md)；
 - **尚未**实现 LoRA / QLoRA / SFT 微调、LangGraph Agent、自动投标方案生成或投标提交；
 - Qwen3-8B 仅作基础结构化匹配验证，未微调。
 
