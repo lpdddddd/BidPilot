@@ -75,6 +75,10 @@ datasets/fixtures/**
 !datasets/reports/llamafactory_real_validation.json
 !datasets/reports/training_readiness_report.json
 !datasets/reports/artifact_consistency_report.json
+!datasets/eval/reference/.gitkeep
+!datasets/eval/reference/reference_dataset_summary.md
+!datasets/eval/reference/reference_dataset_report.json
+!datasets/eval/reference/splits.json
 training/llamafactory/outputs/*
 !training/llamafactory/outputs/.gitkeep
 training/llamafactory/data/bidpilot_sft_*.json

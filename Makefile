@@ -8,7 +8,7 @@ PIP ?= pip
 
 PIPELINE_DIR := $(ROOT_DIR)/data_pipeline
 
-.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft validate-sft-sample validate-sft-real validate-sft-internal validate-sft-llamafactory validate-sft-smoke dataset-install dataset-test dataset-bootstrap dataset-download dataset-parse dataset-label dataset-review-export dataset-review-priority dataset-validate dataset-build-rag dataset-build-agent dataset-build-sft dataset-report dataset-demo rag-smoke rag-smoke-live llm-up
+.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft validate-sft-sample validate-sft-real validate-sft-internal validate-sft-llamafactory validate-sft-smoke dataset-install dataset-test dataset-bootstrap dataset-download dataset-parse dataset-label dataset-review-export dataset-review-priority dataset-validate dataset-build-rag dataset-build-agent dataset-build-sft dataset-build-reference dataset-report dataset-demo rag-smoke rag-smoke-live llm-up
 
 help:
 	@echo "BidPilot development commands"
@@ -38,6 +38,7 @@ help:
 	@echo "  make dataset-review-export Export review CSV"
 	@echo "  make dataset-validate    Validate all dataset artifacts"
 	@echo "  make dataset-build-sft   Build ShareGPT SFT splits"
+	@echo "  make dataset-build-reference  Build auto reference eval dataset"
 	@echo "  make dataset-report      Write dataset statistics reports"
 	@echo "  make rag-smoke           Mock RAG acceptance (no GPU / vLLM required)"
 	@echo "  make rag-smoke-live      Live RAG smoke against running API + vLLM"
@@ -163,6 +164,9 @@ dataset-build-agent:
 
 dataset-build-sft:
 	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data build-sft
+
+dataset-build-reference:
+	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data build-reference --seed 42
 
 dataset-report:
 	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data report

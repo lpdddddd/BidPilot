@@ -41,12 +41,15 @@ python -m bidpilot_data build-rag --limit 300
 python -m bidpilot_data validate rag
 python -m bidpilot_data build-agent --limit 500
 python -m bidpilot_data build-sft
+python -m bidpilot_data build-reference --seed 42
 python -m bidpilot_data validate all
 python -m bidpilot_data report
 python -m bidpilot_data db import-requirements
 ```
 
-Makefile wrappers: `dataset-label`, `dataset-build-rag`, `dataset-build-agent`, `dataset-build-sft`, `dataset-review-priority`, `dataset-validate`, `dataset-validate-rag`, `dataset-report`.
+Makefile wrappers: `dataset-label`, `dataset-build-rag`, `dataset-build-agent`, `dataset-build-sft`, `dataset-build-reference`, `dataset-review-priority`, `dataset-validate`, `dataset-validate-rag`, `dataset-report`.
+
+Auto reference eval set (Step 1, not expert gold): `datasets/eval/reference/` — see [docs/reference_dataset.md](../docs/reference_dataset.md).
 
 ## 质量规则
 

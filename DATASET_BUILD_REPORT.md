@@ -94,3 +94,11 @@ Validation ok: **True**
 - Do **not** start formal LoRA until reviewed_trainable_sft meets the gold review target.
 - Do not count portal homepage snapshots as SFT source diversity.
 
+## Auto Reference Dataset (Step 1)
+
+- Builder: `python -m bidpilot_data build-reference --seed 42` / `make dataset-build-reference`
+- Output dir: `datasets/eval/reference/` (does **not** overwrite `eval/rag/questions.jsonl`)
+- Label policy: `auto_reference` / `silver` only — **never human_gold**
+- Docs: `docs/reference_dataset.md`
+- Summary artifact written at build time: `datasets/eval/reference/reference_dataset_summary.md`
+

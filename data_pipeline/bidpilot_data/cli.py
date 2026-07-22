@@ -327,6 +327,33 @@ def build_sft(dry_run: bool = False, verbose: bool = False) -> None:
     print(build_sft_dataset(dry_run=dry_run))
 
 
+@app.command("build-reference")
+def build_reference(
+    seed: int = typer.Option(42, help="RNG seed for selection/generation/splits"),
+    output_dir: Optional[Path] = typer.Option(None, help="Default: datasets/eval/reference"),
+    dry_run: bool = False,
+    use_llm: bool = typer.Option(False, help="Optional LLM second-pass judge"),
+    max_retries: int = typer.Option(2, help="Retries for failed samples before reject"),
+    max_projects: int = typer.Option(48, help="Max high-quality projects to sample from"),
+    verbose: bool = False,
+) -> None:
+    """Build auto reference eval dataset (silver/auto_reference — never human_gold)."""
+    _setup(verbose)
+    from bidpilot_data.reference_dataset import build_reference_dataset
+
+    report = build_reference_dataset(
+        seed=seed,
+        output_dir=output_dir,
+        dry_run=dry_run,
+        use_llm=use_llm,
+        max_retries=max_retries,
+        max_projects=max_projects,
+    )
+    print(report)
+    if not dry_run and not report.get("all_targets_met", False):
+        raise typer.Exit(code=1)
+
+
 @app.command("validate")
 def validate(target: str = typer.Argument("all"), verbose: bool = False) -> None:
     _setup(verbose)

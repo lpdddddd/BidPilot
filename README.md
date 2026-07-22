@@ -303,12 +303,13 @@ make dataset-report
 产出目录：
 
 - `datasets/silver|gold|review|eval|sft/`
+- `datasets/eval/reference/` — Step 1 auto reference eval set（`build-reference` / `make dataset-build-reference`）
 - `datasets/reports/{dataset_statistics,validation_report,build_manifest}.json`
 - `training/llamafactory/data/dataset_info.json`（注册 `bidpilot_sft_train(_qwen3)` 等）
 
-质量约束：自动标注只能是 silver/pending；accept/corrected + reviewer 才能升 gold；按 `project_id` 划分 train/val/test。
+质量约束：自动标注只能是 silver/pending；accept/corrected + reviewer 才能升 gold；按 `project_id` 划分 train/val/test。Auto reference 标签仅为 `auto_reference`/`silver`，**不是** human gold。
 
-详情见 [data_pipeline/README.md](data_pipeline/README.md) 与 [DATASET_BUILD_REPORT.md](DATASET_BUILD_REPORT.md)。
+详情见 [data_pipeline/README.md](data_pipeline/README.md)、[docs/reference_dataset.md](docs/reference_dataset.md) 与 [DATASET_BUILD_REPORT.md](DATASET_BUILD_REPORT.md)。
 
 ## LLaMAFactory 数据导出与训练流程
 
