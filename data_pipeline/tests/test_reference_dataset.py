@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from bidpilot_data.reference_dataset.build import build_reference_dataset
@@ -30,6 +31,21 @@ def _install_fixture_corpus(datasets: Path) -> None:
     write_jsonl(datasets / "eval" / "rag" / "questions.jsonl", read_jsonl(FIXTURES / "questions.jsonl"))
 
 
+def _base_rag_dict(chunk: dict) -> dict:
+    return {
+        "sample_id": "cite-test",
+        "task_type": "rag",
+        "project_id": chunk["project_id"],
+        "document_id": chunk["document_id"],
+        "input": {"question": "截止时间是什么？"},
+        "reference_output": {"answer": "2026年08月04日", "answerable": True},
+        "evidence": [],
+        "confidence": 0.7,
+        "generation_model": "test",
+        "label_source": "auto_reference",
+    }
+
+
 def test_selection_reproducible_with_seed(tmp_datasets: Path) -> None:
     _install_fixture_corpus(tmp_datasets)
     corpus = load_corpus(tmp_datasets)
@@ -50,6 +66,131 @@ def test_quote_grounding_pass_fail() -> None:
     assert quote_contiguous_in_text("投标文件递交截止时间为2026年08月04日。", text)
     assert quote_contiguous_in_text("投标文件  递交截止时间为2026年08月04日。", text)
     assert not quote_contiguous_in_text("完全不存在的引用句子XYZ", text)
+
+
+def test_citation_empty_evidence_invalid_citation(tmp_datasets: Path) -> None:
+    """Citation checks run even when evidence is empty."""
+    _install_fixture_corpus(tmp_datasets)
+    corpus = load_corpus(tmp_datasets)
+    chunk = next(iter(corpus.chunks.values()))
+    sample = ReferenceSample.model_validate(
+        {
+            **_base_rag_dict(chunk),
+            "evidence": [],
+            "citation_metadata": {
+                "chunk_ids": ["does-not-exist"],
+                "document_ids": [chunk["document_id"]],
+                "quotes": ["完全不存在的引用句子XYZ"],
+            },
+        }
+    )
+    ok, msgs, _ = validate_sample(sample, chunk_index=corpus.chunks, document_index=corpus.documents)
+    assert not ok
+    assert any("missing chunk_id" in m for m in msgs)
+    assert any("not grounded" in m for m in msgs)
+
+
+def test_citation_empty_evidence_with_citation_fails_answerable(tmp_datasets: Path) -> None:
+    _install_fixture_corpus(tmp_datasets)
+    corpus = load_corpus(tmp_datasets)
+    chunk = next(iter(corpus.chunks.values()))
+    quote = (chunk.get("text") or "")[:40]
+    sample = ReferenceSample.model_validate(
+        {
+            **_base_rag_dict(chunk),
+            "evidence": [],
+            "citation_metadata": {
+                "chunk_ids": [chunk["chunk_id"]],
+                "document_ids": [chunk["document_id"]],
+                "quotes": [quote],
+            },
+        }
+    )
+    ok, msgs, _ = validate_sample(sample, chunk_index=corpus.chunks, document_index=corpus.documents)
+    assert not ok
+    assert any("citations present but evidence empty" in m for m in msgs)
+
+
+def test_citation_valid_evidence_and_citation(tmp_datasets: Path) -> None:
+    _install_fixture_corpus(tmp_datasets)
+    corpus = load_corpus(tmp_datasets)
+    chunk = next(iter(corpus.chunks.values()))
+    quote = (chunk.get("text") or "")[:60]
+    sample = ReferenceSample.model_validate(
+        {
+            **_base_rag_dict(chunk),
+            "evidence": [
+                {
+                    "chunk_id": chunk["chunk_id"],
+                    "document_id": chunk["document_id"],
+                    "page_number": chunk.get("page_start") or 1,
+                    "quote": quote,
+                }
+            ],
+            "citation_metadata": {
+                "chunk_ids": [chunk["chunk_id"]],
+                "document_ids": [chunk["document_id"]],
+                "quotes": [quote],
+                "page_numbers": [chunk.get("page_start") or 1],
+            },
+        }
+    )
+    ok, msgs, _ = validate_sample(sample, chunk_index=corpus.chunks, document_index=corpus.documents)
+    assert ok, msgs
+
+
+def test_citation_quote_not_in_chunk(tmp_datasets: Path) -> None:
+    _install_fixture_corpus(tmp_datasets)
+    corpus = load_corpus(tmp_datasets)
+    chunk = next(iter(corpus.chunks.values()))
+    sample = ReferenceSample.model_validate(
+        {
+            **_base_rag_dict(chunk),
+            "evidence": [
+                {
+                    "chunk_id": chunk["chunk_id"],
+                    "document_id": chunk["document_id"],
+                    "quote": (chunk.get("text") or "")[:40],
+                }
+            ],
+            "citation_metadata": {
+                "chunk_ids": [chunk["chunk_id"]],
+                "document_ids": [chunk["document_id"]],
+                "quotes": ["这段话完全不在任何chunk里XYZABC"],
+            },
+        }
+    )
+    ok, msgs, _ = validate_sample(sample, chunk_index=corpus.chunks, document_index=corpus.documents)
+    assert not ok
+    assert any("not grounded" in m for m in msgs)
+
+
+def test_citation_missing_document_or_chunk_id(tmp_datasets: Path) -> None:
+    _install_fixture_corpus(tmp_datasets)
+    corpus = load_corpus(tmp_datasets)
+    chunk = next(iter(corpus.chunks.values()))
+    quote = (chunk.get("text") or "")[:40]
+    sample = ReferenceSample.model_validate(
+        {
+            **_base_rag_dict(chunk),
+            "evidence": [
+                {
+                    "chunk_id": chunk["chunk_id"],
+                    "document_id": chunk["document_id"],
+                    "quote": quote,
+                }
+            ],
+            "citation_metadata": {
+                "chunk_ids": ["missing-chunk-xyz"],
+                "document_ids": ["missing-doc-xyz"],
+                "quotes": [quote],
+            },
+        }
+    )
+    ok, msgs, _ = validate_sample(sample, chunk_index=corpus.chunks, document_index=corpus.documents)
+    assert not ok
+    assert any("missing chunk_id" in m for m in msgs)
+    assert any("missing citation document_id" in m for m in msgs)
 
 
 def test_unanswerable_rejects_definitive_claims(tmp_datasets: Path) -> None:
@@ -167,6 +308,7 @@ def test_export_schema_and_min_counts(tmp_datasets: Path) -> None:
         targets=targets,
         max_projects=10,
         datasets_root=tmp_datasets,
+        build_timestamp="2026-07-22T00:00:00Z",
     )
     assert report["all_targets_met"], report
     assert (out / "reference_dataset.jsonl").exists()
@@ -180,6 +322,15 @@ def test_export_schema_and_min_counts(tmp_datasets: Path) -> None:
         assert parsed.label_source in {"auto_reference", "silver"}
         assert parsed.generator_version == GENERATOR_VERSION
         assert parsed.task_type in targets
+        # No fictional synthetic company materials
+        material = str((parsed.input or {}).get("company_material") or "")
+        assert "粤海信息" not in material
+        assert "南粤数智" not in material
+        assert "珠三角云网" not in material
+        assert not (parsed.input or {}).get("synthetic_company_profile")
+    matching_rows = [r for r in rows if r.get("task_type") == "matching"]
+    assert matching_rows
+    assert report.get("matching_status_histogram")
     # per-task files exist
     for name in (
         "rag_reference.jsonl",
@@ -191,6 +342,42 @@ def test_export_schema_and_min_counts(tmp_datasets: Path) -> None:
         "rejected_samples.jsonl",
     ):
         assert (out / name).exists()
+
+
+def test_reproducible_build_same_seed_and_timestamp(tmp_datasets: Path) -> None:
+    _install_fixture_corpus(tmp_datasets)
+    targets = {
+        "rag": 2,
+        "extraction": 2,
+        "matching": 2,
+        "compliance": 1,
+        "drafting": 1,
+        "unanswerable": 1,
+    }
+    ts = "2026-07-22T00:00:00Z"
+    out_a = tmp_datasets / "eval" / "reference_a"
+    out_b = tmp_datasets / "eval" / "reference_b"
+    build_reference_dataset(
+        seed=42,
+        output_dir=out_a,
+        datasets_root=tmp_datasets,
+        targets=targets,
+        build_timestamp=ts,
+        max_projects=10,
+        max_retries=3,
+    )
+    build_reference_dataset(
+        seed=42,
+        output_dir=out_b,
+        datasets_root=tmp_datasets,
+        targets=targets,
+        build_timestamp=ts,
+        max_projects=10,
+        max_retries=3,
+    )
+    ha = hashlib.sha256((out_a / "reference_dataset.jsonl").read_bytes()).hexdigest()
+    hb = hashlib.sha256((out_b / "reference_dataset.jsonl").read_bytes()).hexdigest()
+    assert ha == hb
 
 
 def test_dry_run_fixture_mode(tmp_datasets: Path) -> None:

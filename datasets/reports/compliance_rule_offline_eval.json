@@ -1,0 +1,557 @@
+{
+  "engine_version": "compliance-rules-1.1.0",
+  "reference_path": "/root/autodl-tmp/bidpilot/datasets/eval/reference/compliance_reference.jsonl",
+  "sample_count": 20,
+  "total_sample_count": 20,
+  "compared_count": 20,
+  "verdict_match_count": 16,
+  "verdict_match_rate": 0.8,
+  "label_consistency_rate": 0.8,
+  "rule_trigger_counts": {
+    "REF_deadline_keyword": 1,
+    "REF_invalid_bid_keyword": 1,
+    "REF_mandatory_keyword": 18,
+    "REF_quote_grounding": 20
+  },
+  "severity_distribution": {
+    "error": 2,
+    "info": 38
+  },
+  "category_distribution": {
+    "consistency": 1,
+    "coverage": 18,
+    "evidence": 20,
+    "qualification_risk": 1
+  },
+  "note": "This report evaluates lightweight REF_* checks on compliance_reference.jsonl. Full DB-backed engine rules (A001–E006, compliance-rules-1.1.0) apply to live projects via the compliance API/service — not to these JSONL samples alone.",
+  "results": [
+    {
+      "sample_id": "010dd1a5-660b-51af-b68c-62749372be1c",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "必须",
+        "应当",
+        "须"
+      ]
+    },
+    {
+      "sample_id": "04831b5d-bfb2-5e20-91d7-56bb499767b7",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "必须",
+        "须"
+      ]
+    },
+    {
+      "sample_id": "096fadb2-ca87-5fa0-8592-cd641dbfc2fd",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "必须",
+        "须"
+      ]
+    },
+    {
+      "sample_id": "0981f45a-954d-5201-982f-1b96412d9f2e",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "必须",
+        "须"
+      ]
+    },
+    {
+      "sample_id": "0cb981ff-b2bd-5454-b2cc-1c064eebbded",
+      "rule_type": "deadline",
+      "reference_verdict": "attention_required",
+      "engine_verdict": "pass",
+      "verdict_match": false,
+      "findings": [
+        {
+          "rule_id": "REF_deadline_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "consistency"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "截止",
+        "投标截止"
+      ]
+    },
+    {
+      "sample_id": "0cc89fd4-0712-54fe-8eb9-155ab4bd4ce6",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "fail",
+      "verdict_match": false,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "fail",
+          "message": "expected keywords for rule_type=mandatory not found",
+          "severity": "error",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": []
+    },
+    {
+      "sample_id": "13bc5ebb-9ea7-587f-af82-fc6bd933d0c5",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "应当"
+      ]
+    },
+    {
+      "sample_id": "13f1aa51-9140-59de-ad4d-df7786425ac1",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "必须",
+        "须"
+      ]
+    },
+    {
+      "sample_id": "20626dca-a979-5ce2-9700-8de59ff9b8a7",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "须"
+      ]
+    },
+    {
+      "sample_id": "29731317-beba-52f9-91fc-acd5c2895449",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "须"
+      ]
+    },
+    {
+      "sample_id": "297a2234-b771-57ee-9f5b-03bf860c7c77",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "必须",
+        "须"
+      ]
+    },
+    {
+      "sample_id": "29a00933-da3f-5819-a5bb-7dd9476d465c",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "必须",
+        "须",
+        "不得擅自",
+        "否则视为无效"
+      ]
+    },
+    {
+      "sample_id": "2da9f517-d275-50fd-9f90-3e07fb162159",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "须"
+      ]
+    },
+    {
+      "sample_id": "329cd13e-d0b1-5b29-b76c-5b92f91db78d",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "必须",
+        "须"
+      ]
+    },
+    {
+      "sample_id": "3696c67d-fdf1-5b8e-82d0-b31ffa7ad33a",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "应当"
+      ]
+    },
+    {
+      "sample_id": "3dd2c313-5f63-51a1-b078-7d3fea476fcd",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "fail",
+      "verdict_match": false,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "fail",
+          "message": "expected keywords for rule_type=mandatory not found",
+          "severity": "error",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": []
+    },
+    {
+      "sample_id": "42712598-dc64-5d3a-adfb-ca1bc8280fa2",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "须"
+      ]
+    },
+    {
+      "sample_id": "443e9b6d-fd48-52d6-99ce-74caf1b5124e",
+      "rule_type": "invalid_bid",
+      "reference_verdict": "fail",
+      "engine_verdict": "pass",
+      "verdict_match": false,
+      "findings": [
+        {
+          "rule_id": "REF_invalid_bid_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "qualification_risk"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "无效投标"
+      ]
+    },
+    {
+      "sample_id": "4a28e056-b780-5fba-88d0-96408784659e",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "应当"
+      ]
+    },
+    {
+      "sample_id": "4ac6e147-cf82-51fc-a2b9-c8009f6e676e",
+      "rule_type": "mandatory",
+      "reference_verdict": "pass",
+      "engine_verdict": "pass",
+      "verdict_match": true,
+      "findings": [
+        {
+          "rule_id": "REF_mandatory_keyword",
+          "status": "pass",
+          "message": "keyword pattern check passed or N/A",
+          "severity": "info",
+          "category": "coverage"
+        },
+        {
+          "rule_id": "REF_quote_grounding",
+          "status": "pass",
+          "message": "at least one evidence quote grounded in text",
+          "severity": "info",
+          "category": "evidence"
+        }
+      ],
+      "keyword_hits": [
+        "须"
+      ]
+    }
+  ]
+}

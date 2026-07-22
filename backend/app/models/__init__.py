@@ -1,10 +1,15 @@
 from app.models.agent import AgentRun, AgentStep, ToolCall
 from app.models.company import CompanyProfile
+from app.models.compliance import ComplianceFinding, ComplianceRun
 from app.models.conversation import Conversation, Message
 from app.models.document import Document, DocumentChunk, DocumentVersion
 from app.models.enums import (
     ActorAuthn,
     AgentRunStatus,
+    ComplianceFindingStatus,
+    ComplianceRuleCategory,
+    ComplianceRunStatus,
+    ComplianceSeverity,
     DocumentType,
     EvidenceMatchStatus,
     ExtractionRunStatus,
@@ -58,6 +63,12 @@ __all__ = [
     "AgentStep",
     "BidProject",
     "CompanyProfile",
+    "ComplianceFinding",
+    "ComplianceFindingStatus",
+    "ComplianceRuleCategory",
+    "ComplianceRun",
+    "ComplianceRunStatus",
+    "ComplianceSeverity",
     "Conversation",
     "Document",
     "DocumentChunk",

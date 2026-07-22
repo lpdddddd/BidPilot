@@ -175,3 +175,30 @@ class ProposalDraftGenerationMode(StrEnum):
 
 # Generation runs reuse ExtractionRunStatus values.
 ProposalDraftRunStatus = ExtractionRunStatus
+
+# Compliance runs reuse ExtractionRunStatus values (queued/running/succeeded/failed).
+ComplianceRunStatus = ExtractionRunStatus
+
+
+class ComplianceSeverity(StrEnum):
+    info = "info"
+    warning = "warning"
+    error = "error"
+    critical = "critical"
+
+
+class ComplianceFindingStatus(StrEnum):
+    """Finding outcome. Member ``pass_`` maps to DB/API value ``pass``."""
+
+    pass_ = "pass"
+    fail = "fail"
+    unknown = "unknown"
+
+
+class ComplianceRuleCategory(StrEnum):
+    coverage = "coverage"
+    evidence = "evidence"
+    qualification_risk = "qualification_risk"
+    draft_safety = "draft_safety"
+    consistency = "consistency"
+    engine = "engine"

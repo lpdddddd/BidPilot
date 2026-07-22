@@ -16,6 +16,7 @@ from app.models.types import EnumType
 
 if TYPE_CHECKING:
     from app.models.agent import AgentRun
+    from app.models.compliance import ComplianceFinding, ComplianceRun
     from app.models.conversation import Conversation
     from app.models.document import Document, DocumentChunk
     from app.models.extraction_run import RequirementExtractionRun
@@ -95,5 +96,11 @@ class BidProject(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         back_populates="project"
     )
     proposal_draft_runs: Mapped[list[ProposalDraftGenerationRun]] = relationship(
+        back_populates="project"
+    )
+    compliance_runs: Mapped[list[ComplianceRun]] = relationship(
+        back_populates="project"
+    )
+    compliance_findings: Mapped[list[ComplianceFinding]] = relationship(
         back_populates="project"
     )

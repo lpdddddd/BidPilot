@@ -76,6 +76,29 @@ def _answer_text(sample: ReferenceSample) -> str:
     return str(out)
 
 
+def _citation_nonempty(cites: Any) -> bool:
+    return bool(
+        (cites.chunk_ids or [])
+        or (cites.document_ids or [])
+        or (cites.quotes or [])
+        or (cites.page_numbers or [])
+        or (cites.source_urls or [])
+    )
+
+
+def _allows_empty_evidence(parsed: ReferenceSample) -> bool:
+    """Unanswerable / matching insufficient_evidence|unknown may omit evidence."""
+    if parsed.task_type == "unanswerable":
+        return True
+    if parsed.task_type == "rag" and not (parsed.reference_output or {}).get("answerable", True):
+        return True
+    if parsed.task_type == "matching":
+        status = str((parsed.reference_output or {}).get("status") or "")
+        if status in {"insufficient_evidence", "unknown", "not_applicable"}:
+            return True
+    return False
+
+
 def validate_sample(
     sample: ReferenceSample | dict[str, Any],
     *,
@@ -94,8 +117,9 @@ def validate_sample(
     if parsed.document_id and parsed.document_id not in document_index and document_index:
         messages.append(f"missing document_id={parsed.document_id}")
 
-    # Evidence / citation checks
     cites = parsed.citation_metadata
+
+    # --- Citation checks ALWAYS run when citation_metadata is present (independent of evidence) ---
     for cid in cites.chunk_ids:
         if cid and cid not in chunk_index and chunk_index:
             messages.append(f"missing chunk_id={cid}")
@@ -103,6 +127,43 @@ def validate_sample(
         if did and did not in document_index and document_index:
             messages.append(f"missing citation document_id={did}")
 
+    nonempty_quotes = [q for q in (cites.quotes or []) if q]
+    if nonempty_quotes:
+        if not cites.chunk_ids:
+            messages.append("citation quotes without chunk_ids")
+        elif chunk_index:
+            for quote in nonempty_quotes:
+                grounded = False
+                for cid in cites.chunk_ids:
+                    ch = chunk_index.get(cid)
+                    if ch and quote_contiguous_in_text(quote, ch.get("text") or ""):
+                        grounded = True
+                        break
+                if not grounded:
+                    messages.append("citation quote not grounded in cited chunks")
+
+    # Page numbers (if any) should fall within cited chunk page ranges when available
+    if cites.page_numbers and cites.chunk_ids and chunk_index:
+        for page in cites.page_numbers:
+            if page is None:
+                continue
+            page_ok = False
+            any_range = False
+            for cid in cites.chunk_ids:
+                ch = chunk_index.get(cid)
+                if not ch:
+                    continue
+                ps, pe = ch.get("page_start"), ch.get("page_end")
+                if ps is None or pe is None:
+                    continue
+                any_range = True
+                if ps <= page <= pe:
+                    page_ok = True
+                    break
+            if any_range and not page_ok:
+                messages.append(f"citation page_number {page} outside cited chunk pages")
+
+    # Evidence item checks
     for ev in parsed.evidence:
         if ev.document_id and ev.document_id not in document_index and document_index:
             messages.append(f"evidence missing document_id={ev.document_id}")
@@ -112,13 +173,11 @@ def validate_sample(
                 messages.append(f"evidence missing chunk_id={ev.chunk_id}")
             elif chunk is not None:
                 text = chunk.get("text") or chunk.get("normalized_text") or ""
-                # page range
                 if ev.page_number is not None:
                     ps = chunk.get("page_start")
                     pe = chunk.get("page_end")
                     if ps is not None and pe is not None and not (ps <= ev.page_number <= pe):
                         messages.append(f"page_number {ev.page_number} outside chunk pages {ps}-{pe}")
-                # char range against raw chunk text when present
                 if ev.char_start is not None and ev.char_end is not None:
                     if ev.char_end > len(text) or ev.char_start > len(text):
                         messages.append("char range exceeds chunk text length")
@@ -126,32 +185,24 @@ def validate_sample(
                     if not quote_contiguous_in_text(ev.quote, text):
                         messages.append("quote not contiguous in chunk text")
 
-        # Also validate citation quotes against first matching chunk
-        for quote in cites.quotes:
-            if not quote:
-                continue
-            grounded = False
-            for cid in cites.chunk_ids:
-                ch = chunk_index.get(cid)
-                if ch and quote_contiguous_in_text(quote, ch.get("text") or ""):
-                    grounded = True
-                    break
-            if cites.chunk_ids and chunk_index and not grounded and parsed.task_type != "unanswerable":
-                messages.append("citation quote not grounded in cited chunks")
-
     answerable = parsed.task_type != "unanswerable"
     if parsed.task_type == "rag":
         answerable = bool((parsed.reference_output or {}).get("answerable", True))
     if parsed.task_type == "matching":
         status = str((parsed.reference_output or {}).get("status") or "")
-        if status in {"insufficient_evidence", "not_applicable"}:
+        if status in {"insufficient_evidence", "not_applicable", "unknown"}:
             answerable = False
+
+    allows_empty = _allows_empty_evidence(parsed)
+
+    # Citations present but evidence empty → fail for answerable tasks
+    if not parsed.evidence and _citation_nonempty(cites) and not allows_empty:
+        messages.append("citations present but evidence empty")
 
     if require_evidence_for_answerable and answerable and parsed.task_type != "unanswerable":
         has_ev = bool(parsed.evidence) or bool(cites.chunk_ids) or bool(cites.quotes)
         if not has_ev:
             messages.append("answerable sample lacks evidence support")
-        # Prefer at least one grounded quote when evidence present
         if parsed.evidence:
             any_quote = any(e.quote for e in parsed.evidence)
             if not any_quote and parsed.task_type in {"rag", "extraction", "compliance", "drafting"}:
@@ -163,7 +214,6 @@ def validate_sample(
         text = _answer_text(parsed)
         if _DEFINITIVE_CLAIM_RE.search(text) and not _ABSTAIN_OK_RE.search(text):
             messages.append("unanswerable sample has definitive unsupported claim")
-        # Must not claim strong support from empty/irrelevant evidence
         if (parsed.reference_output or {}).get("answerable") is True:
             messages.append("unanswerable sample marked answerable=true")
 

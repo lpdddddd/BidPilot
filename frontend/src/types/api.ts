@@ -888,3 +888,117 @@ export type ProposalDraftReopenPayload = {
 export const PROPOSAL_DRAFT_DISCLAIMER =
   "本文件为基于已审核材料生成的响应准备草稿，须经人工复核、补充、签署和法务或业务确认后方可使用，不构成投标结论或投标提交文件。";
 
+export type ComplianceSeverity = "info" | "warning" | "error" | "critical";
+
+export type ComplianceFindingStatus = "pass" | "fail" | "unknown";
+
+export type ComplianceRuleCategory =
+  | "coverage"
+  | "evidence"
+  | "qualification_risk"
+  | "draft_safety"
+  | "consistency"
+  | "engine";
+
+export type ComplianceRun = {
+  id: string;
+  project_id: string;
+  status: ExtractionRunStatus;
+  draft_id?: string | null;
+  total_checks: number;
+  passed_checks: number;
+  finding_count: number;
+  severity_counts_json?: Record<string, number> | null;
+  category_counts_json?: Record<string, number> | null;
+  rule_ids_json?: string[] | null;
+  engine_version: string;
+  error_summary?: string | null;
+  idempotency_key?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  config_json?: Record<string, unknown> | null;
+};
+
+export type ComplianceFinding = {
+  id?: string | null;
+  project_id?: string | null;
+  run_id?: string | null;
+  finding_id: string;
+  rule_id: string;
+  rule_name: string;
+  category: ComplianceRuleCategory;
+  severity: ComplianceSeverity;
+  status: ComplianceFindingStatus;
+  message: string;
+  remediation?: string | null;
+  requirement_id?: string | null;
+  match_id?: string | null;
+  draft_id?: string | null;
+  evidence_json?: Record<string, unknown> | unknown[] | null;
+  source_location_json?: {
+    document_id?: string | null;
+    file_name?: string | null;
+    page_start?: number | null;
+    page_end?: number | null;
+    section?: string | null;
+    source_page?: number | null;
+    source_section?: string | null;
+    source_document_id?: string | null;
+    chunk_id?: string | null;
+    [key: string]: unknown;
+  } | null;
+  metadata_json?: Record<string, unknown> | null;
+  created_at?: string | null;
+};
+
+export type ComplianceReport = {
+  run: ComplianceRun;
+  findings: ComplianceFinding[];
+  engine_version: string;
+  total_checks: number;
+  passed_checks: number;
+  finding_count: number;
+  severity_counts: Record<string, number>;
+  category_counts: Record<string, number>;
+};
+
+export type ComplianceStartPayload = {
+  draft_id?: string | null;
+  rule_ids?: string[] | null;
+  categories?: ComplianceRuleCategory[] | null;
+};
+
+export type ComplianceRuleInfo = {
+  rule_id: string;
+  name: string;
+  category: ComplianceRuleCategory;
+  description: string;
+  default_severity: ComplianceSeverity;
+};
+
+export type ComplianceRuleListResponse = {
+  items: ComplianceRuleInfo[];
+  total: number;
+  engine_version: string;
+};
+
+export type ComplianceFindingListParams = {
+  severity?: ComplianceSeverity;
+  category?: ComplianceRuleCategory;
+  rule_id?: string;
+  requirement_id?: string;
+  draft_id?: string;
+  status?: ComplianceFindingStatus;
+  run_id?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type ComplianceFindingListResponse = {
+  items: ComplianceFinding[];
+  total: number;
+  run_id?: string | null;
+};
+

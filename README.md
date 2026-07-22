@@ -238,7 +238,7 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 - API：`POST/GET .../requirement-matches/runs`、`GET .../requirement-matches`
 - 前端：项目详情「材料匹配」Tab；`insufficient_evidence` 文案为「当前材料未找到充分证据」
 
-## 匹配结果人工审核（第 9 步）
+## 匹配结果人工审核（产品步骤 · 审核闭环）
 
 对自动 Match 建立可审计审核闭环（confirm / reject / needs_more_material / reopen）。
 详见 `docs/requirement_match_review.md`。
@@ -246,6 +246,22 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 - 追加式 `RequirementMatchReview` 审计；Match 保留原始自动结果与证据链
 - 已审核 Match 受 `force` 保护；reopen 后可 supersede 再匹配且不丢历史
 - 无完整认证：`actor_authn=unverified_local_operator` + 本地 `actor_label`
+
+## 流程表第 9 步：规则检查工具
+
+对项目要求 / 匹配 / 草稿做**确定性**合规检查（无 LLM、无 LangGraph）。
+详见 `docs/compliance_rules.md`。
+
+> 编号说明：流程表将「规则检查工具」列为第 9 步；上文「匹配结果人工审核」为先序产品能力，二者并存。
+
+- 表：`compliance_runs`、`compliance_findings`；引擎版本 `compliance-rules-1.1.0`
+- 规则分类：coverage / evidence / qualification_risk / draft_safety / consistency（A001–E006）
+- API：`POST/GET .../compliance/runs`、`.../latest`、`.../findings`、`.../rules`
+- Tools：`check_requirement_coverage` 等 5 个 Pydantic I/O 包装
+- 前端：「智能审查」`/review`（`ComplianceReviewPage`）；Dashboard 能力标记 ready
+- 离线：`python -m app.services.compliance.offline_eval`
+- **限制**：非法律意见 / 非人工 gold；不足则 unknown，不编造
+- **尚未实现**：LangGraph Agent、LoRA 审查、自动投标结论
 
 ## 可追溯响应准备草稿（第 10 步）
 
@@ -362,12 +378,13 @@ llamafactory-cli train /absolute/path/to/bidpilot/training/llamafactory/configs/
 11. 结构感知 Chunk 与字符/页码溯源
 12. 混合检索：Qdrant Dense + OpenSearch BM25 + RRF 融合 + Cross-Encoder 重排
 13. 带来源引用的文档问答（RAG：检索证据约束 + Qwen3-8B + 引用校验 + SSE）
+14. 确定性规则合规检查引擎（coverage/evidence/资格风险/草稿安全/一致性）
 
 ## 后续开发顺序建议
 
 1. 人工审核沉淀 gold 需求 / Match / RAG / SFT
 2. 合规公开源采集规模化 + OCR
-3. LangGraph Agent 合规审查工作流
+3. LangGraph Agent 编排（复用已有合规 Tools，而非重写规则）
 4. 认证授权与组织权限
 5. 多 GPU QLoRA 正式训练
 6. 自动投标方案生成与投标提交（远期）

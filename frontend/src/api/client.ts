@@ -2,6 +2,12 @@ import { http } from "./http";
 import type {
   ChunkListResponse,
   ChunkSummaryResponse,
+  ComplianceFindingListParams,
+  ComplianceFindingListResponse,
+  ComplianceReport,
+  ComplianceRuleListResponse,
+  ComplianceRun,
+  ComplianceStartPayload,
   DocumentDownloadResponse,
   DocumentItem,
   DocumentListResponse,
@@ -498,6 +504,89 @@ export function proposalDraftExportUrl(
   format: "markdown" | "docx",
 ): string {
   return `/api/v1/projects/${projectId}/proposal-drafts/${draftId}/export?format=${format}`;
+}
+
+export async function listComplianceRules(
+  projectId?: string,
+): Promise<ComplianceRuleListResponse> {
+  const path = projectId
+    ? `/api/v1/projects/${projectId}/compliance/rules`
+    : `/api/v1/projects/compliance/rules`;
+  const { data } = await http.get<ComplianceRuleListResponse>(path);
+  return data;
+}
+
+export async function startComplianceRun(
+  projectId: string,
+  payload: ComplianceStartPayload = {},
+  idempotencyKey?: string,
+): Promise<ComplianceReport> {
+  const { data } = await http.post<ComplianceReport>(
+    `/api/v1/projects/${projectId}/compliance/runs`,
+    payload,
+    {
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      timeout: 120000,
+    },
+  );
+  return data;
+}
+
+export async function startDraftComplianceRun(
+  projectId: string,
+  draftId: string,
+  payload: ComplianceStartPayload = {},
+  idempotencyKey?: string,
+): Promise<ComplianceReport> {
+  const { data } = await http.post<ComplianceReport>(
+    `/api/v1/projects/${projectId}/proposal-drafts/${draftId}/compliance/runs`,
+    payload,
+    {
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      timeout: 120000,
+    },
+  );
+  return data;
+}
+
+export async function getComplianceRun(
+  projectId: string,
+  runId: string,
+): Promise<ComplianceRun> {
+  const { data } = await http.get<ComplianceRun>(
+    `/api/v1/projects/${projectId}/compliance/runs/${runId}`,
+  );
+  return data;
+}
+
+export async function getComplianceReport(
+  projectId: string,
+  runId: string,
+): Promise<ComplianceReport> {
+  const { data } = await http.get<ComplianceReport>(
+    `/api/v1/projects/${projectId}/compliance/runs/${runId}/report`,
+  );
+  return data;
+}
+
+export async function getLatestCompliance(
+  projectId: string,
+): Promise<ComplianceReport | null> {
+  const { data } = await http.get<ComplianceReport | null>(
+    `/api/v1/projects/${projectId}/compliance/latest`,
+  );
+  return data;
+}
+
+export async function listComplianceFindings(
+  projectId: string,
+  params: ComplianceFindingListParams = {},
+): Promise<ComplianceFindingListResponse> {
+  const { data } = await http.get<ComplianceFindingListResponse>(
+    `/api/v1/projects/${projectId}/compliance/findings`,
+    { params },
+  );
+  return data;
 }
 
 export { askProject, askProjectStream, getLlmHealth } from "./ask";

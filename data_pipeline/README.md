@@ -41,7 +41,7 @@ python -m bidpilot_data build-rag --limit 300
 python -m bidpilot_data validate rag
 python -m bidpilot_data build-agent --limit 500
 python -m bidpilot_data build-sft
-python -m bidpilot_data build-reference --seed 42
+python -m bidpilot_data build-reference --seed 42 --build-timestamp 2026-07-22T00:00:00Z
 python -m bidpilot_data validate all
 python -m bidpilot_data report
 python -m bidpilot_data db import-requirements

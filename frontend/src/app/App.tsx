@@ -7,6 +7,9 @@ const DashboardPage = lazy(() => import("../pages/DashboardPage"));
 const ProjectListPage = lazy(() => import("../pages/ProjectListPage"));
 const ProjectDetailPage = lazy(() => import("../pages/ProjectDetailPage"));
 const CapabilityPlaceholderPage = lazy(() => import("../pages/CapabilityPlaceholderPage"));
+const ComplianceReviewPage = lazy(
+  () => import("../features/compliance/ComplianceReviewPage"),
+);
 const NotFoundPage = lazy(() => import("../pages/NotFoundPage"));
 
 function RouteFallback() {
@@ -34,15 +37,7 @@ export default function App() {
               />
             }
           />
-          <Route
-            path="/review"
-            element={
-              <CapabilityPlaceholderPage
-                title="智能审查"
-                description="基于规则与 Agent 工作流的合规审查能力将在第 6～10 步接入。届时可在此查看条款风险与证据溯源。"
-              />
-            }
-          />
+          <Route path="/review" element={<ComplianceReviewPage />} />
           <Route
             path="/evaluation"
             element={

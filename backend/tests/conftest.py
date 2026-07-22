@@ -39,6 +39,9 @@ ENUM_TYPE_NAMES = [
     "proposal_draft_source_role",
     "proposal_draft_review_action",
     "proposal_draft_generation_mode",
+    "compliance_severity",
+    "compliance_finding_status",
+    "compliance_rule_category",
 ]
 
 

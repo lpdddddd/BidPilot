@@ -18,7 +18,7 @@ const INTEL_NODES: CapabilityNode[] = [
   { name: "混合检索", ready: true, note: "Dense + BM25 召回，RRF 融合与重排" },
   { name: "来源追溯", ready: true, note: "结果携带文件、章节、条款与页码" },
   { name: "文档问答", ready: true, note: "受检索证据约束的带来源回答（Qwen3-8B）" },
-  { name: "智能审查", ready: false, note: "规则与 Agent 工作流待后续开放" },
+  { name: "智能审查", ready: true, note: "确定性规则引擎：覆盖/证据/资格风险/草稿安全/一致性" },
 ];
 
 export default function DashboardPage() {

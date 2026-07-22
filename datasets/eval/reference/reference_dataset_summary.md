@@ -5,6 +5,7 @@
 - Total accepted samples: **140**
 - Rejected samples: **0**
 - Seed: `42`
+- build_timestamp: `2026-07-22T00:00:00Z`
 - use_llm: `False`
 
 ## Counts by task
@@ -16,11 +17,21 @@
 - `drafting`: 20
 - `unanswerable`: 10
 
+## Matching evidence
+
+- matching_with_real_bilateral_evidence: **20**
+- matching_missing_company_evidence: **10**
+
+### Matching status histogram
+
+- `insufficient_evidence`: 10
+- `partially_supported`: 20
+
 ## Splits
 
-- `train`: 98
-- `validation`: 14
-- `test`: 28
+- `train`: 73
+- `validation`: 40
+- `test`: 27
 
 ## Label sources
 
@@ -40,3 +51,4 @@
 - This is an **auto reference** set for course demos and automatic evaluation.
 - It is **not** expert human gold.
 - All citation quotes are validated against real chunk text (whitespace-normalized).
+- Matching uses real disclosed company evidence only; otherwise status is `insufficient_evidence`.

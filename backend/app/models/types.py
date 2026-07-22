@@ -5,6 +5,9 @@ from sqlalchemy import Enum as SAEnum
 
 from app.models.enums import (
     ActorAuthn,
+    ComplianceFindingStatus,
+    ComplianceRuleCategory,
+    ComplianceSeverity,
     EvidenceMatchStatus,
     MatchReviewAction,
     MatchReviewReasonCode,
@@ -57,6 +60,13 @@ proposal_draft_review_action_enum = EnumType(
 )
 proposal_draft_generation_mode_enum = EnumType(
     ProposalDraftGenerationMode, name="proposal_draft_generation_mode"
+)
+compliance_severity_enum = EnumType(ComplianceSeverity, name="compliance_severity")
+compliance_finding_status_enum = EnumType(
+    ComplianceFindingStatus, name="compliance_finding_status"
+)
+compliance_rule_category_enum = EnumType(
+    ComplianceRuleCategory, name="compliance_rule_category"
 )
 
 

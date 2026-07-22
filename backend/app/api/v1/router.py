@@ -1,6 +1,15 @@
 from fastapi import APIRouter
 
-from app.api.v1 import ask, documents, matches, projects, proposal_drafts, requirements, search
+from app.api.v1 import (
+    ask,
+    compliance,
+    documents,
+    matches,
+    projects,
+    proposal_drafts,
+    requirements,
+    search,
+)
 
 api_router = APIRouter()
 api_router.include_router(projects.router, prefix="/projects", tags=["projects"])
@@ -12,3 +21,5 @@ api_router.include_router(matches.router, prefix="/projects", tags=["matches"])
 api_router.include_router(
     proposal_drafts.router, prefix="/projects", tags=["proposal-drafts"]
 )
+api_router.include_router(compliance.router, prefix="/projects", tags=["compliance"])
+

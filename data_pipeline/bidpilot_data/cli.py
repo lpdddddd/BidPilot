@@ -335,6 +335,11 @@ def build_reference(
     use_llm: bool = typer.Option(False, help="Optional LLM second-pass judge"),
     max_retries: int = typer.Option(2, help="Retries for failed samples before reject"),
     max_projects: int = typer.Option(48, help="Max high-quality projects to sample from"),
+    build_timestamp: Optional[str] = typer.Option(
+        None,
+        "--build-timestamp",
+        help="Fixed ISO-8601 UTC timestamp for sample created_at / report (reproducible builds)",
+    ),
     verbose: bool = False,
 ) -> None:
     """Build auto reference eval dataset (silver/auto_reference — never human_gold)."""
@@ -348,6 +353,7 @@ def build_reference(
         use_llm=use_llm,
         max_retries=max_retries,
         max_projects=max_projects,
+        build_timestamp=build_timestamp,
     )
     print(report)
     if not dry_run and not report.get("all_targets_met", False):

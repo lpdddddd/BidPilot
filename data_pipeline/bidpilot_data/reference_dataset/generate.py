@@ -39,15 +39,6 @@ _COMPLIANCE_PATTERNS = [
     ("invalid_bid", re.compile(r"(无效投标|废标|否决|资格审查不合格)"), "invalid_bid_rule"),
 ]
 
-_MATCH_STATUSES = (
-    "supported",
-    "partially_supported",
-    "insufficient_evidence",
-    "conflicting",
-    "not_applicable",
-)
-
-
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -116,6 +107,7 @@ def _base_sample(
     generation_model: str = "deterministic",
     label_source: str = "auto_reference",
     key: str,
+    created_at: datetime | None = None,
 ) -> ReferenceSample:
     return ReferenceSample(
         sample_id=_sid(task_type, project_id, key),
@@ -132,7 +124,7 @@ def _base_sample(
         generator_version=GENERATOR_VERSION,
         data_provenance=provenance,
         label_source=label_source,  # type: ignore[arg-type]
-        created_at=_now(),
+        created_at=created_at or _now(),
     )
 
 
@@ -146,6 +138,7 @@ def generate_rag_samples(
     *,
     rng: random.Random,
     target: int,
+    created_at: datetime | None = None,
 ) -> list[ReferenceSample]:
     out: list[ReferenceSample] = []
     # Prefer reuse+normalize existing RAG questions where quote validates
@@ -210,6 +203,7 @@ def generate_rag_samples(
                 reuse_existing_rag=True,
             ),
             key=f"rag-reuse-{q.get('question_id')}",
+            created_at=created_at,
         )
         out.append(sample)
 
@@ -261,6 +255,7 @@ def generate_rag_samples(
                         method="template_rag",
                     ),
                     key=f"rag-tpl-{req.get('requirement_id')}",
+                created_at=created_at,
                 )
                 out.append(sample)
                 break  # diversify across projects
@@ -273,6 +268,7 @@ def generate_extraction_samples(
     *,
     rng: random.Random,
     target: int,
+    created_at: datetime | None = None,
 ) -> list[ReferenceSample]:
     out: list[ReferenceSample] = []
     # Diversify categories
@@ -334,24 +330,59 @@ def generate_extraction_samples(
             ),
             label_source="auto_reference",
             key=f"ext-{req.get('requirement_id')}",
+        created_at=created_at,
         )
         out.append(sample)
     return out[:target]
 
 
-def _synthetic_company_snippet(req: dict[str, Any], status: str, rng: random.Random) -> str:
-    """Build a synthetic company-profile snippet aligned to a requirement (eval-only, not written to silver)."""
-    text = _trim_quote(req.get("normalized_requirement") or req.get("original_text") or "", 120)
-    company = rng.choice(["粤海信息科技有限公司", "南粤数智科技股份有限公司", "珠三角云网科技有限公司"])
-    if status == "supported":
-        return f"{company}具备相关能力：{text}。已提供对应资质与业绩证明材料。"
-    if status == "partially_supported":
-        return f"{company}部分响应：{text[:60]}……（其余条款需补充证明）。"
-    if status == "conflicting":
-        return f"{company}材料显示与条款冲突：无法满足「{text[:40]}」中的强制性要求。"
-    if status == "not_applicable":
-        return f"{company}主营业务与本条款无关，该条款对本投标主体不适用。"
-    return f"{company}公开材料未包含足以证明「{text[:40]}」的证据。"
+_MISSING_COMPANY_MATERIAL = "缺少企业侧证据：当前材料未找到充分证据以支撑该需求条款的企业侧响应判定。"
+
+
+def _chunks_for_documents(corpus: CorpusIndexes, document_ids: list[str]) -> list[dict[str, Any]]:
+    wanted = {d for d in document_ids if d}
+    if not wanted:
+        return []
+    return [c for c in corpus.chunks.values() if c.get("document_id") in wanted]
+
+
+def _find_supplier_chunk(
+    corpus: CorpusIndexes,
+    supplier: dict[str, Any],
+) -> tuple[dict[str, Any], str] | None:
+    """Locate a real chunk in supplier source documents that contains the supplier name."""
+    name = (supplier.get("name") or "").strip()
+    if not name:
+        return None
+    docs = list(supplier.get("source_document_ids") or [])
+    for chunk in _chunks_for_documents(corpus, docs):
+        text = chunk.get("text") or ""
+        if name not in text:
+            continue
+        # Prefer a contiguous window around the name mention
+        idx = text.find(name)
+        start = max(0, idx - 40)
+        end = min(len(text), idx + len(name) + 80)
+        quote = _trim_quote(text[start:end])
+        if len(quote) < 8 or not quote_contiguous_in_text(quote, text):
+            quote = _trim_quote(name)
+            if not quote_contiguous_in_text(quote, text):
+                continue
+        return chunk, quote
+    return None
+
+
+def _requirement_tender_evidence(
+    corpus: CorpusIndexes,
+    req: dict[str, Any],
+) -> tuple[dict[str, Any], str] | None:
+    chunk = corpus.chunks.get(req.get("chunk_id") or "")
+    if not chunk:
+        return None
+    quote = _trim_quote(req.get("original_text") or "")
+    if len(quote) < 16 or not quote_contiguous_in_text(quote, chunk.get("text") or ""):
+        return None
+    return chunk, quote
 
 
 def generate_matching_samples(
@@ -360,10 +391,13 @@ def generate_matching_samples(
     *,
     rng: random.Random,
     target: int,
+    created_at: datetime | None = None,
 ) -> list[ReferenceSample]:
+    """Matching samples use ONLY real company-side evidence (or explicit insufficient_evidence)."""
     out: list[ReferenceSample] = []
+    used_req_ids: set[str] = set()
 
-    # Prefer disclosed matches if present
+    # 1) Prefer disclosed matches when present
     req_by_id = {r.get("requirement_id"): r for r in corpus.requirements if r.get("requirement_id")}
     for m in corpus.matches:
         if len(out) >= target:
@@ -386,6 +420,7 @@ def generate_matching_samples(
         status = status_map.get(str(m.get("status")), "insufficient_evidence")
         doc_id = m.get("evidence_document_id") or chunk.get("document_id") or ""
         ev = _chunk_evidence(chunk, quote, source_url=m.get("source_url"), evidence_id=(m.get("evidence_ids") or [None])[0])
+        rid = req.get("requirement_id") or ""
         sample = _base_sample(
             task_type="matching",
             project_id=req["project_id"],
@@ -405,76 +440,164 @@ def generate_matching_samples(
                 category=map_category(req.get("category")),
                 notes="disclosed_match",
             ),
-            confidence=float(m.get("confidence") or 0.75),
+            confidence=max(0.88, float(m.get("confidence") or 0.88)),
             provenance=DataProvenance(
                 source_paths=["silver/requirement_matches.jsonl"],
                 source_record_ids=[m.get("match_id") or ""],
                 method="disclosed_match",
+                notes="real_bilateral_evidence",
             ),
             key=f"match-disclosed-{m.get('match_id')}",
+            created_at=created_at,
         )
         out.append(sample)
+        if rid:
+            used_req_ids.add(rid)
 
-    # Synthetic company snippets aligned to requirements (+ optional disclosed supplier names)
-    status_cycle = list(_MATCH_STATUSES)
-    si = 0
+    # 2) Disclosed suppliers: real chunks containing supplier name + tender requirement evidence
+    # Cap bilateral pairs so insufficient_evidence padding can still reach ≥10 when possible.
+    BILATERAL_SUPPLIER_CAP = 20
+    selected_ids = {sp.project_id for sp in selected}
+    supplier_rows = [s for s in corpus.suppliers if s.get("project_id") in selected_ids]
+    rng.shuffle(supplier_rows)
+    bilateral_added = 0
+    for supplier in supplier_rows:
+        if len(out) >= target or bilateral_added >= BILATERAL_SUPPLIER_CAP:
+            break
+        found = _find_supplier_chunk(corpus, supplier)
+        if not found:
+            continue
+        company_chunk, company_quote = found
+        pid = supplier.get("project_id") or ""
+        reqs = list(corpus.requirements_by_project.get(pid) or [])
+        rng.shuffle(reqs)
+        taken_for_supplier = 0
+        for req in reqs:
+            if (
+                len(out) >= target
+                or taken_for_supplier >= 5
+                or bilateral_added >= BILATERAL_SUPPLIER_CAP
+            ):
+                break
+            rid = req.get("requirement_id") or ""
+            if rid in used_req_ids:
+                continue
+            tender = _requirement_tender_evidence(corpus, req)
+            if not tender:
+                continue
+            tender_chunk, tender_quote = tender
+            company_doc = company_chunk.get("document_id") or ""
+            tender_doc = tender_chunk.get("document_id") or req.get("document_id") or ""
+            company_ev = _chunk_evidence(company_chunk, company_quote, source_url=(supplier.get("source_urls") or [None])[0])
+            tender_ev = _chunk_evidence(tender_chunk, tender_quote, source_url=req.get("source_url"))
+            # Name attestation only — clause-level satisfaction not fully proven
+            status = "partially_supported"
+            sample = _base_sample(
+                task_type="matching",
+                project_id=pid,
+                document_id=tender_doc or company_doc,
+                input_obj={
+                    "requirement": req.get("normalized_requirement") or tender_quote,
+                    "company_material": company_quote,
+                    "supplier_id": supplier.get("supplier_id"),
+                    "supplier_name": supplier.get("name"),
+                },
+                output_obj={
+                    "status": status,
+                    "reason": (
+                        f"公开材料出现供应商「{supplier.get('name')}」相关表述，"
+                        "可作为企业侧证据；条款完全满足情况仍需人工核验。"
+                    ),
+                    "evidence_chunk_ids": [tender_chunk["chunk_id"], company_chunk["chunk_id"]],
+                },
+                evidence=[tender_ev, company_ev],
+                citation=CitationMetadata(
+                    chunk_ids=[tender_chunk["chunk_id"], company_chunk["chunk_id"]],
+                    document_ids=[d for d in [tender_doc, company_doc] if d],
+                    page_numbers=[
+                        p
+                        for p in [tender_chunk.get("page_start"), company_chunk.get("page_start")]
+                        if p is not None
+                    ],
+                    source_urls=[u for u in [req.get("source_url"), *((supplier.get("source_urls") or []))] if u],
+                    quotes=[tender_quote, company_quote],
+                    category=map_category(req.get("category")),
+                    notes="disclosed_supplier_bilateral",
+                ),
+                confidence=0.86,
+                provenance=DataProvenance(
+                    source_paths=[
+                        "silver/disclosed_suppliers.jsonl",
+                        "silver/requirements.jsonl",
+                        "interim/chunks/chunks.jsonl",
+                    ],
+                    source_record_ids=[supplier.get("supplier_id") or "", rid],
+                    method="disclosed_supplier_bilateral",
+                    notes="real_bilateral_evidence",
+                ),
+                key=f"match-bilateral-{rid}-{supplier.get('supplier_id')}",
+                created_at=created_at,
+            )
+            out.append(sample)
+            taken_for_supplier += 1
+            bilateral_added += 1
+            if rid:
+                used_req_ids.add(rid)
+
+    # 3) Pad with insufficient_evidence when no real company-side evidence for a requirement
     for sp in selected:
         if len(out) >= target:
             break
         reqs = list(corpus.requirements_by_project.get(sp.project_id) or [])
         rng.shuffle(reqs)
-        suppliers = corpus.suppliers_by_project.get(sp.project_id) or []
-        for req in reqs[:8]:
+        for req in reqs:
             if len(out) >= target:
                 break
-            chunk = corpus.chunks.get(req.get("chunk_id") or "")
-            if not chunk:
+            rid = req.get("requirement_id") or ""
+            if rid in used_req_ids:
                 continue
-            quote = _trim_quote(req.get("original_text") or "")
-            if len(quote) < 16 or not quote_contiguous_in_text(quote, chunk.get("text") or ""):
+            tender = _requirement_tender_evidence(corpus, req)
+            if not tender:
                 continue
-            status = status_cycle[si % len(status_cycle)]
-            si += 1
-            company_snip = _synthetic_company_snippet(req, status, rng)
-            if suppliers:
-                company_snip = f"供应商「{suppliers[0].get('name')}」：" + company_snip
-            doc_id = req.get("document_id") or chunk.get("document_id") or ""
-            # Evidence is the requirement chunk (real); company material is synthetic snippet in input only
-            ev = _chunk_evidence(chunk, quote, source_url=req.get("source_url"))
+            tender_chunk, tender_quote = tender
+            doc_id = req.get("document_id") or tender_chunk.get("document_id") or ""
+            tender_ev = _chunk_evidence(tender_chunk, tender_quote, source_url=req.get("source_url"))
             sample = _base_sample(
                 task_type="matching",
                 project_id=sp.project_id,
                 document_id=doc_id,
                 input_obj={
-                    "requirement": req.get("normalized_requirement") or quote,
-                    "company_material": company_snip,
-                    "synthetic_company_profile": True,
+                    "requirement": req.get("normalized_requirement") or tender_quote,
+                    "company_material": _MISSING_COMPANY_MATERIAL,
                 },
                 output_obj={
-                    "status": status,
-                    "reason": f"基于需求证据与公司材料对齐的自动判定：{status}",
-                    "evidence_chunk_ids": [chunk["chunk_id"]],
+                    "status": "insufficient_evidence",
+                    "reason": "缺少企业侧证据，当前材料未找到充分证据，无法判定企业是否满足该需求。",
+                    "evidence_chunk_ids": [tender_chunk["chunk_id"]],
                 },
-                evidence=[ev],
+                evidence=[tender_ev],
                 citation=CitationMetadata(
-                    chunk_ids=[chunk["chunk_id"]],
+                    chunk_ids=[tender_chunk["chunk_id"]],
                     document_ids=[doc_id] if doc_id else [],
-                    quotes=[quote],
+                    page_numbers=[tender_chunk.get("page_start")] if tender_chunk.get("page_start") else [],
                     source_urls=[req.get("source_url")] if req.get("source_url") else [],
+                    quotes=[tender_quote],
                     category=map_category(req.get("category")),
-                    notes="synthetic_company_snippet_eval_only",
+                    notes="missing_company_evidence",
                 ),
-                confidence=0.65,
+                confidence=0.64,
                 provenance=DataProvenance(
                     source_paths=["silver/requirements.jsonl", "interim/chunks/chunks.jsonl"],
-                    source_record_ids=[req.get("requirement_id") or ""],
-                    method="synthetic_aligned_matching",
-                    notes="company snippet is eval-only; evidence quotes are real chunks",
+                    source_record_ids=[rid],
+                    method="insufficient_company_evidence",
+                    notes="matching_missing_company_evidence",
                 ),
-                key=f"match-syn-{req.get('requirement_id')}-{status}",
+                key=f"match-insuff-{rid}",
+                created_at=created_at,
             )
             out.append(sample)
-            break
+            if rid:
+                used_req_ids.add(rid)
     return out[:target]
 
 
@@ -484,6 +607,7 @@ def generate_compliance_samples(
     *,
     rng: random.Random,
     target: int,
+    created_at: datetime | None = None,
 ) -> list[ReferenceSample]:
     out: list[ReferenceSample] = []
     for sp in selected:
@@ -541,6 +665,7 @@ def generate_compliance_samples(
                         method="rule_pattern_compliance",
                     ),
                     key=f"comp-{chunk.get('chunk_id')}-{rule_name}",
+                created_at=created_at,
                 )
                 out.append(sample)
                 break
@@ -553,6 +678,7 @@ def generate_drafting_samples(
     *,
     rng: random.Random,
     target: int,
+    created_at: datetime | None = None,
 ) -> list[ReferenceSample]:
     """Draft outlines ONLY from confirmed-like evidence (silver supported pairs / evidence quotes)."""
     out: list[ReferenceSample] = []
@@ -656,6 +782,7 @@ def generate_drafting_samples(
                 method="supported_pair_draft_outline",
             ),
             key=f"draft-{chunk.get('chunk_id')}-{req.get('requirement_id')}",
+        created_at=created_at,
         )
         out.append(sample)
     return out[:target]
@@ -667,6 +794,7 @@ def generate_unanswerable_samples(
     *,
     rng: random.Random,
     target: int,
+    created_at: datetime | None = None,
 ) -> list[ReferenceSample]:
     out: list[ReferenceSample] = []
     # Reuse existing unanswerable RAG
@@ -712,6 +840,7 @@ def generate_unanswerable_samples(
                     reuse_existing_rag=True,
                 ),
                 key=f"una-reuse-{q.get('question_id')}",
+            created_at=created_at,
             )
             out.append(sample)
 
@@ -764,6 +893,7 @@ def generate_unanswerable_samples(
                 method="template_unanswerable",
             ),
             key=f"una-tpl-{sp.project_id}-{ti}",
+        created_at=created_at,
         )
         out.append(sample)
     return out[:target]
@@ -775,15 +905,38 @@ def generate_all_candidates(
     *,
     seed: int,
     targets: dict[str, int],
+    created_at: datetime | None = None,
 ) -> list[ReferenceSample]:
     rng = random.Random(seed)
     samples: list[ReferenceSample] = []
-    samples.extend(generate_rag_samples(corpus, selected, rng=rng, target=targets.get("rag", 30)))
-    samples.extend(generate_extraction_samples(corpus, selected, rng=rng, target=targets.get("extraction", 30)))
-    samples.extend(generate_matching_samples(corpus, selected, rng=rng, target=targets.get("matching", 30)))
-    samples.extend(generate_compliance_samples(corpus, selected, rng=rng, target=targets.get("compliance", 20)))
-    samples.extend(generate_drafting_samples(corpus, selected, rng=rng, target=targets.get("drafting", 20)))
-    samples.extend(generate_unanswerable_samples(corpus, selected, rng=rng, target=targets.get("unanswerable", 10)))
+    samples.extend(
+        generate_rag_samples(corpus, selected, rng=rng, target=targets.get("rag", 30), created_at=created_at)
+    )
+    samples.extend(
+        generate_extraction_samples(
+            corpus, selected, rng=rng, target=targets.get("extraction", 30), created_at=created_at
+        )
+    )
+    samples.extend(
+        generate_matching_samples(
+            corpus, selected, rng=rng, target=targets.get("matching", 30), created_at=created_at
+        )
+    )
+    samples.extend(
+        generate_compliance_samples(
+            corpus, selected, rng=rng, target=targets.get("compliance", 20), created_at=created_at
+        )
+    )
+    samples.extend(
+        generate_drafting_samples(
+            corpus, selected, rng=rng, target=targets.get("drafting", 20), created_at=created_at
+        )
+    )
+    samples.extend(
+        generate_unanswerable_samples(
+            corpus, selected, rng=rng, target=targets.get("unanswerable", 10), created_at=created_at
+        )
+    )
     return samples
 
 
@@ -794,6 +947,7 @@ def overgenerate_for_retry(
     seed: int,
     targets: dict[str, int],
     multiplier: float = 2.5,
+    created_at: datetime | None = None,
 ) -> list[ReferenceSample]:
     inflated = {k: max(int(v * multiplier), v + 5) for k, v in targets.items()}
-    return generate_all_candidates(corpus, selected, seed=seed, targets=inflated)
+    return generate_all_candidates(corpus, selected, seed=seed, targets=inflated, created_at=created_at)

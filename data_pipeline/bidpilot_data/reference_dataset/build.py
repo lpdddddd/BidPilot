@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from bidpilot_data.logging import get_logger, log_stats
-from bidpilot_data.reference_dataset.export import export_reference_dataset
+from bidpilot_data.reference_dataset.export import export_reference_dataset, matching_stats
 from bidpilot_data.reference_dataset.generate import generate_all_candidates, overgenerate_for_retry
 from bidpilot_data.reference_dataset.llm_judge import apply_judge
 from bidpilot_data.reference_dataset.schema import DEFAULT_TARGETS, GENERATOR_VERSION, ReferenceSample
@@ -17,6 +18,24 @@ from bidpilot_data.reference_dataset.validate import dedupe_samples, validate_sa
 from bidpilot_data.settings import get_settings
 
 log = get_logger(__name__)
+
+
+def parse_build_timestamp(value: datetime | str | None) -> datetime | None:
+    """Parse optional ISO-8601 build timestamp to UTC datetime."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        raw = str(value).strip()
+        if not raw:
+            return None
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        dt = datetime.fromisoformat(raw)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def build_reference_dataset(
@@ -29,6 +48,7 @@ def build_reference_dataset(
     targets: dict[str, int] | None = None,
     max_projects: int | None = 48,
     datasets_root: Path | None = None,
+    build_timestamp: datetime | str | None = None,
 ) -> dict[str, Any]:
     """Build auto reference dataset under datasets/eval/reference/ (new dir only)."""
     settings = get_settings()
@@ -38,14 +58,24 @@ def build_reference_dataset(
     if targets:
         tgt.update(targets)
 
+    created_at = parse_build_timestamp(build_timestamp)
+
     corpus = load_corpus(root)
     selected = select_projects(corpus, seed=seed, max_projects=max_projects)
     log.info("selected %s projects for reference build (seed=%s)", len(selected), seed)
 
     # Over-generate so validation/retry can still meet minima
-    candidates = overgenerate_for_retry(corpus, selected, seed=seed, targets=tgt, multiplier=3.0)
+    candidates = overgenerate_for_retry(
+        corpus, selected, seed=seed, targets=tgt, multiplier=3.0, created_at=created_at
+    )
     # Also keep a second wave with offset seed for retries
-    extra_pool = generate_all_candidates(corpus, selected, seed=seed + 17, targets={k: v * 2 for k, v in tgt.items()})
+    extra_pool = generate_all_candidates(
+        corpus,
+        selected,
+        seed=seed + 17,
+        targets={k: v * 2 for k, v in tgt.items()},
+        created_at=created_at,
+    )
 
     accepted: list[ReferenceSample] = []
     rejected: list[ReferenceSample] = []
@@ -98,6 +128,7 @@ def build_reference_dataset(
             selected,
             seed=seed + 100 * (retry_i + 1),
             targets={t: max(shortfall[t] * 3, shortfall[t] + 5) for t in shortfall},
+            created_at=created_at,
         )
         wave.extend(extra_pool)
         # Avoid already accepted ids
@@ -142,10 +173,13 @@ def build_reference_dataset(
     accepted, splits_manifest = assign_splits(accepted, seed=seed, document_index=corpus.documents)
 
     counts = Counter(s.task_type for s in accepted)
+    match_stats = matching_stats(accepted)
     targets_met = {t: counts.get(t, 0) >= n for t, n in tgt.items()}
+    report_ts = created_at or datetime.now(timezone.utc)
     report: dict[str, Any] = {
         "generator_version": GENERATOR_VERSION,
         "seed": seed,
+        "build_timestamp": report_ts.isoformat().replace("+00:00", "Z"),
         "use_llm": use_llm,
         "max_retries": max_retries,
         "dry_run": dry_run,
@@ -159,6 +193,9 @@ def build_reference_dataset(
         "all_targets_met": all(targets_met.values()),
         "rejected_count": len(rejected),
         "attempt_stats": dict(attempt_stats),
+        "matching_with_real_bilateral_evidence": match_stats["matching_with_real_bilateral_evidence"],
+        "matching_missing_company_evidence": match_stats["matching_missing_company_evidence"],
+        "matching_status_histogram": match_stats["matching_status_histogram"],
         "splits": {
             "counts": splits_manifest.get("counts"),
             "project_counts": splits_manifest.get("project_counts"),
@@ -175,6 +212,7 @@ def build_reference_dataset(
         report=report,
         splits_manifest={
             "seed": seed,
+            "build_timestamp": report["build_timestamp"],
             "project_to_split": splits_manifest.get("project_to_split") or {},
             "counts": splits_manifest.get("counts") or {},
             "ok": splits_manifest.get("ok", False),
@@ -190,6 +228,8 @@ def build_reference_dataset(
             "rejected": len(rejected),
             "all_targets_met": report["all_targets_met"],
             **{f"n_{k}": counts.get(k, 0) for k in tgt},
+            "matching_bilateral": match_stats["matching_with_real_bilateral_evidence"],
+            "matching_missing_company": match_stats["matching_missing_company_evidence"],
         },
     )
     return report

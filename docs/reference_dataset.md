@@ -20,7 +20,7 @@ Step 1 of BidPilot’s evaluation data path is complete via an **automatic refer
 |------|-------------|
 | `rag` | Grounded Q&A (prefer reuse+normalize existing RAG where quotes validate) |
 | `extraction` | Requirement extraction with chunk evidence |
-| `matching` | Company-material vs requirement judgments (synthetic profile snippets allowed for eval; evidence quotes are real) |
+| `matching` | Company-material vs requirement judgments using **real** disclosed supplier / match evidence only; otherwise `insufficient_evidence` |
 | `compliance` | Rule checks (mandatory / deadline / invalid-bid style) |
 | `drafting` | Response outline from confirmed-like silver evidence; always includes disclaimer |
 | `unanswerable` | Abstain / insufficient evidence |
@@ -32,6 +32,17 @@ cd data_pipeline
 python -m bidpilot_data build-reference --seed 42
 # or
 make -C .. dataset-build-reference
+```
+
+### Reproducible builds
+
+Pin RNG seed **and** a fixed UTC timestamp so sample `created_at` / report timestamps (and thus file bytes) are identical across runs:
+
+```bash
+cd data_pipeline
+PYTHONPATH=. python -m bidpilot_data build-reference \
+  --seed 42 \
+  --build-timestamp 2026-07-22T00:00:00Z
 ```
 
 Optional LLM second-pass judge (not required):
@@ -49,13 +60,51 @@ python -m bidpilot_data build-reference --seed 42 --use-llm
 - `reference_dataset_report.json`, `reference_dataset_summary.md`
 - `splits.json` (project → train/validation/test; project + document isolation)
 
+Report fields include:
+
+- `matching_with_real_bilateral_evidence`
+- `matching_missing_company_evidence`
+- `matching_status_histogram`
+
 ## Quality gates
 
 - Citation quotes must be contiguous in chunk text (whitespace-normalized).
+- Citation metadata is validated **independently of the evidence list** (empty evidence no longer skips citation checks).
 - Answerable samples require evidence support; unanswerable must not make definitive unsupported claims.
+- Matching never invents company profiles; missing company-side evidence uses status `insufficient_evidence`.
 - Soft-normalized input+output dedupe.
 - Failed samples retry up to `max_retries`, then land in `rejected_samples.jsonl`.
 - Generator version: `bidpilot-reference-1.0.0`.
+
+### Matching diversity (bilateral vs missing)
+
+Disclosed-supplier **bilateral** pairs are capped at **~20** so the
+`insufficient_evidence` pad can still produce **≥10** missing-company samples when
+the corpus allows (overall matching target remains **≥30**). Report counters:
+
+- `matching_with_real_bilateral_evidence`
+- `matching_missing_company_evidence`
+- `matching_status_histogram`
+
+Reproduce (versioned summary/report/splits + JSONL):
+
+```bash
+cd data_pipeline
+PYTHONPATH=. python -m bidpilot_data build-reference \
+  --seed 42 \
+  --build-timestamp 2026-07-22T00:00:00Z
+```
+
+### Compliance offline eval
+
+Lightweight REF_* checks on `compliance_reference.jsonl` (not a substitute for the
+full DB rule engine on live projects):
+
+```bash
+cd backend
+python -m app.services.compliance.offline_eval
+# → datasets/reports/compliance_rule_offline_eval.json
+```
 
 ## Package
 
