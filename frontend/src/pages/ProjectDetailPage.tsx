@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { getProject } from "../api/client";
 import DocumentCenter from "../features/documents/DocumentCenter";
+import MatchingWorkspace from "../features/matching/MatchingWorkspace";
 import RequirementsWorkspace from "../features/requirements/RequirementsWorkspace";
 import KnowledgeSearch from "../features/search/KnowledgeSearch";
 import type { Project } from "../types/api";
@@ -183,6 +184,21 @@ export default function ProjectDetailPage() {
             children: (
               <div className="bp-workspace-body">
                 <RequirementsWorkspace
+                  projectId={project.id}
+                  onOpenSource={(documentId) => {
+                    setChunkFocusDocumentId(documentId);
+                    setActiveTab("documents");
+                  }}
+                />
+              </div>
+            ),
+          },
+          {
+            key: "matching",
+            label: "材料匹配",
+            children: (
+              <div className="bp-workspace-body">
+                <MatchingWorkspace
                   projectId={project.id}
                   onOpenSource={(documentId) => {
                     setChunkFocusDocumentId(documentId);

@@ -467,3 +467,108 @@ export type RequirementDetail = RequirementSummary & {
   evidence_required_json?: Record<string, unknown> | unknown[] | null;
   evidence_links: EvidenceLink[];
 };
+
+export type EvidenceMatchStatus =
+  | "supported"
+  | "partially_supported"
+  | "insufficient_evidence"
+  | "conflicting_evidence"
+  | "not_applicable";
+
+export type MatchStartPayload = {
+  requirement_ids?: string[];
+  document_ids?: string[];
+  document_types?: string[];
+  force?: boolean;
+};
+
+export type MatchRun = {
+  id: string;
+  project_id: string;
+  status: ExtractionRunStatus;
+  requirement_ids_json?: unknown[] | null;
+  document_ids_json?: unknown[] | null;
+  document_types_json?: unknown[] | null;
+  total_requirements: number;
+  processed_requirements: number;
+  matched_count: number;
+  partial_count: number;
+  missing_evidence_count: number;
+  conflict_count: number;
+  failed_requirement_count: number;
+  error_summary?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  config_json?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CompanyEvidenceLink = {
+  id: string;
+  match_id: string;
+  document_id?: string | null;
+  chunk_id?: string | null;
+  quote?: string | null;
+  notes?: string | null;
+  role: string;
+  created_at: string;
+  updated_at: string;
+  document_file_name?: string | null;
+  document_type?: string | null;
+  chunk_index?: number | null;
+  section?: string | null;
+  clause_id?: string | null;
+  page_start?: number | null;
+  page_end?: number | null;
+  document_center_path?: string | null;
+};
+
+export type MatchSummary = {
+  id: string;
+  project_id: string;
+  requirement_id: string;
+  status: EvidenceMatchStatus;
+  confidence?: string | number | null;
+  summary?: string | null;
+  needs_review: boolean;
+  risk_level: RiskLevel;
+  primary_company_document_id?: string | null;
+  primary_company_chunk_id?: string | null;
+  primary_company_quote?: string | null;
+  metadata_json?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  requirement?: RequirementSummary | null;
+  primary_company_document_file_name?: string | null;
+  primary_company_document_type?: string | null;
+  document_center_path?: string | null;
+};
+
+export type MatchListParams = {
+  requirement_id?: string;
+  status?: EvidenceMatchStatus;
+  risk_level?: RiskLevel;
+  category?: RequirementCategory;
+  mandatory?: boolean;
+  needs_review?: boolean;
+  source_document_id?: string;
+  page?: number;
+  limit?: number;
+  offset?: number;
+};
+
+export type MatchListResponse = {
+  items: MatchSummary[];
+  total: number;
+  page: number;
+  limit: number;
+  offset: number;
+};
+
+export type MatchDetail = MatchSummary & {
+  tender_evidence_links: EvidenceLink[];
+  company_links: CompanyEvidenceLink[];
+  requirement_category?: RequirementCategory | null;
+  requirement_mandatory?: boolean | null;
+};

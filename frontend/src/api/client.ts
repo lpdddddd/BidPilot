@@ -10,6 +10,11 @@ import type {
   ExtractionStartPayload,
   HealthResponse,
   IndexSummaryResponse,
+  MatchDetail,
+  MatchListParams,
+  MatchListResponse,
+  MatchRun,
+  MatchStartPayload,
   Project,
   ProjectCreatePayload,
   ProjectListResponse,
@@ -220,6 +225,49 @@ export async function getRequirement(
 ): Promise<RequirementDetail> {
   const { data } = await http.get<RequirementDetail>(
     `/api/v1/projects/${projectId}/requirements/${requirementId}`,
+  );
+  return data;
+}
+
+export async function startRequirementMatching(
+  projectId: string,
+  payload: MatchStartPayload = {},
+): Promise<MatchRun> {
+  const { data } = await http.post<MatchRun>(
+    `/api/v1/projects/${projectId}/requirement-matches/runs`,
+    payload,
+    { timeout: 60000 },
+  );
+  return data;
+}
+
+export async function getRequirementMatchRun(
+  projectId: string,
+  runId: string,
+): Promise<MatchRun> {
+  const { data } = await http.get<MatchRun>(
+    `/api/v1/projects/${projectId}/requirement-matches/runs/${runId}`,
+  );
+  return data;
+}
+
+export async function listRequirementMatches(
+  projectId: string,
+  params: MatchListParams = {},
+): Promise<MatchListResponse> {
+  const { data } = await http.get<MatchListResponse>(
+    `/api/v1/projects/${projectId}/requirement-matches`,
+    { params },
+  );
+  return data;
+}
+
+export async function getRequirementMatch(
+  projectId: string,
+  matchId: string,
+): Promise<MatchDetail> {
+  const { data } = await http.get<MatchDetail>(
+    `/api/v1/projects/${projectId}/requirement-matches/${matchId}`,
   );
   return data;
 }

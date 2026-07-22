@@ -58,7 +58,11 @@
 
 - **去重**：同一 extraction run 内，仅合并「类别相同且规范化文本完全一致」的候选；保留全部 EvidenceLink。不做激进语义去重。
 - **幂等**：相同自动抽取 `requirement_code` 不重复插入。
-- **`force=true`**：仅删除「本次实际扫描文档集合」内、且 `metadata_json.source=auto_extraction` 且未人工 `reviewed` 的记录；删除发生在全部批次成功之后，与写入在同一事务语义下完成。任一批次致命失败则**保留旧结果**、不删除。范围外自动抽取与手工/导入记录一律保留。
+- **`force=true`**：仅删除「本次实际扫描文档集合」内、且 `metadata_json.source=auto_extraction` 且未人工 `reviewed` 的记录；删除发生在全部批次成功之后，与写入在同一事务语义下完成。范围外自动抽取与手工/导入记录一律保留。
+- **成功语义三分**：
+  - `valid_empty_result`：各 batch 可解析且合法空 `items`，无致命/校验拒绝 → 可用空结果替换本范围旧自动结果；
+  - `validated_nonempty_result`：至少一条候选通过全部证据校验 → 可提交并在 force 时原子替换；
+  - `invalid_or_incomplete_result`：任一 batch 致命失败，**或**模型输出了候选但全部被证据校验拒绝 → run `failed`，**禁止**删除旧结果。
 - **冲突**：同类不同数值/日期；同条款号互相矛盾；`amendment` 与 `tender` 明显差异 → 标记需人工确认，不自动裁决。
 
 ## API
@@ -95,7 +99,8 @@ GET  /api/v1/projects/{project_id}/requirements/{requirement_id}
 ## 当前限制
 
 - 结果为**自动抽取、待人工审核**；
-- **尚未**实现 RequirementMatch、企业材料匹配、LoRA/SFT 微调、LangGraph Agent；
+- 企业材料匹配见 `docs/requirement_matching.md`；
+- **尚未**实现 LoRA/SFT 微调、LangGraph Agent、自动投标方案生成或投标提交；
 - Qwen3-8B 仅作基础结构化抽取验证，未微调。
 
 ## 本地开发

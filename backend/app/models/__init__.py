@@ -5,7 +5,9 @@ from app.models.document import Document, DocumentChunk, DocumentVersion
 from app.models.enums import (
     AgentRunStatus,
     DocumentType,
+    EvidenceMatchStatus,
     ExtractionRunStatus,
+    MatchRunStatus,
     MatchStatus,
     MemberRole,
     MessageRole,
@@ -17,6 +19,11 @@ from app.models.enums import (
     RiskLevel,
 )
 from app.models.extraction_run import RequirementExtractionRun
+from app.models.match_run import (
+    RequirementEvidenceMatch,
+    RequirementEvidenceMatchLink,
+    RequirementMatchRun,
+)
 from app.models.organization import Organization, OrganizationMember, User
 from app.models.project import BidProject
 from app.models.requirement import (
@@ -38,7 +45,9 @@ __all__ = [
     "DocumentType",
     "DocumentVersion",
     "EvidenceLink",
+    "EvidenceMatchStatus",
     "ExtractionRunStatus",
+    "MatchRunStatus",
     "MatchStatus",
     "MemberRole",
     "Message",
@@ -50,9 +59,12 @@ __all__ = [
     "QualityLevel",
     "Requirement",
     "RequirementCategory",
+    "RequirementEvidenceMatch",
+    "RequirementEvidenceMatchLink",
     "RequirementExtractionRun",
     "RequirementMatch",
     "RequirementMatchEvidence",
+    "RequirementMatchRun",
     "ReviewStatus",
     "RiskLevel",
     "ToolCall",

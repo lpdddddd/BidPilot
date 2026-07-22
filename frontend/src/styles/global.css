@@ -960,6 +960,63 @@ body {
   }
 }
 
+/* --------------------------------------------------------- material matching */
+
+.bp-match-workspace {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.bp-match-stats {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.bp-match-doc-types {
+  margin: 0 auto 20px;
+  max-width: 420px;
+  text-align: left;
+  padding: 14px 16px;
+  border: 1px solid var(--bp-border);
+  border-radius: var(--bp-radius);
+  background: var(--bp-surface-2);
+}
+
+.bp-match-doc-types-label {
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--bp-text-faint);
+}
+
+.bp-match-doc-types .ant-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 1200px) {
+  .bp-match-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .bp-match-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .bp-match-stats .bp-req-stat:last-child {
+    grid-column: auto;
+  }
+
+  .bp-match-workspace .bp-req-table-wrap {
+    max-width: 100%;
+  }
+
+  .bp-match-doc-types {
+    max-width: 100%;
+  }
+}
+
 /* --------------------------------------------------------- knowledge search */
 
 .bp-mode-switch {

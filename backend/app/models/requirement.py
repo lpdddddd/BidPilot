@@ -27,6 +27,7 @@ from app.models.types import (
 if TYPE_CHECKING:
     from app.models.company import CompanyProfile
     from app.models.document import Document, DocumentChunk
+    from app.models.match_run import RequirementEvidenceMatch
     from app.models.project import BidProject
 
 
@@ -85,6 +86,9 @@ class Requirement(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     source_document: Mapped[Document | None] = relationship(back_populates="sourced_requirements")
     evidence_links: Mapped[list[EvidenceLink]] = relationship(back_populates="requirement")
     matches: Mapped[list[RequirementMatch]] = relationship(back_populates="requirement")
+    evidence_matches: Mapped[list[RequirementEvidenceMatch]] = relationship(
+        back_populates="requirement"
+    )
 
 
 class EvidenceLink(Base, UUIDPrimaryKeyMixin, TimestampMixin):

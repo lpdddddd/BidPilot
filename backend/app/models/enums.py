@@ -102,3 +102,15 @@ class ExtractionRunStatus(StrEnum):
     succeeded = "succeeded"
     failed = "failed"
     cancelled = "cancelled"
+
+
+# Match runs reuse ExtractionRunStatus values (queued/running/succeeded/failed/cancelled).
+MatchRunStatus = ExtractionRunStatus
+
+
+class EvidenceMatchStatus(StrEnum):
+    supported = "supported"
+    partially_supported = "partially_supported"
+    insufficient_evidence = "insufficient_evidence"
+    conflicting_evidence = "conflicting_evidence"
+    not_applicable = "not_applicable"

@@ -214,7 +214,7 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
   - 脱敏摘要写入 `docs/acceptance/rag_smoke_*.json`（已 gitignore，不入库原文）
 - 前端：「检索证据」保留；「带来源问答」仅在 `final` 后展示确认答案
 - 真实联调记录：`docs/rag_e2e_acceptance.md`
-- **本步未包含**：微调 / LoRA、企业匹配、LangGraph Agent
+- **本步未包含**：微调 / LoRA、企业材料匹配、LangGraph Agent
 
 ## 招标要求结构化抽取（第 7 步）
 
@@ -223,9 +223,21 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 
 - 文档范围：`tender` / `announcement` / `amendment` / `contract`（不含企业侧材料）
 - 异步 run 表：`requirement_extraction_runs`；证据校验 + 幂等去重 + 冲突标记（不自动裁决）
+- `force=true` 成功语义三分：合法空结果 / 已校验非空 / 无效或不完整（含「候选全部证据校验失败」→失败且保留旧数据）
 - API：`POST/GET .../requirements/extractions`、`GET .../requirements`
 - 前端：项目详情「需求清单」Tab
-- **尚未实现**：RequirementMatch、企业材料匹配、LoRA、Agent
+
+## 企业材料与招标要求匹配（第 8 步）
+
+将已验证 Requirement 与当前项目企业侧材料对照，生成待人工审核的 Match（双侧证据）。
+详见 `docs/requirement_matching.md`。
+
+- 企业侧范围：`company_profile` / `qualification` / `case` / `personnel` / `product`（严禁招标侧文档）
+- 新表：`requirement_match_runs`、`requirement_evidence_matches`、`requirement_evidence_match_links`（遗留演示用 `requirement_matches` 不动）
+- 固定状态：`supported` / `partially_supported` / `insufficient_evidence` / `conflicting_evidence` / `not_applicable`
+- API：`POST/GET .../requirement-matches/runs`、`GET .../requirement-matches`
+- 前端：项目详情「材料匹配」Tab；`insufficient_evidence` 文案为「当前材料未找到充分证据」
+- **尚未实现**：LoRA / Agent / 自动投标方案生成 / 投标提交
 
 ## 测试 / 静态检查
 
@@ -335,12 +347,12 @@ llamafactory-cli train /absolute/path/to/bidpilot/training/llamafactory/configs/
 
 ## 后续开发顺序建议
 
-1. 招标要求结构化抽取与 RequirementMatch / 企业材料匹配
+1. 人工审核沉淀 gold 需求 / Match / RAG / SFT
 2. 合规公开源采集规模化 + OCR
-3. 人工审核沉淀 gold 需求/RAG/SFT
-4. LangGraph Agent 合规审查工作流
-5. 认证授权与组织权限
-6. 多 GPU QLoRA 正式训练
+3. LangGraph Agent 合规审查工作流
+4. 认证授权与组织权限
+5. 多 GPU QLoRA 正式训练
+6. 自动投标方案生成与投标提交（远期）
 
 ## Makefile 命令
 

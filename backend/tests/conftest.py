@@ -29,6 +29,7 @@ ENUM_TYPE_NAMES = [
     "review_status",
     "match_status",
     "extraction_run_status",
+    "evidence_match_status",
 ]
 
 
