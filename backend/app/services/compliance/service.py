@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.db.session import SessionLocal
 from app.models.compliance import ComplianceFinding as ComplianceFindingRow
 from app.models.compliance import ComplianceRun
 from app.models.enums import ExtractionRunStatus
@@ -31,6 +33,12 @@ from app.services.compliance.context import load_compliance_context
 from app.services.compliance.engine import ComplianceEngine
 from app.services.compliance.registry import get_default_registry
 
+_SECRET_PATTERNS = (
+    re.compile(r"(?i)(api[_-]?key|token|secret|password|authorization)\s*[:=]\s*\S+"),
+    re.compile(r"(?i)bearer\s+[a-z0-9\-._~+/]+=*"),
+    re.compile(r"(?i)postgres(?:ql)?://\S+"),
+)
+
 
 def _payload_hash(payload: dict[str, Any]) -> str:
     raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
@@ -39,6 +47,71 @@ def _payload_hash(payload: dict[str, Any]) -> str:
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def sanitize_error_summary(message: str | None, *, max_len: int = 500) -> str:
+    """Truncate and strip secrets/stack traces from error summaries."""
+    text = " ".join(str(message or "compliance run failed").split())
+    for pat in _SECRET_PATTERNS:
+        text = pat.sub("[REDACTED]", text)
+    # Drop traceback-like tails
+    if "Traceback" in text:
+        text = text.split("Traceback", 1)[0].strip() or "compliance run failed"
+    if len(text) > max_len:
+        text = text[: max_len - 1] + "…"
+    return text
+
+
+def _persist_failed_run(
+    run_id: UUID,
+    *,
+    error_code: str,
+    error_summary: str,
+    db: Session | None = None,
+    bind=None,
+) -> None:
+    """Persist failed status so it survives the request session rollback.
+
+    Prefer the caller's session after rollback (same DB as the already-committed
+    running row). Fall back to a short-lived session on ``bind`` / SessionLocal.
+    """
+    summary = sanitize_error_summary(error_summary)
+    code = error_code[:64]
+    if db is not None:
+        run = db.get(ComplianceRun, run_id)
+        if run is None:
+            return
+        run.status = ExtractionRunStatus.failed
+        run.finished_at = _now()
+        run.error_code = code
+        run.error_summary = summary
+        db.commit()
+        return
+
+    if bind is not None:
+        factory = sessionmaker(
+            bind=bind,
+            autoflush=False,
+            autocommit=False,
+            expire_on_commit=False,
+            class_=Session,
+        )
+        local = factory()
+    else:
+        local = SessionLocal()
+    try:
+        run = local.get(ComplianceRun, run_id)
+        if run is None:
+            return
+        run.status = ExtractionRunStatus.failed
+        run.finished_at = _now()
+        run.error_code = code
+        run.error_summary = summary
+        local.commit()
+    except Exception:  # noqa: BLE001
+        local.rollback()
+    finally:
+        local.close()
 
 
 class ComplianceService:
@@ -102,21 +175,21 @@ class ComplianceService:
                     )
                 return self.get_report(project_id, existing.id)
 
+        # 1) Create + commit run as running immediately so failure can be durably recorded
         run = ComplianceRun(
             project_id=project_id,
-            status=ExtractionRunStatus.queued,
+            status=ExtractionRunStatus.running,
             draft_id=effective_draft_id,
             engine_version=ENGINE_VERSION,
             idempotency_key=idempotency_key,
             config_json={**payload, "payload_hash": payload_hash},
             rule_ids_json=req.rule_ids,
+            started_at=_now(),
         )
         self.db.add(run)
-        self.db.flush()
-
-        run.status = ExtractionRunStatus.running
-        run.started_at = _now()
-        self.db.flush()
+        self.db.commit()
+        self.db.refresh(run)
+        run_id = run.id
 
         try:
             ctx = load_compliance_context(
@@ -130,25 +203,58 @@ class ComplianceService:
             self._persist_findings(run, findings, stats)
             run.status = ExtractionRunStatus.succeeded
             run.finished_at = _now()
+            run.error_code = None
             run.error_summary = None
-        except HTTPException:
-            run.status = ExtractionRunStatus.failed
-            run.finished_at = _now()
-            run.error_summary = "HTTP error while loading context"
-            self.db.flush()
-            raise
-        except Exception as exc:  # noqa: BLE001
-            run.status = ExtractionRunStatus.failed
-            run.finished_at = _now()
-            run.error_summary = f"{type(exc).__name__}: {exc}"
-            self.db.flush()
+            self.db.commit()
+            self.db.refresh(run)
+            return self._to_report(run)
+        except HTTPException as exc:
+            # Roll back any partial business work on the request session
+            self.db.rollback()
+            _persist_failed_run(
+                run_id,
+                error_code=f"http_{exc.status_code}",
+                error_summary=str(exc.detail),
+                db=self.db,
+            )
+            # Return structured failure including run_id (do not lose it)
+            failed = self._load_run_fresh(project_id, run_id)
             raise HTTPException(
-                status_code=500, detail=f"compliance run failed: {exc}"
+                status_code=exc.status_code,
+                detail={
+                    "message": exc.detail if isinstance(exc.detail, str) else "HTTP error",
+                    "run_id": str(run_id),
+                    "error_code": f"http_{exc.status_code}",
+                    "status": "failed",
+                },
+            ) from exc
+        except Exception as exc:  # noqa: BLE001
+            self.db.rollback()
+            error_code = type(exc).__name__[:64]
+            summary = sanitize_error_summary(f"{type(exc).__name__}: {exc}")
+            _persist_failed_run(
+                run_id,
+                error_code=error_code,
+                error_summary=summary,
+                db=self.db,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": "compliance run failed",
+                    "run_id": str(run_id),
+                    "error_code": error_code,
+                    "error_summary": summary,
+                    "status": "failed",
+                },
             ) from exc
 
-        self.db.commit()
-        self.db.refresh(run)
-        return self._to_report(run)
+    def _load_run_fresh(self, project_id: UUID, run_id: UUID) -> ComplianceRun:
+        self.db.expire_all()
+        run = self.db.get(ComplianceRun, run_id)
+        if run is None or run.project_id != project_id:
+            raise HTTPException(status_code=404, detail="compliance run not found")
+        return run
 
     def _persist_findings(
         self,

@@ -17,12 +17,14 @@
   "dry_run": false,
   "generator_version": "bidpilot-reference-1.0.0",
   "label_policy": "auto_reference|silver only; never human_gold",
-  "matching_missing_company_evidence": 10,
+  "matching_insufficient_evidence": 30,
+  "matching_missing_company_evidence": 30,
   "matching_status_histogram": {
-    "insufficient_evidence": 10,
-    "partially_supported": 20
+    "insufficient_evidence": 30
   },
-  "matching_with_real_bilateral_evidence": 20,
+  "matching_with_company_evidence_but_not_requirement_aligned": 20,
+  "matching_with_real_bilateral_evidence": 0,
+  "matching_with_tender_evidence_only": 10,
   "max_retries": 2,
   "output_dir": "/root/autodl-tmp/bidpilot/datasets/eval/reference",
   "rejected_count": 0,

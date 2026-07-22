@@ -338,6 +338,25 @@ def generate_extraction_samples(
 
 _MISSING_COMPANY_MATERIAL = "缺少企业侧证据：当前材料未找到充分证据以支撑该需求条款的企业侧响应判定。"
 
+# Category → clause keywords used to prove company evidence is requirement-aligned
+# (beyond mere supplier/company name appearance).
+_CLAUSE_ALIGNMENT_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "qualification": ("资质", "证书", "认证", "资格", "许可", "ISO", "注册资本", "业绩"),
+    "mandatory": ("必须", "应当", "强制", "必备", "不得"),
+    "technical": ("技术", "参数", "性能", "指标", "配置", "带宽", "接口"),
+    "commercial": ("金额", "报价", "付款", "质保", "服务费", "万元", "元"),
+    "delivery": ("交付", "工期", "交货", "到货", "实施周期", "日历天"),
+    "deadline": ("截止", "开标", "递交", "有效期"),
+    "personnel": ("人员", "项目经理", "证书", "职称", "驻场"),
+    "product": ("产品", "型号", "品牌", "设备", "清单"),
+    "case": ("案例", "合同", "同类项目", "实施经验", "验收"),
+    "scoring": ("评分", "分值", "评审"),
+    "invalid_bid": ("废标", "无效投标", "否决"),
+    "risk": ("风险", "违约", "责任"),
+}
+
+_POSITIVE_MATCH_STATUSES = frozenset({"supported", "partially_supported"})
+
 
 def _chunks_for_documents(corpus: CorpusIndexes, document_ids: list[str]) -> list[dict[str, Any]]:
     wanted = {d for d in document_ids if d}
@@ -385,6 +404,104 @@ def _requirement_tender_evidence(
     return chunk, quote
 
 
+def _structured_bags(*objs: Any) -> list[dict[str, Any]]:
+    bags: list[dict[str, Any]] = []
+    for obj in objs:
+        if isinstance(obj, dict):
+            bags.append(obj)
+            for nested_key in (
+                "metadata",
+                "metadata_json",
+                "evidence_required",
+                "evidence_required_json",
+                "structured_fields",
+            ):
+                nested = obj.get(nested_key)
+                if isinstance(nested, dict):
+                    bags.append(nested)
+    return bags
+
+
+_STRUCTURED_ALIGNMENT_KEYS = (
+    "qualification",
+    "cert",
+    "certificate",
+    "certificate_name",
+    "amount",
+    "min_amount",
+    "registered_capital",
+    "expiry",
+    "expires_at",
+    "valid_until",
+    "years",
+    "quantity",
+    "level",
+    "case",
+    "product",
+    "model",
+    "tech_params",
+    "technical_params",
+    "delivery_date",
+    "service_period",
+)
+
+
+def _has_structured_alignment_fields(*objs: Any) -> bool:
+    for bag in _structured_bags(*objs):
+        lower = {str(k).lower(): v for k, v in bag.items()}
+        for key in _STRUCTURED_ALIGNMENT_KEYS:
+            val = lower.get(key.lower())
+            if val not in (None, "", [], {}):
+                return True
+    return False
+
+
+def _clause_level_company_alignment(
+    req: dict[str, Any],
+    *,
+    company_quote: str,
+    company_chunk: dict[str, Any] | None = None,
+    supplier: dict[str, Any] | None = None,
+    match_row: dict[str, Any] | None = None,
+) -> bool:
+    """Prove company evidence is clause-level related to the requirement.
+
+    Conservative: supplier/company name appearance alone is NEVER enough.
+    Requires structured field overlap or category/keyword hits in company text
+    after stripping the supplier name.
+    """
+    if _has_structured_alignment_fields(req, match_row or {}, supplier or {}, company_chunk or {}):
+        # Structured fields present — still require that company text is not name-only
+        name = ((supplier or {}).get("name") or "").strip()
+        stripped = company_quote
+        if name:
+            stripped = stripped.replace(name, "")
+        if len(re.sub(r"\s+", "", stripped)) >= 8:
+            return True
+        # Structured match metadata alone can prove alignment for silver disclosed_match
+        if match_row is not None and _has_structured_alignment_fields(match_row):
+            return True
+
+    cat = map_category(req.get("category"))
+    keywords = list(_CLAUSE_ALIGNMENT_KEYWORDS.get(cat, ()))
+    # Also mine short tokens from requirement title / normalized text
+    title = str(req.get("title") or "")
+    for token in re.findall(r"[\u4e00-\u9fff]{2,8}|[A-Za-z][A-Za-z0-9_-]{2,}", title):
+        if token not in keywords:
+            keywords.append(token)
+
+    name = ((supplier or {}).get("name") or "").strip()
+    haystack = company_quote
+    if name:
+        haystack = haystack.replace(name, " ")
+    haystack_n = re.sub(r"\s+", "", haystack)
+    if len(haystack_n) < 4:
+        return False
+    hits = [kw for kw in keywords if kw and kw in haystack]
+    # Need at least one category/requirement keyword beyond the company name
+    return len(hits) >= 1
+
+
 def generate_matching_samples(
     corpus: CorpusIndexes,
     selected: list[SelectedProject],
@@ -393,11 +510,12 @@ def generate_matching_samples(
     target: int,
     created_at: datetime | None = None,
 ) -> list[ReferenceSample]:
-    """Matching samples use ONLY real company-side evidence (or explicit insufficient_evidence)."""
+    """Matching samples: bilateral only with clause-level company alignment; else insufficient."""
     out: list[ReferenceSample] = []
     used_req_ids: set[str] = set()
 
-    # 1) Prefer disclosed matches when present
+    # 1) Silver disclosed matches — bilateral ONLY when status is supported/partial
+    #    AND quote is grounded. Empty silver file → bilateral may be 0 (OK).
     req_by_id = {r.get("requirement_id"): r for r in corpus.requirements if r.get("requirement_id")}
     for m in corpus.matches:
         if len(out) >= target:
@@ -414,13 +532,28 @@ def generate_matching_samples(
         status_map = {
             "satisfied": "supported",
             "partially_satisfied": "partially_supported",
+            "supported": "supported",
+            "partially_supported": "partially_supported",
             "missing": "insufficient_evidence",
             "uncertain": "insufficient_evidence",
+            "insufficient_evidence": "insufficient_evidence",
         }
         status = status_map.get(str(m.get("status")), "insufficient_evidence")
         doc_id = m.get("evidence_document_id") or chunk.get("document_id") or ""
         ev = _chunk_evidence(chunk, quote, source_url=m.get("source_url"), evidence_id=(m.get("evidence_ids") or [None])[0])
         rid = req.get("requirement_id") or ""
+        is_positive = status in _POSITIVE_MATCH_STATUSES
+        # Silver disclosed_match with grounded quote counts as bilateral ONLY when
+        # the match status itself indicates supported/partial.
+        if is_positive:
+            provenance_notes = "real_bilateral_evidence"
+            citation_notes = "disclosed_match"
+            conf = max(0.88, float(m.get("confidence") or 0.88))
+        else:
+            status = "insufficient_evidence"
+            provenance_notes = "disclosed_match_insufficient"
+            citation_notes = "disclosed_match_insufficient"
+            conf = 0.7
         sample = _base_sample(
             task_type="matching",
             project_id=req["project_id"],
@@ -438,14 +571,14 @@ def generate_matching_samples(
                 quotes=[quote],
                 source_urls=[m.get("source_url")] if m.get("source_url") else [],
                 category=map_category(req.get("category")),
-                notes="disclosed_match",
+                notes=citation_notes,
             ),
-            confidence=max(0.88, float(m.get("confidence") or 0.88)),
+            confidence=conf,
             provenance=DataProvenance(
                 source_paths=["silver/requirement_matches.jsonl"],
                 source_record_ids=[m.get("match_id") or ""],
                 method="disclosed_match",
-                notes="real_bilateral_evidence",
+                notes=provenance_notes,
             ),
             key=f"match-disclosed-{m.get('match_id')}",
             created_at=created_at,
@@ -454,15 +587,15 @@ def generate_matching_samples(
         if rid:
             used_req_ids.add(rid)
 
-    # 2) Disclosed suppliers: real chunks containing supplier name + tender requirement evidence
-    # Cap bilateral pairs so insufficient_evidence padding can still reach ≥10 when possible.
-    BILATERAL_SUPPLIER_CAP = 20
+    # 2) Disclosed suppliers: name attestation is NOT bilateral.
+    #    Emit insufficient_evidence with company_name_only_not_requirement_aligned.
+    NAME_ONLY_CAP = 20
     selected_ids = {sp.project_id for sp in selected}
     supplier_rows = [s for s in corpus.suppliers if s.get("project_id") in selected_ids]
     rng.shuffle(supplier_rows)
-    bilateral_added = 0
+    name_only_added = 0
     for supplier in supplier_rows:
-        if len(out) >= target or bilateral_added >= BILATERAL_SUPPLIER_CAP:
+        if len(out) >= target or name_only_added >= NAME_ONLY_CAP:
             break
         found = _find_supplier_chunk(corpus, supplier)
         if not found:
@@ -476,7 +609,7 @@ def generate_matching_samples(
             if (
                 len(out) >= target
                 or taken_for_supplier >= 5
-                or bilateral_added >= BILATERAL_SUPPLIER_CAP
+                or name_only_added >= NAME_ONLY_CAP
             ):
                 break
             rid = req.get("requirement_id") or ""
@@ -490,8 +623,14 @@ def generate_matching_samples(
             tender_doc = tender_chunk.get("document_id") or req.get("document_id") or ""
             company_ev = _chunk_evidence(company_chunk, company_quote, source_url=(supplier.get("source_urls") or [None])[0])
             tender_ev = _chunk_evidence(tender_chunk, tender_quote, source_url=req.get("source_url"))
-            # Name attestation only — clause-level satisfaction not fully proven
-            status = "partially_supported"
+
+            # Name attestation alone is NEVER clause-level alignment / bilateral.
+            # Only silver disclosed_match (supported/partial + grounded quote) counts.
+            status = "insufficient_evidence"
+            reason = (
+                f"公开材料仅出现供应商「{supplier.get('name')}」名称，"
+                "无法证明与该需求条款的条款级对齐，标记为证据不足。"
+            )
             sample = _base_sample(
                 task_type="matching",
                 project_id=pid,
@@ -504,10 +643,7 @@ def generate_matching_samples(
                 },
                 output_obj={
                     "status": status,
-                    "reason": (
-                        f"公开材料出现供应商「{supplier.get('name')}」相关表述，"
-                        "可作为企业侧证据；条款完全满足情况仍需人工核验。"
-                    ),
+                    "reason": reason,
                     "evidence_chunk_ids": [tender_chunk["chunk_id"], company_chunk["chunk_id"]],
                 },
                 evidence=[tender_ev, company_ev],
@@ -522,9 +658,11 @@ def generate_matching_samples(
                     source_urls=[u for u in [req.get("source_url"), *((supplier.get("source_urls") or []))] if u],
                     quotes=[tender_quote, company_quote],
                     category=map_category(req.get("category")),
-                    notes="disclosed_supplier_bilateral",
+                    notes="company_name_only_not_requirement_aligned",
                 ),
-                confidence=0.86,
+                # Slightly above tender-only pad confidence so trim keeps name-only
+                # diversity (still insufficient_evidence — never bilateral).
+                confidence=0.67,
                 provenance=DataProvenance(
                     source_paths=[
                         "silver/disclosed_suppliers.jsonl",
@@ -532,19 +670,19 @@ def generate_matching_samples(
                         "interim/chunks/chunks.jsonl",
                     ],
                     source_record_ids=[supplier.get("supplier_id") or "", rid],
-                    method="disclosed_supplier_bilateral",
-                    notes="real_bilateral_evidence",
+                    method="company_name_only",
+                    notes="company_name_only_not_requirement_aligned",
                 ),
-                key=f"match-bilateral-{rid}-{supplier.get('supplier_id')}",
+                key=f"match-company-{rid}-{supplier.get('supplier_id')}",
                 created_at=created_at,
             )
             out.append(sample)
             taken_for_supplier += 1
-            bilateral_added += 1
+            name_only_added += 1
             if rid:
                 used_req_ids.add(rid)
 
-    # 3) Pad with insufficient_evidence when no real company-side evidence for a requirement
+    # 3) Pad with tender-only insufficient_evidence to keep ≥30 matching samples
     for sp in selected:
         if len(out) >= target:
             break
@@ -631,9 +769,16 @@ def generate_compliance_samples(
                     continue
                 doc_id = chunk.get("document_id") or ""
                 ev = _chunk_evidence(chunk, quote)
-                verdict = "fail" if rule_name == "invalid_bid" and "不得" not in quote else "pass"
+                # Formal A–E engine mapping (no REF_* keyword pass):
+                # - mandatory clause without company match → fail (A001 uncovered)
+                # - deadline without bid_deadline → attention_required (E003 warning)
+                # - invalid_bid clause present → fail (C003 critical attention)
                 if rule_name == "deadline":
                     verdict = "attention_required"
+                elif rule_name == "invalid_bid":
+                    verdict = "fail"
+                else:
+                    verdict = "fail"
                 sample = _base_sample(
                     task_type="compliance",
                     project_id=sp.project_id,

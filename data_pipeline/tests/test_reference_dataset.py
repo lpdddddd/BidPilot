@@ -331,6 +331,21 @@ def test_export_schema_and_min_counts(tmp_datasets: Path) -> None:
     matching_rows = [r for r in rows if r.get("task_type") == "matching"]
     assert matching_rows
     assert report.get("matching_status_histogram")
+    # Supplier-name-only pairs must NEVER count as real bilateral evidence
+    for row in matching_rows:
+        method = ((row.get("data_provenance") or {}).get("method") or "")
+        notes = ((row.get("data_provenance") or {}).get("notes") or "")
+        cite = ((row.get("citation_metadata") or {}).get("notes") or "")
+        status = ((row.get("reference_output") or {}).get("status") or "")
+        if (
+            method in {"company_name_only", "disclosed_supplier_bilateral"}
+            or "company_name_only" in notes
+            or "company_name_only" in cite
+        ):
+            assert status in {"insufficient_evidence", "unknown"}
+            assert "real_bilateral_evidence" not in notes
+    assert "matching_with_company_evidence_but_not_requirement_aligned" in report
+    assert "matching_with_tender_evidence_only" in report
     # per-task files exist
     for name in (
         "rag_reference.jsonl",
@@ -378,6 +393,41 @@ def test_reproducible_build_same_seed_and_timestamp(tmp_datasets: Path) -> None:
     ha = hashlib.sha256((out_a / "reference_dataset.jsonl").read_bytes()).hexdigest()
     hb = hashlib.sha256((out_b / "reference_dataset.jsonl").read_bytes()).hexdigest()
     assert ha == hb
+
+
+def test_supplier_name_only_never_counted_as_bilateral(tmp_datasets: Path) -> None:
+    """Name attestation must not inflate matching_with_real_bilateral_evidence."""
+    from bidpilot_data.reference_dataset.export import matching_stats
+    from bidpilot_data.reference_dataset.generate import generate_matching_samples
+
+    _install_fixture_corpus(tmp_datasets)
+    corpus = load_corpus(tmp_datasets)
+    selected = select_projects(corpus, seed=42, max_projects=10)
+    import random
+
+    samples = generate_matching_samples(
+        corpus, selected, rng=random.Random(42), target=10
+    )
+    assert samples
+    name_only = [
+        s
+        for s in samples
+        if (s.data_provenance and "company_name_only" in (s.data_provenance.notes or ""))
+        or (s.data_provenance and s.data_provenance.method == "company_name_only")
+    ]
+    # Fixture has disclosed supplier with name in chunk → expect name-only rows
+    assert name_only, "expected at least one company_name_only matching sample"
+    for s in name_only:
+        assert (s.reference_output or {}).get("status") == "insufficient_evidence"
+        assert "real_bilateral_evidence" not in (s.data_provenance.notes or "")
+
+    stats = matching_stats(samples)
+    # No silver positive matches in fixture → bilateral must be 0
+    assert stats["matching_with_real_bilateral_evidence"] == 0
+    assert stats["matching_with_company_evidence_but_not_requirement_aligned"] >= len(name_only)
+    for s in name_only:
+        # Explicitly ensure name-only rows are not in the bilateral bucket
+        assert (s.reference_output or {}).get("status") not in {"supported", "partially_supported"}
 
 
 def test_dry_run_fixture_mode(tmp_datasets: Path) -> None:

@@ -205,8 +205,12 @@ class DraftCitationIntegrityRule:
             problems: list[str] = []
             if src.requirement_id and src.requirement_id not in ctx.requirements_by_id:
                 problems.append("requirement_missing")
-            if src.match_id and src.match_id not in ctx.matches_by_id:
-                problems.append("match_not_active")
+            if src.match_id:
+                match = ctx.matches_by_id.get(src.match_id)
+                if match is None:
+                    problems.append("match_not_active")
+                elif getattr(match, "lifecycle_status", "active") != "active":
+                    problems.append("match_not_active")
             if problems:
                 bad += 1
                 findings.append(

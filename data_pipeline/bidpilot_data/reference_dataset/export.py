@@ -23,11 +23,29 @@ _MISSING_COMPANY_MARKERS = (
     "当前材料未找到充分证据",
 )
 
+_POSITIVE_STATUSES = frozenset({"supported", "partially_supported"})
+_NAME_ONLY_MARKERS = (
+    "company_name_only_not_requirement_aligned",
+    "company_name_only",
+)
+_BILATERAL_MARKERS = (
+    "real_bilateral_evidence",
+    "clause_aligned_company_evidence",
+    "disclosed_match",
+)
+
 
 def matching_stats(samples: list[ReferenceSample]) -> dict[str, Any]:
-    """Count bilateral vs missing-company matching samples and status histogram."""
+    """Partition matching samples by evidence provenance + status histogram.
+
+    `matching_with_real_bilateral_evidence` requires tender + company evidence with
+    clause-level alignment (or silver disclosed_match with supported/partial status).
+    Supplier-name-only pairs are NEVER counted as bilateral.
+    """
     bilateral = 0
-    missing = 0
+    tender_only = 0
+    company_not_aligned = 0
+    insufficient = 0
     status_hist: Counter[str] = Counter()
     for s in samples:
         if s.task_type != "matching":
@@ -36,26 +54,51 @@ def matching_stats(samples: list[ReferenceSample]) -> dict[str, Any]:
         status_hist[status] += 1
         method = (s.data_provenance.method if s.data_provenance else "") or ""
         notes = (s.data_provenance.notes if s.data_provenance else "") or ""
+        cite_notes = (s.citation_metadata.notes if s.citation_metadata else "") or ""
         company_material = str((s.input or {}).get("company_material") or "")
-        if (
-            method in {"disclosed_match", "disclosed_supplier_bilateral"}
-            or "real_bilateral_evidence" in notes
-            or (len(s.evidence) >= 2 and not any(m in company_material for m in _MISSING_COMPANY_MARKERS))
-        ):
+        blob = f"{method}|{notes}|{cite_notes}"
+
+        is_name_only = any(m in blob for m in _NAME_ONLY_MARKERS)
+        is_bilateral = (
+            notes == "real_bilateral_evidence"
+            or method in {"disclosed_match", "clause_aligned_company_evidence"}
+            and status in _POSITIVE_STATUSES
+            and not is_name_only
+            and any(m in blob for m in _BILATERAL_MARKERS)
+        )
+        # Tighten: name-only notes always win over bilateral claim
+        if is_name_only or "disclosed_supplier_bilateral" in blob:
+            # Legacy path or explicit name-only — never bilateral
+            if status in _POSITIVE_STATUSES and "disclosed_supplier_bilateral" in blob:
+                # Old buggy rows: still classify as not-aligned, not bilateral
+                company_not_aligned += 1
+            else:
+                company_not_aligned += 1
+        elif is_bilateral and status in _POSITIVE_STATUSES:
             bilateral += 1
         elif (
             method == "insufficient_company_evidence"
             or "matching_missing_company_evidence" in notes
             or any(m in company_material for m in _MISSING_COMPANY_MARKERS)
-            or status in {"insufficient_evidence", "unknown"}
         ):
-            missing += 1
+            tender_only += 1
         else:
-            # Fallback: single tender-side evidence without company material markers
-            missing += 1
+            # Residual insufficient / unknown without clear tender-only or name-only markers
+            insufficient += 1
+
+    # Status-based insufficient count (may overlap partitions; useful for reports)
+    status_insufficient = int(status_hist.get("insufficient_evidence", 0)) + int(
+        status_hist.get("unknown", 0)
+    )
+
     return {
         "matching_with_real_bilateral_evidence": bilateral,
-        "matching_missing_company_evidence": missing,
+        "matching_with_tender_evidence_only": tender_only,
+        "matching_with_company_evidence_but_not_requirement_aligned": company_not_aligned,
+        # Prefer status-based total when partition residual is empty but statuses are insufficient
+        "matching_insufficient_evidence": max(insufficient, status_insufficient - bilateral),
+        # Back-compat alias used by older callers
+        "matching_missing_company_evidence": tender_only + company_not_aligned + insufficient,
         "matching_status_histogram": dict(status_hist),
     }
 
@@ -81,6 +124,11 @@ def export_reference_dataset(
     report = {
         **report,
         "matching_with_real_bilateral_evidence": match["matching_with_real_bilateral_evidence"],
+        "matching_with_tender_evidence_only": match["matching_with_tender_evidence_only"],
+        "matching_with_company_evidence_but_not_requirement_aligned": match[
+            "matching_with_company_evidence_but_not_requirement_aligned"
+        ],
+        "matching_insufficient_evidence": match["matching_insufficient_evidence"],
         "matching_missing_company_evidence": match["matching_missing_company_evidence"],
         "matching_status_histogram": match["matching_status_histogram"],
     }
@@ -159,7 +207,12 @@ def render_summary_md(
             "## Matching evidence",
             "",
             f"- matching_with_real_bilateral_evidence: **{match['matching_with_real_bilateral_evidence']}**",
-            f"- matching_missing_company_evidence: **{match['matching_missing_company_evidence']}**",
+            f"- matching_with_tender_evidence_only: **{match['matching_with_tender_evidence_only']}**",
+            (
+                "- matching_with_company_evidence_but_not_requirement_aligned: "
+                f"**{match['matching_with_company_evidence_but_not_requirement_aligned']}**"
+            ),
+            f"- matching_insufficient_evidence: **{match['matching_insufficient_evidence']}**",
             "",
             "### Matching status histogram",
             "",
@@ -192,7 +245,8 @@ def render_summary_md(
             "- This is an **auto reference** set for course demos and automatic evaluation.",
             "- It is **not** expert human gold.",
             "- All citation quotes are validated against real chunk text (whitespace-normalized).",
-            "- Matching uses real disclosed company evidence only; otherwise status is `insufficient_evidence`.",
+            "- Matching bilateral evidence requires clause-level company alignment; "
+            "supplier-name-only pairs are `insufficient_evidence`.",
             "",
         ]
     )

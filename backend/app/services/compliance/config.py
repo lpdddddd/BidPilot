@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-ENGINE_VERSION = "compliance-rules-1.1.0"
+ENGINE_VERSION = "compliance-rules-1.2.0"
 
 # Document types treated as tender-side (must not appear as company evidence).
 TENDER_DOCUMENT_TYPES = frozenset(
@@ -109,6 +109,7 @@ STRUCTURED_EXPIRY_KEYS = (
     "expiry_date",
     "valid_until",
     "certificate_expiry",
+    "qualification_valid_until",
 )
 STRUCTURED_AMOUNT_KEYS = (
     "amount",
@@ -117,6 +118,35 @@ STRUCTURED_AMOUNT_KEYS = (
     "threshold_amount",
     "registered_capital",
     "budget_cny",
+)
+STRUCTURED_YEARS_KEYS = (
+    "years",
+    "min_years",
+    "experience_years",
+    "service_years",
+)
+STRUCTURED_QUANTITY_KEYS = (
+    "quantity",
+    "min_quantity",
+    "count",
+    "units",
+)
+STRUCTURED_LEVEL_KEYS = (
+    "level",
+    "cert_level",
+    "qualification_level",
+)
+STRUCTURED_DATE_KEYS = (
+    "bid_deadline",
+    "delivery_date",
+    "delivery_deadline",
+    "service_start",
+    "service_end",
+    "service_period",
+    "qualification_valid_until",
+    "valid_until",
+    "expiry",
+    "expires_at",
 )
 STRUCTURED_CONFLICT_KEYS = (
     "conflict",
@@ -131,20 +161,3 @@ MIN_QUOTE_LENGTH = 8
 
 # Draft considered "obviously short" below this (chars, whitespace-normalized).
 MIN_DRAFT_CONTENT_CHARS = 40
-
-# Offline reference adapter keyword maps (no invented company facts).
-REFERENCE_RULE_TYPE_KEYWORDS: dict[str, tuple[str, ...]] = {
-    "mandatory": ("必须", "应当", "须", "不得擅自", "否则视为无效"),
-    "deadline": ("截止", "投标截止", "递交截止", "开标时间"),
-    "invalid_bid": ("无效投标", "投标无效", "废标", "否决投标"),
-}
-
-# Map lightweight REF_* findings → severity / category for offline aggregates.
-REF_FINDING_META: dict[str, tuple[str, str]] = {
-    # rule_id prefix or exact → (severity, category)
-    "REF_insufficient_text": ("warning", "coverage"),
-    "REF_mandatory_keyword": ("error", "coverage"),
-    "REF_deadline_keyword": ("warning", "consistency"),
-    "REF_invalid_bid_keyword": ("critical", "qualification_risk"),
-    "REF_quote_grounding": ("error", "evidence"),
-}

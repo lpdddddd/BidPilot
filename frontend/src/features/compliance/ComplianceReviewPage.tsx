@@ -231,6 +231,7 @@ export default function ComplianceReviewPage() {
             />
             <StatCard label="error" value={report.severity_counts.error ?? 0} />
             <StatCard label="warning" value={report.severity_counts.warning ?? 0} />
+            <StatCard label="info" value={report.severity_counts.info ?? 0} />
           </Space>
 
           <Space wrap>

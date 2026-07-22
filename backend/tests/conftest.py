@@ -11,6 +11,7 @@ from app.models import *  # noqa: F403
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 DEFAULT_PG = "postgresql+psycopg://bidpilot@127.0.0.1:5432/bidpilot_test"
 TEST_DATABASE_URL = os.getenv("DATABASE_URL_TEST") or DEFAULT_PG
@@ -60,10 +61,12 @@ POSTGRES_OK = USE_POSTGRES and _postgres_reachable(TEST_DATABASE_URL)
 
 
 def _reset_schema(eng) -> None:
-    Base.metadata.drop_all(bind=eng)
+    # Drop any leftover pooled connections before CASCADE so create_all is reliable
+    eng.pool.dispose()
     with eng.begin() as conn:
-        for name in ENUM_TYPE_NAMES:
-            conn.execute(text(f'DROP TYPE IF EXISTS "{name}" CASCADE'))
+        conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+        conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
     Base.metadata.create_all(bind=eng)
 
 
@@ -82,13 +85,21 @@ def _no_auto_indexing(monkeypatch):
 def engine():
     if not POSTGRES_OK:
         pytest.skip("PostgreSQL is not available for integration tests")
-    eng = create_engine(TEST_DATABASE_URL, future=True, pool_pre_ping=True)
+    from sqlalchemy.pool import NullPool
+
+    eng = create_engine(
+        TEST_DATABASE_URL,
+        future=True,
+        pool_pre_ping=True,
+        poolclass=NullPool,
+    )
     _reset_schema(eng)
     yield eng
-    Base.metadata.drop_all(bind=eng)
+    eng.pool.dispose()
     with eng.begin() as conn:
-        for name in ENUM_TYPE_NAMES:
-            conn.execute(text(f'DROP TYPE IF EXISTS "{name}" CASCADE'))
+        conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+        conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
     eng.dispose()
 
 

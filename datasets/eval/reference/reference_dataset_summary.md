@@ -19,13 +19,14 @@
 
 ## Matching evidence
 
-- matching_with_real_bilateral_evidence: **20**
-- matching_missing_company_evidence: **10**
+- matching_with_real_bilateral_evidence: **0**
+- matching_with_tender_evidence_only: **10**
+- matching_with_company_evidence_but_not_requirement_aligned: **20**
+- matching_insufficient_evidence: **30**
 
 ### Matching status histogram
 
-- `insufficient_evidence`: 10
-- `partially_supported`: 20
+- `insufficient_evidence`: 30
 
 ## Splits
 
@@ -51,4 +52,4 @@
 - This is an **auto reference** set for course demos and automatic evaluation.
 - It is **not** expert human gold.
 - All citation quotes are validated against real chunk text (whitespace-normalized).
-- Matching uses real disclosed company evidence only; otherwise status is `insufficient_evidence`.
+- Matching bilateral evidence requires clause-level company alignment; supplier-name-only pairs are `insufficient_evidence`.

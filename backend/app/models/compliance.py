@@ -69,6 +69,7 @@ class ComplianceRun(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     category_counts_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     rule_ids_json: Mapped[list[Any] | None] = mapped_column(JSONB)
     engine_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(64))
     error_summary: Mapped[str | None] = mapped_column(Text)
     idempotency_key: Mapped[str | None] = mapped_column(String(128))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

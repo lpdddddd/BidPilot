@@ -375,7 +375,7 @@ def test_consistency_deadline(db: Session):
     db.commit()
     findings, _ = ComplianceEngine().run(
         _ctx_from_db(db, project),
-        rule_ids=["E003_deadline_presence"],
+        rule_ids=["E003_date_conflicts"],
     )
     assert any(f.status == ComplianceFindingStatus.fail for f in findings)
 
@@ -383,12 +383,12 @@ def test_consistency_deadline(db: Session):
     db.commit()
     findings, _ = ComplianceEngine().run(
         _ctx_from_db(db, project),
-        rule_ids=["E003_deadline_presence"],
+        rule_ids=["E003_date_conflicts"],
     )
     assert any(f.status == ComplianceFindingStatus.pass_ for f in findings)
 
 
-def test_offline_adapter_roundtrip():
+def test_offline_adapter_formal_engine_parity():
     sample = {
         "sample_id": "s1",
         "project_id": str(uuid4()),
@@ -399,11 +399,11 @@ def test_offline_adapter_roundtrip():
             "text": "本声明函必须提供且内容不得擅自删改，否则视为无效投标。",
             "instruction": "检查",
         },
-        "reference_output": {"verdict": "pass", "rule_type": "mandatory"},
+        "reference_output": {"verdict": "fail", "rule_type": "mandatory"},
         "evidence": [
             {
-                "chunk_id": "c1",
-                "document_id": "d1",
+                "chunk_id": str(uuid4()),
+                "document_id": str(uuid4()),
                 "page_number": 1,
                 "quote": "本声明函必须提供且内容不得擅自删改，否则视为无效投标。",
             }
@@ -411,11 +411,20 @@ def test_offline_adapter_roundtrip():
         "citation_metadata": {},
         "split": "test",
     }
+    from app.services.compliance.adapter_reference import (
+        evaluate_sample_online_parity,
+    )
+
     adapted = adapt_compliance_reference_sample(sample)
-    assert adapted["has_grounded_quote"] is True
-    evaluated = evaluate_adapted_sample(adapted)
+    evaluated = evaluate_adapted_sample(adapted, sample=sample)
+    assert evaluated["ok"] is True
     assert evaluated["engine_verdict"] in {"pass", "fail", "attention_required"}
+    assert evaluated["rule_ids_executed"]
     assert all("severity" in f and "category" in f for f in evaluated["findings"])
+
+    a, b = evaluate_sample_online_parity(sample)
+    assert [f.finding_id for f in a] == [f.finding_id for f in b]
+    assert [f.rule_id for f in a] == [f.rule_id for f in b]
 
 
 def test_coverage_a004_a005(db: Session):
@@ -551,7 +560,31 @@ def test_qualification_c004_c005(db: Session):
     )
     assert any(f.status == ComplianceFindingStatus.unknown for f in findings_u)
 
-    qual.metadata_json = {"expiry": "2027-01-01", "min_amount": 100000}
+    qual.metadata_json = {"expiry": "2027-01-01", "min_amount": "10万元"}
+    db.commit()
+    # Without company-side values → warning/unknown (missing), not invent pass
+    findings_missing, _ = ComplianceEngine().run(
+        _ctx_from_db(db, project),
+        rule_ids=["C005_structured_thresholds"],
+    )
+    assert any(
+        f.status == ComplianceFindingStatus.unknown and "missing" in f.finding_id
+        for f in findings_missing
+    )
+
+    match.metadata_json = {"min_amount": "5万元", "expiry": "2025-01-01"}
+    db.commit()
+    findings_fail, _ = ComplianceEngine().run(
+        _ctx_from_db(db, project),
+        rule_ids=["C005_structured_thresholds"],
+    )
+    assert any(
+        f.status == ComplianceFindingStatus.fail
+        and f.severity.value in {"error", "critical"}
+        for f in findings_fail
+    )
+
+    match.metadata_json = {"min_amount": "20万元", "expiry": "2028-06-01"}
     db.commit()
     findings_ok, _ = ComplianceEngine().run(
         _ctx_from_db(db, project),
@@ -640,3 +673,156 @@ def test_draft_d004_d005_and_consistency_e004(db: Session):
         and f.status == ComplianceFindingStatus.fail
         for f in findings
     )
+
+
+def test_d003_d006_d007_e005_e006(db: Session):
+    project = _org_project(db, "CMP-DX")
+    other = _org_project(db, "CMP-OT")
+    req = _req(db, project, title="强制资质", mandatory=True)
+    gap = RequirementEvidenceMatch(
+        project_id=project.id,
+        requirement_id=req.id,
+        status=EvidenceMatchStatus.insufficient_evidence,
+        risk_level=RiskLevel.medium,
+        review_status=MatchReviewStatus.pending,
+        lifecycle_status="active",
+    )
+    db.add(gap)
+    db.flush()
+    # Superseded match exists for FK but is not loaded as active → D003 match_not_active
+    old = RequirementEvidenceMatch(
+        project_id=project.id,
+        requirement_id=req.id,
+        status=EvidenceMatchStatus.supported,
+        risk_level=RiskLevel.low,
+        review_status=MatchReviewStatus.pending,
+        lifecycle_status="superseded",
+    )
+    db.add(old)
+    db.flush()
+
+    draft = ProposalDraft(
+        project_id=project.id,
+        title="跨项草稿",
+        status=ProposalDraftStatus.draft_pending_review,
+    )
+    db.add(draft)
+    db.flush()
+    version = ProposalDraftVersion(
+        project_id=project.id,
+        draft_id=draft.id,
+        version_number=1,
+        version_kind=ProposalDraftVersionKind.manual_revision,
+        content_json={
+            "sections": [
+                {
+                    "title": "响应",
+                    "blocks": [
+                        {
+                            "block_kind": "partial_response",
+                            "content": "本公司完全满足该要求，已具备全部资质。",
+                            "requirement_ids": [str(req.id)],
+                            "citation_ids": [],
+                        }
+                    ],
+                }
+            ]
+        },
+        content_markdown="本公司完全满足该要求，已具备全部资质。",
+        is_current=True,
+    )
+    db.add(version)
+    db.flush()
+    draft.current_version_id = version.id
+
+    from app.models.enums import ProposalDraftSourceRole
+    from app.models.proposal_draft import ProposalDraftSource
+
+    src_bad = ProposalDraftSource(
+        project_id=project.id,
+        draft_version_id=version.id,
+        requirement_id=req.id,
+        match_id=old.id,
+        source_role=ProposalDraftSourceRole.company_support,
+        source_quote="x",
+        location_json={},
+    )
+    db.add(src_bad)
+
+    foreign_doc = _doc(
+        db, other, document_type=DocumentType.qualification, file_name="other.pdf"
+    )
+    src_cross = ProposalDraftSource(
+        project_id=other.id,
+        draft_version_id=version.id,
+        requirement_id=req.id,
+        match_id=gap.id,
+        source_role=ProposalDraftSourceRole.company_support,
+        source_quote="外项目材料",
+        location_json={"document_id": str(foreign_doc.id)},
+    )
+    db.add(src_cross)
+    db.commit()
+
+    ctx = _ctx_from_db(db, project, draft_id=draft.id)
+    findings, _ = ComplianceEngine().run(
+        ctx,
+        rule_ids=[
+            "D003_citation_integrity",
+            "D006_strong_claim_without_support",
+            "D007_cross_project_source",
+            "E005_project_ownership",
+            "E006_gap_match_definitive_draft",
+        ],
+    )
+    assert any(
+        f.rule_id == "D003_citation_integrity" and f.status == ComplianceFindingStatus.fail
+        for f in findings
+    )
+    assert any(
+        f.rule_id == "D006_strong_claim_without_support"
+        and f.status == ComplianceFindingStatus.fail
+        for f in findings
+    )
+    assert any(
+        f.rule_id == "D007_cross_project_source" and f.status == ComplianceFindingStatus.fail
+        for f in findings
+    )
+    assert any(
+        f.rule_id == "E006_gap_match_definitive_draft"
+        and f.status == ComplianceFindingStatus.fail
+        for f in findings
+    )
+    assert any(
+        f.rule_id == "E005_project_ownership" and f.status == ComplianceFindingStatus.fail
+        for f in findings
+    )
+
+
+def test_e003_date_conflict_and_onesided(db: Session):
+    project = _org_project(db, "CMP-E3")
+    req = _req(db, project, title="交付时间", category=RequirementCategory.deadline)
+    req.metadata_json = {"delivery_date": "2026-09-01"}
+    db.commit()
+    findings, _ = ComplianceEngine().run(
+        _ctx_from_db(db, project),
+        rule_ids=["E003_date_conflicts"],
+    )
+    assert any(f.status == ComplianceFindingStatus.unknown for f in findings)
+
+    match = RequirementEvidenceMatch(
+        project_id=project.id,
+        requirement_id=req.id,
+        status=EvidenceMatchStatus.partially_supported,
+        risk_level=RiskLevel.low,
+        review_status=MatchReviewStatus.pending,
+        lifecycle_status="active",
+        metadata_json={"delivery_date": "2026-10-01"},
+    )
+    db.add(match)
+    db.commit()
+    findings2, _ = ComplianceEngine().run(
+        _ctx_from_db(db, project),
+        rule_ids=["E003_date_conflicts"],
+    )
+    assert any(f.status == ComplianceFindingStatus.fail for f in findings2)

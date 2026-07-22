@@ -912,6 +912,7 @@ export type ComplianceRun = {
   category_counts_json?: Record<string, number> | null;
   rule_ids_json?: string[] | null;
   engine_version: string;
+  error_code?: string | null;
   error_summary?: string | null;
   idempotency_key?: string | null;
   started_at?: string | null;
@@ -1000,5 +1001,92 @@ export type ComplianceFindingListResponse = {
   items: ComplianceFinding[];
   total: number;
   run_id?: string | null;
+};
+
+export type AgentRunStatus =
+  | "pending"
+  | "running"
+  | "waiting_for_user"
+  | "blocked"
+  | "completed"
+  | "completed_with_warnings"
+  | "failed"
+  | "cancelled";
+
+export type AgentRunStartPayload = {
+  user_request?: string;
+  intent?: string | null;
+  requested_requirement_ids?: string[];
+  selected_document_ids?: string[];
+  metadata?: Record<string, unknown>;
+};
+
+export type AgentState = {
+  run_id?: string | null;
+  project_id?: string | null;
+  current_node?: string | null;
+  status?: string | null;
+  compliance_run_id?: string | null;
+  compliance_summary?: Record<string, unknown>;
+  draft_ids?: string[];
+  citations?: Array<Record<string, unknown>>;
+  warnings?: string[];
+  errors?: string[];
+  graph_version?: string | null;
+  critical_qualification?: boolean | null;
+  company_evidence_insufficient?: boolean | null;
+  [key: string]: unknown;
+};
+
+export type AgentRun = {
+  id: string;
+  organization_id: string;
+  project_id?: string | null;
+  status: AgentRunStatus;
+  intent?: string | null;
+  current_node?: string | null;
+  graph_version?: string | null;
+  idempotency_key?: string | null;
+  input_json?: Record<string, unknown> | null;
+  output_summary_json?: Record<string, unknown> | null;
+  error_code?: string | null;
+  error_summary?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  state?: AgentState | null;
+};
+
+export type AgentRunListResponse = {
+  items: AgentRun[];
+  total: number;
+};
+
+export type AgentEventItem = {
+  event_type: string;
+  sequence: number;
+  name: string;
+  status: string;
+  summary?: string | null;
+  created_at?: string | null;
+  payload?: Record<string, unknown>;
+};
+
+export type AgentEventsResponse = {
+  run_id: string;
+  items: AgentEventItem[];
+  total: number;
+};
+
+export type AgentResultResponse = {
+  run: AgentRun;
+  summary: Record<string, unknown>;
+  state?: AgentState | null;
+  citations: Array<Record<string, unknown>>;
+  draft_ids: string[];
+  compliance_run_id?: string | null;
+  warnings: string[];
+  errors: string[];
 };
 

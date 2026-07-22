@@ -91,7 +91,9 @@ class AgentRunStatus(StrEnum):
     pending = "pending"
     running = "running"
     waiting_for_user = "waiting_for_user"
+    blocked = "blocked"
     completed = "completed"
+    completed_with_warnings = "completed_with_warnings"
     failed = "failed"
     cancelled = "cancelled"
 

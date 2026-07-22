@@ -63,7 +63,9 @@ python -m bidpilot_data build-reference --seed 42 --use-llm
 Report fields include:
 
 - `matching_with_real_bilateral_evidence`
-- `matching_missing_company_evidence`
+- `matching_with_tender_evidence_only`
+- `matching_with_company_evidence_but_not_requirement_aligned`
+- `matching_insufficient_evidence`
 - `matching_status_histogram`
 
 ## Quality gates
@@ -76,14 +78,34 @@ Report fields include:
 - Failed samples retry up to `max_retries`, then land in `rejected_samples.jsonl`.
 - Generator version: `bidpilot-reference-1.0.0`.
 
-### Matching diversity (bilateral vs missing)
+### Matching diversity (bilateral vs name-only vs tender-only)
 
-Disclosed-supplier **bilateral** pairs are capped at **~20** so the
-`insufficient_evidence` pad can still produce **≥10** missing-company samples when
-the corpus allows (overall matching target remains **≥30**). Report counters:
+**Strict bilateral definition** (`matching_with_real_bilateral_evidence`) requires ALL of:
+
+1. Real tender requirement + tender-side grounded quote
+2. Real company material (chunk/document)
+3. Company evidence that is **clause-level related** to that requirement — **not** mere supplier name appearance
+
+Conservative rule: if deterministic logic cannot prove clause-level alignment →
+`insufficient_evidence` / `unknown`. **Never** `supported` / `partially_supported` for name-only.
+
+In practice, only silver `disclosed_match` rows with grounded quotes and
+supported/partial status count as bilateral (empty silver file → bilateral may be **0**, OK).
+
+Supplier-name attestation samples are emitted as:
+
+- status `insufficient_evidence`
+- provenance `company_name_only_not_requirement_aligned`
+- counted under `matching_with_company_evidence_but_not_requirement_aligned`
+
+Overall matching target remains **≥30** via tender-only insufficient pads.
+
+Report counters:
 
 - `matching_with_real_bilateral_evidence`
-- `matching_missing_company_evidence`
+- `matching_with_tender_evidence_only`
+- `matching_with_company_evidence_but_not_requirement_aligned`
+- `matching_insufficient_evidence`
 - `matching_status_histogram`
 
 Reproduce (versioned summary/report/splits + JSONL):
@@ -97,8 +119,8 @@ PYTHONPATH=. python -m bidpilot_data build-reference \
 
 ### Compliance offline eval
 
-Lightweight REF_* checks on `compliance_reference.jsonl` (not a substitute for the
-full DB rule engine on live projects):
+Formal A–E `ComplianceEngine` on adapted `compliance_reference.jsonl` samples
+(no REF_* keyword engine):
 
 ```bash
 cd backend

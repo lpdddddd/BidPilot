@@ -174,37 +174,117 @@ class ReviewLifecycleConsistencyRule:
         return findings
 
 
-class DeadlineFieldPresenceRule:
-    rule_id = "E003_deadline_presence"
-    name = "截止日期一致性"
+class DateConflictRule:
+    """E003 — compare bid_deadline / validity / delivery / service dates across entities."""
+
+    rule_id = "E003_date_conflicts"
+    name = "日期冲突检查"
     category = ComplianceRuleCategory.consistency
-    description = "存在 deadline 类要求时，项目 bid_deadline 应已填写；否则警告。"
+    description = (
+        "比对 bid_deadline、资质有效期、交付日、服务期等日期；"
+        "单边出现→unknown；草稿日期与要求冲突→error/critical；解析失败不中断。"
+    )
     default_severity = ComplianceSeverity.warning
 
+    # Keep legacy id discoverable for offline adapter aliasing
+    legacy_rule_ids = ("E003_deadline_presence",)
+
     def evaluate(self, ctx: ComplianceContext) -> list[ComplianceFinding]:
+        from app.services.compliance.config import STRUCTURED_DATE_KEYS
+        from app.services.compliance.parsers import (
+            dig_keys,
+            extract_dates_from_text,
+            parse_date,
+        )
+
         findings: list[ComplianceFinding] = []
+        parse_errors: list[dict[str, Any]] = []
+
+        def _safe_parse(raw: Any, source: str) -> Any:
+            try:
+                return parse_date(raw)
+            except Exception as exc:  # noqa: BLE001
+                parse_errors.append(
+                    {"source": source, "raw": str(raw)[:80], "error": type(exc).__name__}
+                )
+                return None
+
+        project = ctx.project
+        bid_deadline = getattr(project, "bid_deadline", None) if project else None
+        project_deadline = None
+        if bid_deadline is not None:
+            project_deadline = _safe_parse(bid_deadline, "project.bid_deadline")
+
         deadline_reqs = [
             r for r in ctx.requirements if enum_value(r.category) == "deadline"
         ]
-        project = ctx.project
-        bid_deadline = getattr(project, "bid_deadline", None) if project else None
 
-        if not deadline_reqs and bid_deadline is None:
-            findings.append(
-                make_finding(
-                    rule_id=self.rule_id,
-                    rule_name=self.name,
-                    category=self.category,
-                    severity=ComplianceSeverity.warning,
-                    status=ComplianceFindingStatus.unknown,
-                    message="未识别到截止日期要求，且项目未填写 bid_deadline。",
-                    finding_suffix="insufficient",
-                    remediation="确认招标文件是否含截止时间条款，或在项目信息中补录。",
-                )
-            )
-            return findings
+        # Collect requirement-side dates
+        req_dates: list[tuple[Any, str, Any]] = []  # (req, key, date)
+        for req in ctx.requirements:
+            bags = [
+                req.metadata_json if isinstance(req.metadata_json, dict) else {},
+                req.evidence_required_json
+                if isinstance(getattr(req, "evidence_required_json", None), dict)
+                else {},
+            ]
+            found: dict[str, Any] = {}
+            for bag in bags:
+                found.update(dig_keys(bag, STRUCTURED_DATE_KEYS))
+            for key, raw in found.items():
+                d = _safe_parse(raw, f"requirement:{req.id}:{key}")
+                if d is not None:
+                    req_dates.append((req, key, d))
+                elif raw not in (None, "", [], {}):
+                    findings.append(
+                        make_finding(
+                            rule_id=self.rule_id,
+                            rule_name=self.name,
+                            category=self.category,
+                            severity=ComplianceSeverity.warning,
+                            status=ComplianceFindingStatus.unknown,
+                            message=f"要求「{req.title}」日期字段 {key} 无法解析。",
+                            finding_suffix=f"parse:{req.id}:{key}",
+                            requirement_id=req.id,
+                            metadata_json={"raw": str(raw)[:120]},
+                        )
+                    )
 
-        if deadline_reqs and bid_deadline is None:
+        # Company match dates
+        match_dates: list[tuple[Any, str, Any]] = []
+        for match in ctx.evidence_matches:
+            meta = match.metadata_json if isinstance(match.metadata_json, dict) else {}
+            found = dig_keys(meta, STRUCTURED_DATE_KEYS)
+            for key, raw in found.items():
+                d = _safe_parse(raw, f"match:{match.id}:{key}")
+                if d is not None:
+                    match_dates.append((match, key, d))
+                elif raw not in (None, "", [], {}):
+                    findings.append(
+                        make_finding(
+                            rule_id=self.rule_id,
+                            rule_name=self.name,
+                            category=self.category,
+                            severity=ComplianceSeverity.warning,
+                            status=ComplianceFindingStatus.unknown,
+                            message=f"匹配日期字段 {key} 无法解析。",
+                            finding_suffix=f"parse_match:{match.id}:{key}",
+                            match_id=match.id,
+                            requirement_id=match.requirement_id,
+                            metadata_json={"raw": str(raw)[:120]},
+                        )
+                    )
+
+        # Draft content dates
+        draft_dates: list[tuple[Any, Any]] = []  # (draft_id, date)
+        for ver in current_draft_versions(ctx):
+            content = ver.content_json if isinstance(ver.content_json, dict) else {}
+            blob = draft_blob(content, ver.content_markdown)
+            for d in extract_dates_from_text(blob):
+                draft_dates.append((ver.draft_id, d))
+
+        # Classic deadline presence checks (preserved semantics)
+        if deadline_reqs and project_deadline is None and bid_deadline is None:
             for req in deadline_reqs:
                 findings.append(
                     make_finding(
@@ -217,7 +297,7 @@ class DeadlineFieldPresenceRule:
                             f"存在截止日期要求「{req.title}」，"
                             "但项目 bid_deadline 为空。"
                         ),
-                        finding_suffix=str(req.id),
+                        finding_suffix=f"missing_deadline:{req.id}",
                         requirement_id=req.id,
                         remediation="在项目详情补录投标截止时间。",
                         source_location_json={
@@ -226,28 +306,174 @@ class DeadlineFieldPresenceRule:
                         },
                     )
                 )
-            return findings
 
-        findings.append(
-            make_finding(
-                rule_id=self.rule_id,
-                rule_name=self.name,
-                category=self.category,
-                severity=ComplianceSeverity.info,
-                status=ComplianceFindingStatus.pass_,
-                message=(
-                    "截止日期字段检查通过"
-                    + (
-                        f"（bid_deadline={bid_deadline.isoformat()}）"
-                        if bid_deadline is not None
-                        else ""
+        if not deadline_reqs and project_deadline is None and not req_dates and not match_dates:
+            if not draft_dates:
+                findings.append(
+                    make_finding(
+                        rule_id=self.rule_id,
+                        rule_name=self.name,
+                        category=self.category,
+                        severity=ComplianceSeverity.warning,
+                        status=ComplianceFindingStatus.unknown,
+                        message="未识别到可比对的日期字段（要求/项目/匹配/草稿）。",
+                        finding_suffix="insufficient",
+                        remediation="确认招标文件是否含截止/交付时间条款，或在结构化字段中补录。",
+                        metadata_json={"parse_errors": parse_errors[:5]} if parse_errors else None,
                     )
-                    + "。"
-                ),
-                finding_suffix="ok",
+                )
+                return findings
+
+        # One-sided: requirement dates without project/match counterpart → unknown
+        if req_dates and project_deadline is None and not match_dates:
+            for req, key, d in req_dates:
+                findings.append(
+                    make_finding(
+                        rule_id=self.rule_id,
+                        rule_name=self.name,
+                        category=self.category,
+                        severity=ComplianceSeverity.warning,
+                        status=ComplianceFindingStatus.unknown,
+                        message=(
+                            f"要求「{req.title}」有日期字段 {key}={d.isoformat()}，"
+                            "但项目/企业侧缺少对应日期，无法双侧比对。"
+                        ),
+                        finding_suffix=f"onesided:{req.id}:{key}",
+                        requirement_id=req.id,
+                    )
+                )
+
+        # Compare requirement bid_deadline-like fields vs project
+        for req, key, d in req_dates:
+            if key in {"bid_deadline", "delivery_deadline"} and project_deadline is not None:
+                if d != project_deadline:
+                    findings.append(
+                        make_finding(
+                            rule_id=self.rule_id,
+                            rule_name=self.name,
+                            category=self.category,
+                            severity=ComplianceSeverity.error,
+                            status=ComplianceFindingStatus.fail,
+                            message=(
+                                f"要求「{req.title}」{key}={d.isoformat()} "
+                                f"与项目 bid_deadline={project_deadline.isoformat()} 不一致。"
+                            ),
+                            finding_suffix=f"req_vs_project:{req.id}:{key}",
+                            requirement_id=req.id,
+                        )
+                    )
+
+        # Draft dates vs requirement dates → error/critical on mismatch
+        if draft_dates and req_dates:
+            req_date_set = {d for _, _, d in req_dates}
+            for draft_id, dd in draft_dates:
+                # If draft mentions a date that conflicts with all requirement dates
+                if dd not in req_date_set and project_deadline is not None and dd != project_deadline:
+                    # Only flag when draft date is clearly different from project deadline
+                    # and at least one requirement deadline exists
+                    deadline_like = [d for _, k, d in req_dates if "deadline" in k or "delivery" in k]
+                    if deadline_like and dd not in deadline_like:
+                        findings.append(
+                            make_finding(
+                                rule_id=self.rule_id,
+                                rule_name=self.name,
+                                category=self.category,
+                                severity=ComplianceSeverity.critical,
+                                status=ComplianceFindingStatus.fail,
+                                message=(
+                                    f"草稿日期 {dd.isoformat()} 与要求/项目截止日期不一致。"
+                                ),
+                                finding_suffix=f"draft_mismatch:{draft_id}:{dd.isoformat()}",
+                                draft_id=draft_id,
+                                remediation="核对草稿中的时间表述是否与招标截止/交付要求一致。",
+                            )
+                        )
+
+        # Match vs requirement delivery dates
+        for match, key, md in match_dates:
+            related_req = ctx.requirements_by_id.get(match.requirement_id)
+            if related_req is None:
+                continue
+            for req, rkey, rd in req_dates:
+                if req.id != match.requirement_id:
+                    continue
+                if key == rkey and md != rd:
+                    findings.append(
+                        make_finding(
+                            rule_id=self.rule_id,
+                            rule_name=self.name,
+                            category=self.category,
+                            severity=ComplianceSeverity.error,
+                            status=ComplianceFindingStatus.fail,
+                            message=(
+                                f"匹配与要求日期冲突：{key} 企业={md.isoformat()} "
+                                f"要求={rd.isoformat()}。"
+                            ),
+                            finding_suffix=f"match_vs_req:{match.id}:{key}",
+                            requirement_id=req.id,
+                            match_id=match.id,
+                        )
+                    )
+
+        if parse_errors:
+            findings.append(
+                make_finding(
+                    rule_id=self.rule_id,
+                    rule_name=self.name,
+                    category=self.category,
+                    severity=ComplianceSeverity.warning,
+                    status=ComplianceFindingStatus.unknown,
+                    message=f"存在 {len(parse_errors)} 处日期解析失败（已跳过，未中断检查）。",
+                    finding_suffix="parse_errors",
+                    metadata_json={"parse_errors": parse_errors[:10]},
+                )
             )
-        )
+
+        # Pass if we had dates and raised no fail
+        if not any(f.status == ComplianceFindingStatus.fail for f in findings):
+            if project_deadline is not None or req_dates or match_dates:
+                # Avoid duplicate pass when we already emitted unknowns only — still OK
+                if not any(
+                    f.status == ComplianceFindingStatus.unknown and "onesided" in f.finding_id
+                    for f in findings
+                ):
+                    findings.append(
+                        make_finding(
+                            rule_id=self.rule_id,
+                            rule_name=self.name,
+                            category=self.category,
+                            severity=ComplianceSeverity.info,
+                            status=ComplianceFindingStatus.pass_,
+                            message=(
+                                "日期一致性检查通过"
+                                + (
+                                    f"（bid_deadline={project_deadline.isoformat()}）"
+                                    if project_deadline is not None
+                                    else ""
+                                )
+                                + "。"
+                            ),
+                            finding_suffix="ok",
+                        )
+                    )
+            elif deadline_reqs and project_deadline is not None:
+                findings.append(
+                    make_finding(
+                        rule_id=self.rule_id,
+                        rule_name=self.name,
+                        category=self.category,
+                        severity=ComplianceSeverity.info,
+                        status=ComplianceFindingStatus.pass_,
+                        message=f"截止日期字段检查通过（bid_deadline={project_deadline.isoformat()}）。",
+                        finding_suffix="ok",
+                    )
+                )
+
         return findings
+
+
+# Back-compat alias used by older tests/imports
+DeadlineFieldPresenceRule = DateConflictRule
 
 
 MUTUALLY_EXCLUSIVE_STATUSES = frozenset(
@@ -416,6 +642,16 @@ class ProjectOwnershipConsistencyRule:
                 requirement_id=match.requirement_id,
                 match_id=match.id,
             )
+        # Also check matches loaded by id (e.g. superseded / foreign via draft sources)
+        for match in ctx.matches_by_id.values():
+            if match in ctx.evidence_matches:
+                continue
+            _check(
+                match,
+                "match",
+                requirement_id=match.requirement_id,
+                match_id=match.id,
+            )
         for draft in ctx.drafts:
             _check(draft, "draft", draft_id=draft.id)
         for doc in ctx.documents_by_id.values():
@@ -556,7 +792,7 @@ class InsufficientMatchDefinitiveDraftRule:
 CONSISTENCY_RULES: list[ComplianceRule] = [
     MatchStatusVsLinksRule(),
     ReviewLifecycleConsistencyRule(),
-    DeadlineFieldPresenceRule(),
+    DateConflictRule(),
     MultipleExclusiveMatchStatusesRule(),
     ProjectOwnershipConsistencyRule(),
     InsufficientMatchDefinitiveDraftRule(),

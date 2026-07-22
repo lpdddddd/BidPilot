@@ -101,6 +101,7 @@ class ComplianceRunRead(BaseModel):
     category_counts_json: dict[str, int] | None = None
     rule_ids_json: list[str] | None = None
     engine_version: str
+    error_code: str | None = None
     error_summary: str | None = None
     idempotency_key: str | None = None
     started_at: datetime | None = None

@@ -108,3 +108,47 @@ def test_compliance_rules_and_run_flow(client: TestClient, db: Session):
     rerun = client.post(f"/api/v1/projects/{project.id}/compliance/runs", json={})
     assert rerun.status_code == 201
     assert rerun.json()["run"]["id"] != run_id
+
+
+def test_failed_compliance_run_persists_despite_rollback(client: TestClient, db: Session, monkeypatch):
+    """Force engine failure → outer session rolls back, failed run still in DB."""
+    from app.models.compliance import ComplianceRun
+    from app.models.enums import ExtractionRunStatus
+    from app.services.compliance import service as compliance_service_mod
+    from sqlalchemy import select
+
+    project = _seed(db)
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("forced rule boom api_key=SECRET123")
+
+    monkeypatch.setattr(
+        compliance_service_mod.ComplianceEngine,
+        "run",
+        _boom,
+    )
+
+    resp = client.post(f"/api/v1/projects/{project.id}/compliance/runs", json={})
+    assert resp.status_code == 500
+    detail = resp.json()["detail"]
+    assert isinstance(detail, dict)
+    run_id = detail["run_id"]
+    assert detail.get("error_code")
+    assert "SECRET123" not in (detail.get("error_summary") or "")
+
+    # Request-scoped session may have rolled back; query via same db after expire
+    db.expire_all()
+    run = db.get(ComplianceRun, __import__("uuid").UUID(run_id))
+    assert run is not None
+    assert run.status == ExtractionRunStatus.failed
+    assert run.error_code == "RuntimeError"
+    assert run.error_summary
+    assert "SECRET123" not in run.error_summary
+
+    got = client.get(f"/api/v1/projects/{project.id}/compliance/runs/{run_id}")
+    assert got.status_code == 200
+    assert got.json()["status"] == "failed"
+
+    report = client.get(f"/api/v1/projects/{project.id}/compliance/runs/{run_id}/report")
+    assert report.status_code == 200
+    assert report.json()["run"]["status"] == "failed"

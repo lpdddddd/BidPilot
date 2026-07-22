@@ -254,23 +254,36 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 
 > 编号说明：流程表将「规则检查工具」列为第 9 步；上文「匹配结果人工审核」为先序产品能力，二者并存。
 
-- 表：`compliance_runs`、`compliance_findings`；引擎版本 `compliance-rules-1.1.0`
+- 表：`compliance_runs`、`compliance_findings`；引擎版本 `compliance-rules-1.2.0`
 - 规则分类：coverage / evidence / qualification_risk / draft_safety / consistency（A001–E006）
-- API：`POST/GET .../compliance/runs`、`.../latest`、`.../findings`、`.../rules`
+- API：`POST/GET .../compliance/runs`、`.../latest`、`.../findings`、`.../rules`；失败 run 仍可查询（含 `error_code`）
 - Tools：`check_requirement_coverage` 等 5 个 Pydantic I/O 包装
-- 前端：「智能审查」`/review`（`ComplianceReviewPage`）；Dashboard 能力标记 ready
-- 离线：`python -m app.services.compliance.offline_eval`
+- 前端：「智能审查」`/review`（`ComplianceReviewPage`，含 info StatCard）；Dashboard 能力标记 ready
+- 离线：`python -m app.services.compliance.offline_eval`（正式 A–E 引擎，无 REF_*）
+- **Step 9 修复**：双边证据严格定义、C005/E003/E005 语义、失败 run 持久化、离线一致性评估
 - **限制**：非法律意见 / 非人工 gold；不足则 unknown，不编造
-- **尚未实现**：LangGraph Agent、LoRA 审查、自动投标结论
+- **尚未实现**：LoRA 审查、自动投标结论
 
-## 可追溯响应准备草稿（第 10 步）
+## LangGraph Agent 业务闭环（第 10 步）
+
+用 LangGraph 编排检索 → 抽取 → 匹配 → 合规 → 草稿校验/修订，形成可恢复业务闭环。
+详见 [`docs/agent_workflow.md`](docs/agent_workflow.md)。
+
+- 图版本 `bidpilot-agent-1.0.0`；节点只编排、调用既有 Services/Tools（合规无 LLM）
+- 表：扩展 `agent_runs` + `agent_checkpoints`；事件复用 `AgentStep` / `ToolCall`
+- 关键资格 finding：默认 `block_on_critical_qualification=true` → `blocked`；否则 risk-only 草稿 + `completed_with_warnings`
+- API：`POST/GET .../agent-runs`、`.../latest`、`.../events`、`.../result`、`.../resume`、`.../retry`
+- 前端：项目详情「Agent 闭环」面板（非完整时间线）
+- **尚未实现**：Step 11 实时可视化、Step 12 评测中心、LoRA
+
+## 可追溯响应准备草稿
 
 基于已确认 Match 与可定位证据，生成待人工复核的响应准备草稿（非投标提交文件）。
 详见 `docs/proposal_drafting.md`。
 
 - 正向正文仅用 `confirmed` + `active` + `supported|partially_supported`
 - 不可变版本 / 来源快照 / 人工修订与审核；Markdown·DOCX 仅 reviewed 可导出
-- **尚未实现**：LoRA / Agent / 自动投标结论 / 价格与法律承诺生成 / 投标提交
+- **尚未实现**：LoRA / 自动投标结论 / 价格与法律承诺生成 / 投标提交
 
 ## 测试 / 静态检查
 
@@ -383,11 +396,12 @@ llamafactory-cli train /absolute/path/to/bidpilot/training/llamafactory/configs/
 ## 后续开发顺序建议
 
 1. 人工审核沉淀 gold 需求 / Match / RAG / SFT
-2. 合规公开源采集规模化 + OCR
-3. LangGraph Agent 编排（复用已有合规 Tools，而非重写规则）
-4. 认证授权与组织权限
-5. 多 GPU QLoRA 正式训练
-6. 自动投标方案生成与投标提交（远期）
+2. Step 11 Agent 实时时间线可视化
+3. Step 12 评测中心
+4. 合规公开源采集规模化 + OCR
+5. 认证授权与组织权限
+6. 多 GPU QLoRA 正式训练
+7. LoRA 审查 / 自动投标结论 / 投标提交（远期，明确不在当前范围）
 
 ## Makefile 命令
 

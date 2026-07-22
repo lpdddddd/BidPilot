@@ -25,6 +25,7 @@ def test_all_expected_tables_registered():
         "tool_calls",
     }
     assert expected.issubset(set(Base.metadata.tables))
+    assert "agent_checkpoints" in Base.metadata.tables
 
 
 def test_document_chunk_unique_and_qdrant_point_reserved(engine):

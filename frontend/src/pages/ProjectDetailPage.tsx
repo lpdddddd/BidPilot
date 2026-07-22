@@ -9,6 +9,7 @@ import MatchingWorkspace from "../features/matching/MatchingWorkspace";
 import ProposalDraftsWorkspace from "../features/proposalDrafts/ProposalDraftsWorkspace";
 import RequirementsWorkspace from "../features/requirements/RequirementsWorkspace";
 import KnowledgeSearch from "../features/search/KnowledgeSearch";
+import AgentLoopPanel from "../features/agent/AgentLoopPanel";
 import type { Project } from "../types/api";
 import { usePageTitle } from "../components/usePageTitle";
 
@@ -222,6 +223,15 @@ export default function ProjectDetailPage() {
                     setActiveTab("documents");
                   }}
                 />
+              </div>
+            ),
+          },
+          {
+            key: "agent-loop",
+            label: "Agent 闭环",
+            children: (
+              <div className="bp-workspace-body">
+                <AgentLoopPanel projectId={project.id} />
               </div>
             ),
           },

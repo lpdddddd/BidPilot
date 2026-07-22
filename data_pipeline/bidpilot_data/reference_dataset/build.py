@@ -158,15 +158,31 @@ def build_reference_dataset(
         rejected.extend(more_dupes)
         attempt_stats["retry_accepted"] += len(new_accepted)
 
-    # Trim to targets (prefer higher confidence)
+    # Trim to targets (prefer higher confidence; diversify matching provenance)
     by_task: dict[str, list[ReferenceSample]] = defaultdict(list)
     for s in accepted:
         by_task[s.task_type].append(s)
     trimmed: list[ReferenceSample] = []
     for task, need in tgt.items():
         rows = sorted(by_task.get(task) or [], key=lambda s: (-s.confidence, s.sample_id))
-        trimmed.extend(rows[:need])
-        # Keep extras only if below need (already handled)
+        if task == "matching" and need > 0:
+            name_only = [
+                s
+                for s in rows
+                if (s.data_provenance.method if s.data_provenance else "") == "company_name_only"
+            ]
+            others = [s for s in rows if s not in name_only]
+            # Keep up to 2/3 name-only (company present but not clause-aligned) for report diversity
+            take_name = min(len(name_only), max(need // 2, min(need, 20)))
+            picked = name_only[:take_name]
+            remain = need - len(picked)
+            picked.extend(others[:remain])
+            if len(picked) < need:
+                leftover = [s for s in rows if s not in picked]
+                picked.extend(leftover[: need - len(picked)])
+            trimmed.extend(picked[:need])
+        else:
+            trimmed.extend(rows[:need])
     accepted = trimmed
 
     # Assign splits
@@ -194,6 +210,11 @@ def build_reference_dataset(
         "rejected_count": len(rejected),
         "attempt_stats": dict(attempt_stats),
         "matching_with_real_bilateral_evidence": match_stats["matching_with_real_bilateral_evidence"],
+        "matching_with_tender_evidence_only": match_stats["matching_with_tender_evidence_only"],
+        "matching_with_company_evidence_but_not_requirement_aligned": match_stats[
+            "matching_with_company_evidence_but_not_requirement_aligned"
+        ],
+        "matching_insufficient_evidence": match_stats["matching_insufficient_evidence"],
         "matching_missing_company_evidence": match_stats["matching_missing_company_evidence"],
         "matching_status_histogram": match_stats["matching_status_histogram"],
         "splits": {
@@ -229,6 +250,11 @@ def build_reference_dataset(
             "all_targets_met": report["all_targets_met"],
             **{f"n_{k}": counts.get(k, 0) for k in tgt},
             "matching_bilateral": match_stats["matching_with_real_bilateral_evidence"],
+            "matching_tender_only": match_stats["matching_with_tender_evidence_only"],
+            "matching_company_not_aligned": match_stats[
+                "matching_with_company_evidence_but_not_requirement_aligned"
+            ],
+            "matching_insufficient": match_stats["matching_insufficient_evidence"],
             "matching_missing_company": match_stats["matching_missing_company_evidence"],
         },
     )

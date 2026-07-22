@@ -28,6 +28,7 @@ dependencies = [
   "tiktoken>=0.8.0",
   "opensearch-py>=2.7.0",
   "sentence-transformers>=3.3.0",
+  "langgraph>=0.2.0,<2",
 ]
 
 [project.optional-dependencies]
