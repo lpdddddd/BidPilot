@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from app.models.compliance import ComplianceFinding, ComplianceRun
     from app.models.conversation import Conversation
     from app.models.document import Document, DocumentChunk
+    from app.models.evaluation import EvaluationRun, EvaluationSuite
     from app.models.extraction_run import RequirementExtractionRun
     from app.models.match_run import (
         RequirementEvidenceMatch,
@@ -102,5 +103,11 @@ class BidProject(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         back_populates="project"
     )
     compliance_findings: Mapped[list[ComplianceFinding]] = relationship(
+        back_populates="project"
+    )
+    evaluation_suites: Mapped[list[EvaluationSuite]] = relationship(
+        back_populates="project"
+    )
+    evaluation_runs: Mapped[list[EvaluationRun]] = relationship(
         back_populates="project"
     )

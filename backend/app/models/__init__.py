@@ -11,6 +11,10 @@ from app.models.enums import (
     ComplianceRunStatus,
     ComplianceSeverity,
     DocumentType,
+    EvaluationCaseStatus,
+    EvaluationReferenceKind,
+    EvaluationRunStatus,
+    EvaluationTargetType,
     EvidenceMatchStatus,
     ExtractionRunStatus,
     MatchReviewAction,
@@ -32,6 +36,12 @@ from app.models.enums import (
     RequirementCategory,
     ReviewStatus,
     RiskLevel,
+)
+from app.models.evaluation import (
+    EvaluationCaseResult,
+    EvaluationMetricResult,
+    EvaluationRun,
+    EvaluationSuite,
 )
 from app.models.extraction_run import RequirementExtractionRun
 from app.models.match_run import (
@@ -76,6 +86,14 @@ __all__ = [
     "DocumentChunk",
     "DocumentType",
     "DocumentVersion",
+    "EvaluationCaseResult",
+    "EvaluationCaseStatus",
+    "EvaluationMetricResult",
+    "EvaluationReferenceKind",
+    "EvaluationRun",
+    "EvaluationRunStatus",
+    "EvaluationSuite",
+    "EvaluationTargetType",
     "EvidenceLink",
     "EvidenceMatchStatus",
     "ExtractionRunStatus",

@@ -204,3 +204,47 @@ class ComplianceRuleCategory(StrEnum):
     draft_safety = "draft_safety"
     consistency = "consistency"
     engine = "engine"
+
+
+class EvaluationRunStatus(StrEnum):
+    queued = "queued"
+    running = "running"
+    completed = "completed"
+    partial = "partial"
+    failed = "failed"
+    cancelled = "cancelled"
+
+
+class EvaluationCaseStatus(StrEnum):
+    pending = "pending"
+    running = "running"
+    passed = "passed"
+    failed = "failed"
+    error = "error"
+    skipped = "skipped"
+    cancelled = "cancelled"
+
+
+class EvaluationTargetType(StrEnum):
+    deterministic_fake = "deterministic_fake"
+    rag = "rag"
+    extraction = "extraction"
+    matching = "matching"
+    compliance = "compliance"
+    drafting = "drafting"
+    agent_pipeline = "agent_pipeline"
+
+
+class EvaluationReferenceKind(StrEnum):
+    """Semantic label for how a case/metric relates to reference data.
+
+    Never promote ``auto_reference`` to ``human_gold``.
+    """
+
+    auto_reference = "auto_reference"
+    rule_expected = "rule_expected"
+    human_gold = "human_gold"
+    no_direct_reference = "no_direct_reference"
+    executed_without_direct_reference = "executed_without_direct_reference"
+    not_applicable = "not_applicable"
+    metric_error = "metric_error"

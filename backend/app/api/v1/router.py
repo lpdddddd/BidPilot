@@ -4,6 +4,7 @@ from app.api.v1 import (
     agent_runs,
     ask,
     compliance,
+    evaluation,
     documents,
     matches,
     projects,
@@ -23,6 +24,7 @@ api_router.include_router(
     proposal_drafts.router, prefix="/projects", tags=["proposal-drafts"]
 )
 api_router.include_router(compliance.router, prefix="/projects", tags=["compliance"])
+api_router.include_router(evaluation.router, prefix="/projects", tags=["evaluation"])
 api_router.include_router(
     agent_runs.project_router, prefix="/projects", tags=["agent-runs"]
 )
