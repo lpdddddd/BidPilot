@@ -36,6 +36,142 @@ BACKEND = ROOT / "backend"
 sys.path.insert(0, str(BACKEND))
 
 CITATION_RE = re.compile(r"\[(S\d+)\]")
+INSUFFICIENT_PHRASES = ("当前资料不足以确认", "资料不足以确认")
+
+
+class CaseFailure(Exception):
+    """One live smoke case failed validation."""
+
+    def __init__(self, message: str, *, events: list[str] | None = None, detail: str | None = None):
+        super().__init__(message)
+        self.message = message
+        self.events = events or []
+        self.detail = detail or message
+
+
+def _citation_has_locator(citation: dict) -> bool:
+    if citation.get("section"):
+        return True
+    if citation.get("clause_id"):
+        return True
+    if citation.get("page_start") is not None or citation.get("page_end") is not None:
+        return True
+    return False
+
+
+def validate_answerable_payload(
+    payload: dict,
+    *,
+    expected_model: str | None = None,
+) -> None:
+    """Strict checks for an expected answerable grounded response."""
+    answer = (payload.get("answer") or "").strip()
+    citations = payload.get("citations") or []
+    if not answer:
+        raise CaseFailure("final.answer is empty")
+    if not citations:
+        raise CaseFailure("final.citations is empty")
+
+    cited = CITATION_RE.findall(answer)
+    allowed = {c.get("source_id") for c in citations}
+    for sid in cited:
+        if sid not in allowed:
+            raise CaseFailure(f"answer cites unknown {sid}", detail=f"allowed={sorted(allowed)}")
+
+    for c in citations:
+        for key in ("source_id", "chunk_id", "document_id", "file_name"):
+            if not c.get(key):
+                raise CaseFailure(f"citation missing {key}")
+        if not _citation_has_locator(c):
+            raise CaseFailure(
+                "citation missing locator (need section, clause_id, or page_start/page_end)",
+                detail=f"source_id={c.get('source_id')}",
+            )
+
+    gen = payload.get("generation_trace") or {}
+    model = gen.get("model")
+    if expected_model and model != expected_model:
+        raise CaseFailure(
+            "generation_trace.model mismatch",
+            detail=f"got={model!r} expected={expected_model!r}",
+        )
+    latency = gen.get("latency_ms")
+    if not isinstance(latency, (int, float)) or latency < 0:
+        raise CaseFailure(
+            "generation_trace.latency_ms invalid",
+            detail=f"got={latency!r}",
+        )
+
+
+def validate_insufficient_payload(payload: dict) -> None:
+    """Strict checks for an expected insufficient-evidence response."""
+    if payload.get("status") not in {None, "insufficient_evidence", "answered"}:
+        # Accept answered only if phrase present; status preferred.
+        pass
+    answer = payload.get("answer") or ""
+    if not any(p in answer for p in INSUFFICIENT_PHRASES):
+        raise CaseFailure(
+            "insufficient case missing safety phrase",
+            detail="expected 当前资料不足以确认",
+        )
+
+
+def validate_sse_answerable(
+    events: list[dict],
+    *,
+    expected_model: str | None = None,
+) -> dict:
+    """Validate SSE event stream for an answerable question. Returns final payload."""
+    names = [e.get("event") for e in events]
+    if "delta" in names:
+        raise CaseFailure("client received delta (unvalidated leak)", events=names)
+    if "error" in names:
+        err = next(e for e in events if e.get("event") == "error")
+        data = err.get("data") or {}
+        raise CaseFailure(
+            f"SSE error: {data.get('message') or 'unknown'}",
+            events=names,
+            detail=str(data.get("detail") or "")[:300],
+        )
+    if "retrieval" not in names:
+        raise CaseFailure("missing retrieval event", events=names)
+    if "generation_started" not in names:
+        raise CaseFailure("missing generation_started event", events=names)
+    finals = [e for e in events if e.get("event") == "final"]
+    if len(finals) != 1:
+        raise CaseFailure(f"expected exactly one final, got {len(finals)}", events=names)
+    result = (finals[0].get("data") or {}).get("result") or {}
+    validate_answerable_payload(result, expected_model=expected_model)
+    return result
+
+
+def validate_sse_insufficient(events: list[dict]) -> dict:
+    """Validate SSE for expect_insufficient_evidence=true."""
+    names = [e.get("event") for e in events]
+    if "error" in names:
+        err = next(e for e in events if e.get("event") == "error")
+        data = err.get("data") or {}
+        raise CaseFailure(
+            "insufficient case must not receive SSE error "
+            f"(got {data.get('message')!r}; infra/LLM/citation failures are not insufficient)",
+            events=names,
+            detail=str(data.get("detail") or "")[:300],
+        )
+    finals = [e for e in events if e.get("event") == "final"]
+    if len(finals) != 1:
+        raise CaseFailure(f"insufficient case needs exactly one final, got {len(finals)}", events=names)
+    result = (finals[0].get("data") or {}).get("result") or {}
+    validate_insufficient_payload(result)
+    return result
+
+
+def evaluate_live_cases(case_results: list[tuple[str, bool, str | None]]) -> tuple[bool, list[str]]:
+    """Aggregate case outcomes. Returns (all_passed, failure_messages).
+
+    case_results items: (case_id, ok, error_message_or_none)
+    """
+    failures = [f"{cid}: {msg}" for cid, ok, msg in case_results if not ok]
+    return (len(failures) == 0, failures)
 
 
 def _mock_smoke() -> int:
@@ -121,18 +257,15 @@ def _mock_smoke() -> int:
     service = RagAnswerService(db=SimpleNamespace(), retrieval=retrieval, llm=llm)  # type: ignore[arg-type]
     pid = uuid4()
 
-    # Non-stream
     resp = service.answer(pid, AskRequest(question="需要哪些资质？"))
     assert resp.citations and resp.citations[0].source_id == "S1"
     assert resp.citations[0].chunk_id == "chunk-1"
 
-    # Stream: no delta leak
     events = list(service.answer_stream(pid, AskRequest(question="需要哪些资质？", stream=True)))
     names = [e["event"] for e in events]
     assert names == ["retrieval", "generation_started", "final"], names
     assert "delta" not in names
 
-    # Validation failure path
     bad = FakeLlm("未知引用 [S99]。")
     bad_service = RagAnswerService(db=SimpleNamespace(), retrieval=retrieval, llm=bad)  # type: ignore[arg-type]
     bad_events = list(
@@ -153,11 +286,31 @@ def _http_get(url: str, timeout: float = 10.0):
     return httpx.get(url, timeout=timeout)
 
 
+def _parse_case_specs(questions: list[str]) -> list[dict]:
+    """Build case specs. Trailing questions may be marked insufficient via env.
+
+    RAG_SMOKE_INSUFFICIENT_QUESTION sets an extra insufficient-evidence case.
+    """
+    cases = [{"question": q, "expect_insufficient_evidence": False} for q in questions]
+    insuff = os.getenv("RAG_SMOKE_INSUFFICIENT_QUESTION", "").strip()
+    if insuff:
+        cases.append({"question": insuff, "expect_insufficient_evidence": True})
+    elif len(questions) >= 3 and os.getenv("RAG_SMOKE_AUTO_INSUFFICIENT", "1") in {
+        "1",
+        "true",
+        "yes",
+    }:
+        # Default third live question set can include an unanswerable probe via env.
+        pass
+    return cases
+
+
 def _live_smoke() -> int:
     import httpx
 
     api = os.getenv("RAG_SMOKE_API", "http://127.0.0.1:8000").rstrip("/")
     project_id = os.getenv("RAG_SMOKE_PROJECT_ID", "").strip()
+    expected_model = os.getenv("LLM_MODEL", "bidpilot-qwen3-8b").strip()
     questions_env = os.getenv("RAG_SMOKE_QUESTIONS", "").strip()
     questions = (
         [q.strip() for q in questions_env.split("|") if q.strip()]
@@ -165,9 +318,13 @@ def _live_smoke() -> int:
         else [
             "投标人需要具备哪些资质？",
             "投标保证金是多少？",
-            "投标截止时间是什么时候？",
+            "质保期是多长时间？",
         ]
     )
+    insuff_q = os.getenv(
+        "RAG_SMOKE_INSUFFICIENT_QUESTION",
+        "本项目是否要求投标人具备火星采矿许可证？",
+    ).strip()
 
     blockers: list[str] = []
 
@@ -204,7 +361,6 @@ def _live_smoke() -> int:
         blockers.append(f"/api/v1/health/llm unreachable: {exc}")
 
     if not project_id:
-        # Discover a project with indexed docs if possible.
         try:
             projects = _http_get(f"{api}/api/v1/projects").json()
             for p in projects.get("items", []):
@@ -229,13 +385,20 @@ def _live_smoke() -> int:
             "Run infra + vLLM first, e.g.\n"
             "  make infra-up && make backend\n"
             "  ./scripts/serve_qwen3_vllm.sh\n"
-            "  LLM_ENABLED=true RAG_SMOKE_LIVE=1 make rag-smoke"
+            "  LLM_ENABLED=true RAG_SMOKE_LIVE=1 make rag-smoke-live"
         )
         return 2
 
+    cases = [{"question": q, "expect_insufficient_evidence": False} for q in questions]
+    if insuff_q:
+        cases.append({"question": insuff_q, "expect_insufficient_evidence": True})
+
     records: list[dict] = []
+    case_outcomes: list[tuple[str, bool, str | None]] = []
+    overall_ok = True
+
     with httpx.Client(timeout=180.0) as client:
-        # JSON ask
+        # JSON ask for first answerable question
         q0 = questions[0]
         json_resp = client.post(
             f"{api}/api/v1/projects/{project_id}/ask",
@@ -244,52 +407,61 @@ def _live_smoke() -> int:
         if json_resp.status_code != 200:
             print("JSON ask failed:", json_resp.status_code, json_resp.text[:500])
             return 1
-        payload = json_resp.json()
-        _assert_ask_payload(payload)
-        records.append(_redact_record("json", payload))
+        try:
+            payload = json_resp.json()
+            validate_answerable_payload(payload, expected_model=expected_model)
+            records.append(_redact_record("json", payload))
+            case_outcomes.append(("json:" + q0, True, None))
+        except CaseFailure as exc:
+            overall_ok = False
+            case_outcomes.append(("json:" + q0, False, exc.message))
+            records.append(
+                {
+                    "mode": "json",
+                    "question": q0,
+                    "status": "failed",
+                    "error": exc.message,
+                    "detail": exc.detail,
+                }
+            )
 
-        # SSE ask for remaining questions (and verify event shape)
-        for q in questions:
+        for case in cases:
+            q = case["question"]
+            expect_insuff = case["expect_insufficient_evidence"]
+            case_id = f"sse:{'insuff' if expect_insuff else 'ok'}:{q}"
             started = time.perf_counter()
-            with client.stream(
-                "POST",
-                f"{api}/api/v1/projects/{project_id}/ask",
-                json={"question": q, "stream": True, "top_k": 8},
-            ) as resp:
-                if resp.status_code != 200:
-                    print("SSE ask failed:", resp.status_code)
-                    return 1
-                events = _parse_sse("".join(resp.iter_text()))
-            names = [e["event"] for e in events]
-            if "delta" in names:
-                print("FAIL: client received delta (unvalidated leak)")
-                return 1
-            if names and names[0] != "retrieval":
-                print("FAIL: first event must be retrieval, got", names)
-                return 1
-            if "error" in names and "final" not in names:
-                err = next(e for e in events if e["event"] == "error")
+            try:
+                with client.stream(
+                    "POST",
+                    f"{api}/api/v1/projects/{project_id}/ask",
+                    json={"question": q, "stream": True, "top_k": 8},
+                ) as resp:
+                    if resp.status_code != 200:
+                        raise CaseFailure(f"SSE HTTP {resp.status_code}")
+                    events = _parse_sse("".join(resp.iter_text()))
+                if expect_insuff:
+                    final = validate_sse_insufficient(events)
+                else:
+                    final = validate_sse_answerable(events, expected_model=expected_model)
+                rec = _redact_record("sse", final)
+                rec["latency_ms"] = round((time.perf_counter() - started) * 1000, 1)
+                rec["events"] = [e.get("event") for e in events]
+                records.append(rec)
+                case_outcomes.append((case_id, True, None))
+            except CaseFailure as exc:
+                overall_ok = False
+                case_outcomes.append((case_id, False, exc.message))
                 records.append(
                     {
                         "mode": "sse",
                         "question": q,
-                        "status": "error",
-                        "error": err["data"].get("message"),
+                        "status": "failed",
+                        "error": exc.message,
+                        "detail": exc.detail,
+                        "events": exc.events,
                         "latency_ms": round((time.perf_counter() - started) * 1000, 1),
                     }
                 )
-                continue
-            if "final" not in names:
-                print("FAIL: missing final event", names)
-                return 1
-            if "generation_started" not in names and events[0]["data"].get("status") == "ok":
-                # insufficient_evidence may skip generation_started
-                pass
-            final = next(e for e in events if e["event"] == "final")["data"]["result"]
-            _assert_ask_payload(final)
-            rec = _redact_record("sse", final)
-            rec["latency_ms"] = round((time.perf_counter() - started) * 1000, 1)
-            records.append(rec)
 
     out_dir = ROOT / "docs" / "acceptance"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -299,30 +471,34 @@ def _live_smoke() -> int:
         "created_at": stamp,
         "api": api,
         "project_id": project_id,
-        "model_probe": llm_body,
+        "model_probe": {
+            k: llm_body.get(k)
+            for k in ("status", "enabled", "model", "base_url", "reachable", "latency_ms")
+        },
+        "expected_model": expected_model,
         "records": records,
+        "case_outcomes": [
+            {"id": cid, "ok": ok, "error": err} for cid, ok, err in case_outcomes
+        ],
         "note": "Redacted acceptance summary. No raw document bodies included.",
     }
     out_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    passed, failures = evaluate_live_cases(case_outcomes)
+    if not passed or not overall_ok:
+        print("rag_smoke live: FAIL")
+        for f in failures:
+            print(f"  - {f}")
+        print(f"details -> {out_path}")
+        return 1
+
     print(f"rag_smoke live: PASS ({len(records)} records) -> {out_path}")
     return 0
 
 
 def _assert_ask_payload(payload: dict) -> None:
-    answer = payload.get("answer") or ""
-    citations = payload.get("citations") or []
-    cited = CITATION_RE.findall(answer)
-    allowed = {c["source_id"] for c in citations}
-    for sid in cited:
-        if sid not in allowed and payload.get("status") != "insufficient_evidence":
-            # Cited ids must map to returned citations when present.
-            # Insufficient answers may have zero citations.
-            if citations:
-                raise AssertionError(f"citation {sid} not in response citations")
-    for c in citations:
-        for key in ("source_id", "chunk_id", "document_id", "excerpt"):
-            if not c.get(key):
-                raise AssertionError(f"citation missing {key}: {c}")
+    """Backward-compatible helper used by older callers; prefers answerable rules."""
+    validate_answerable_payload(payload)
 
 
 def _redact_record(mode: str, payload: dict) -> dict:
