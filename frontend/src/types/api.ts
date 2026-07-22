@@ -644,6 +644,8 @@ export type ReviewQueueCounts = {
   rejected: number;
   needs_more_material: number;
   total: number;
+  by_match_status?: Record<string, number>;
+  by_risk_level?: Record<string, number>;
 };
 
 export type ReviewQueueItem = {
@@ -662,8 +664,36 @@ export type ReviewQueueItem = {
   reviewed_by?: string | null;
   requirement_title?: string | null;
   requirement_code?: string | null;
+  requirement_category?: RequirementCategory | null;
+  requirement_risk_level?: RiskLevel | null;
+  has_conflict?: boolean;
+  has_scope_exclusion?: boolean;
+  source_run_id?: string | null;
+  superseded_by_match_id?: string | null;
+  supersedes_match_id?: string | null;
+  last_reviewer?: string | null;
+  last_reviewed_at?: string | null;
+  detail_id?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ReviewQueueParams = {
+  review_status?: MatchReviewStatus | "all";
+  match_status?: EvidenceMatchStatus;
+  status?: EvidenceMatchStatus;
+  risk_level?: RiskLevel;
+  requirement_category?: RequirementCategory;
+  category?: RequirementCategory;
+  has_conflict?: boolean;
+  has_scope_exclusion?: boolean;
+  include_superseded?: boolean;
+  requirement_id?: string;
+  page?: number;
+  page_size?: number;
+  limit?: number;
+  offset?: number;
+  sort?: string;
 };
 
 export type ReviewQueueResponse = {
@@ -673,6 +703,7 @@ export type ReviewQueueResponse = {
   page: number;
   limit: number;
   offset: number;
+  include_superseded?: boolean;
 };
 
 export type MatchReviewListResponse = {

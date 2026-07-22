@@ -36,12 +36,21 @@
 4. `metadata.source != auto_match`
 5. legacy `metadata.review_status == reviewed`
 
+`_needs_new_auto_version(match, force=)`（pre-LLM 过滤与 `_persist_matches` 共用）：
+
+- `None` → 需要新建
+- protected / non-pending / superseded → 跳过
+- pending auto、无审核历史 → `force=false` 幂等跳过；`force=true` 可删除替换
+- pending + **有审核历史**（reopen 后）→ **两种 force 均创建 successor**（`supersedes_match_id` /
+  `lifecycle_status=superseded`）；**永不删除**有审核历史的旧行
+
 执行匹配 run 时：
 
-- 对存在 **active 且受保护** 匹配的 Requirement **跳过 LLM**
+- 对不需要新版本的 Requirement **跳过 LLM**（与 persist 同规则）
 - 计入 `protected_requirement_count` / `skipped_reviewed_requirement_count`（及 `config_json`）
-- 这是合法跳过，不是失败；其余 Requirement 正常匹配
-- 若范围内全部被跳过 → run `succeeded`，零写入
+- 合法跳过不是失败；若范围内全部被跳过 → run `succeeded`，零写入
+- persist 事务内：`pg_advisory_xact_lock` + Match/Run `FOR UPDATE`，并发对同一 reopen
+  Requirement 至多一个 active successor
 
 `force=true`：
 
@@ -49,6 +58,20 @@
 - 有审核历史（含 reopen 后再次 pending）→ **不删除**；将旧行标记
   `lifecycle_status=superseded`，写入 `superseded_by_match_id` / `supersedes_match_id`
 - 已保护的终态匹配 → 永不删除、不参与 rematch
+
+> 说明：文档中的 `record_status` 即模型字段 `lifecycle_status`（`active` | `superseded`）。
+
+## 审核队列 API
+
+`GET .../requirement-matches/review-queue`
+
+默认：`review_status=pending`、`include_superseded=false`（仅 `lifecycle_status=active`）。
+
+可选过滤：`match_status` / `status`、`requirement_category` / `category`、`risk_level`、
+`has_conflict`、`has_scope_exclusion`、`include_superseded`、`page` / `page_size` / `limit`、`sort`。
+`review_status=all` 表示不过滤审核状态。
+
+返回：分页 items + totals + `counts`（按 review_status / match status / risk 聚合）。
 
 ## API
 

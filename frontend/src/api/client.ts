@@ -6,7 +6,6 @@ import type {
   DocumentItem,
   DocumentListResponse,
   DocumentPreviewResponse,
-  EvidenceMatchStatus,
   ExtractionRun,
   ExtractionStartPayload,
   HealthResponse,
@@ -17,7 +16,6 @@ import type {
   MatchReopenRequest,
   MatchReviewListResponse,
   MatchReviewRequest,
-  MatchReviewStatus,
   MatchRun,
   MatchStartPayload,
   Project,
@@ -28,8 +26,8 @@ import type {
   RequirementDetail,
   RequirementListParams,
   RequirementListResponse,
+  ReviewQueueParams,
   ReviewQueueResponse,
-  RiskLevel,
   SearchRequestPayload,
   SearchResponse,
 } from "../types/api";
@@ -293,15 +291,7 @@ export async function getRequirementMatch(
 
 export async function getRequirementMatchReviewQueue(
   projectId: string,
-  params: {
-    review_status?: MatchReviewStatus;
-    status?: EvidenceMatchStatus;
-    risk_level?: RiskLevel;
-    requirement_id?: string;
-    page?: number;
-    limit?: number;
-    offset?: number;
-  } = {},
+  params: ReviewQueueParams = {},
 ): Promise<ReviewQueueResponse> {
   const { data } = await http.get<ReviewQueueResponse>(
     `/api/v1/projects/${projectId}/requirement-matches/review-queue`,

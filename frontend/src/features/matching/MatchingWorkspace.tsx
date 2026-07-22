@@ -11,6 +11,7 @@ import {
   Skeleton,
   Space,
   Table,
+  Tabs,
   Tag,
   Typography,
   message,
@@ -47,6 +48,11 @@ import type {
   RequirementCategory,
   RiskLevel,
 } from "../../types/api";
+import ReviewQueuePanel from "./ReviewQueuePanel";
+import {
+  isConflictStatus,
+  validateReviewComment,
+} from "./reviewQueueParams";
 
 const ACTOR_LABEL_KEY = "bidpilot.matchReview.actorLabel";
 const DEFAULT_ACTOR_LABEL = "local-reviewer";
@@ -396,7 +402,7 @@ function MatchDetailPanel({
     },
     onError: (err: unknown) => {
       const status = err instanceof ApiError ? err.status : undefined;
-      if (status === 409) {
+      if (isConflictStatus(status)) {
         message.error("审核冲突（可能已终态或版本过期），请刷新后重试");
         invalidate();
         return;
@@ -428,7 +434,7 @@ function MatchDetailPanel({
     },
     onError: (err: unknown) => {
       const status = err instanceof ApiError ? err.status : undefined;
-      if (status === 409) {
+      if (isConflictStatus(status)) {
         message.error("无法重新打开（版本冲突或状态不允许），请刷新后重试");
         invalidate();
         return;
@@ -1016,11 +1022,13 @@ function MatchDetailPanel({
         }}
         onOk={() => {
           if (!commentModal) return;
-          const cleaned = commentDraft.trim();
-          if (!cleaned) {
-            message.warning("请填写审核备注");
+          if (busy) return;
+          const err = validateReviewComment(commentModal.action, commentDraft);
+          if (err) {
+            message.warning(err);
             return;
           }
+          const cleaned = commentDraft.trim().replace(/\s+/g, " ");
           if (commentModal.action === "reopen") {
             reopenMutation.mutate(cleaned);
             return;
@@ -1028,6 +1036,8 @@ function MatchDetailPanel({
           reviewMutation.mutate({ action: commentModal.action, comment: cleaned });
         }}
         confirmLoading={busy}
+        okButtonProps={{ disabled: busy }}
+        cancelButtonProps={{ disabled: busy }}
         okText="提交"
         cancelText="取消"
         destroyOnClose
@@ -1036,6 +1046,7 @@ function MatchDetailPanel({
           rows={4}
           maxLength={2000}
           value={commentDraft}
+          disabled={busy}
           onChange={(e) => setCommentDraft(e.target.value)}
           placeholder="请说明原因（必填）"
         />
@@ -1069,6 +1080,7 @@ export default function MatchingWorkspace({
   const [pageSize, setPageSize] = useState(20);
   const [selectedDocTypes, setSelectedDocTypes] = useState<string[]>([...MATCH_DOC_TYPES]);
   const [actorLabel, setActorLabel] = useState(loadActorLabel);
+  const [workspaceTab, setWorkspaceTab] = useState<"matches" | "review-queue">("matches");
 
   const runQuery = useQuery({
     queryKey: ["requirement-match-run", projectId, runId],
@@ -1563,138 +1575,169 @@ export default function MatchingWorkspace({
         <StatCard label="待补充材料" value={stats.needsMaterial} />
       </div>
 
-      <div className="bp-req-filters">
-        <Select
-          allowClear
-          placeholder="匹配状态"
-          style={{ minWidth: 180 }}
-          options={MATCH_STATUS_OPTIONS}
-          value={filters.status}
-          onChange={(v) => {
-            setPage(1);
-            setFilters((f) => ({ ...f, status: v }));
-          }}
-        />
-        <Select
-          allowClear
-          placeholder="审核状态"
-          style={{ minWidth: 140 }}
-          options={REVIEW_STATUS_OPTIONS}
-          value={filters.review_status}
-          onChange={(v) => {
-            setPage(1);
-            setFilters((f) => ({ ...f, review_status: v }));
-          }}
-        />
-        <Select
-          allowClear
-          placeholder="类别"
-          style={{ minWidth: 140 }}
-          options={CATEGORY_OPTIONS}
-          value={filters.category}
-          onChange={(v) => {
-            setPage(1);
-            setFilters((f) => ({ ...f, category: v }));
-          }}
-        />
-        <Select
-          allowClear
-          placeholder="强制性"
-          style={{ minWidth: 110 }}
-          options={[
-            { value: "true", label: "强制" },
-            { value: "false", label: "非强制" },
-          ]}
-          value={
-            filters.mandatory === undefined ? undefined : filters.mandatory ? "true" : "false"
-          }
-          onChange={(v) => {
-            setPage(1);
-            setFilters((f) => ({
-              ...f,
-              mandatory: v === undefined ? undefined : v === "true",
-            }));
-          }}
-        />
-        <Select
-          allowClear
-          placeholder="风险等级"
-          style={{ minWidth: 110 }}
-          options={RISK_OPTIONS}
-          value={filters.risk_level}
-          onChange={(v) => {
-            setPage(1);
-            setFilters((f) => ({ ...f, risk_level: v }));
-          }}
-        />
-        <Select
-          allowClear
-          placeholder="审核"
-          style={{ minWidth: 130 }}
-          options={[
-            { value: "true", label: "待人工审核" },
-            { value: "false", label: "非待审核" },
-          ]}
-          value={
-            filters.needs_review === undefined
-              ? undefined
-              : filters.needs_review
-                ? "true"
-                : "false"
-          }
-          onChange={(v) => {
-            setPage(1);
-            setFilters((f) => ({
-              ...f,
-              needs_review: v === undefined ? undefined : v === "true",
-            }));
-          }}
-        />
-        <Select
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="来源文档"
-          style={{ minWidth: 160 }}
-          options={sourceDocOptions}
-          value={filters.source_document_id}
-          onChange={(v) => {
-            setPage(1);
-            setFilters((f) => ({ ...f, source_document_id: v }));
-          }}
-        />
-      </div>
+      <Tabs
+        activeKey={workspaceTab}
+        onChange={(key) => setWorkspaceTab(key as "matches" | "review-queue")}
+        items={[
+          {
+            key: "matches",
+            label: "匹配结果",
+            children: (
+              <>
+                <div className="bp-req-filters">
+                  <Select
+                    allowClear
+                    placeholder="匹配状态"
+                    style={{ minWidth: 180 }}
+                    options={MATCH_STATUS_OPTIONS}
+                    value={filters.status}
+                    onChange={(v) => {
+                      setPage(1);
+                      setFilters((f) => ({ ...f, status: v }));
+                    }}
+                  />
+                  <Select
+                    allowClear
+                    placeholder="审核状态"
+                    style={{ minWidth: 140 }}
+                    options={REVIEW_STATUS_OPTIONS}
+                    value={filters.review_status}
+                    onChange={(v) => {
+                      setPage(1);
+                      setFilters((f) => ({ ...f, review_status: v }));
+                    }}
+                  />
+                  <Select
+                    allowClear
+                    placeholder="类别"
+                    style={{ minWidth: 140 }}
+                    options={CATEGORY_OPTIONS}
+                    value={filters.category}
+                    onChange={(v) => {
+                      setPage(1);
+                      setFilters((f) => ({ ...f, category: v }));
+                    }}
+                  />
+                  <Select
+                    allowClear
+                    placeholder="强制性"
+                    style={{ minWidth: 110 }}
+                    options={[
+                      { value: "true", label: "强制" },
+                      { value: "false", label: "非强制" },
+                    ]}
+                    value={
+                      filters.mandatory === undefined
+                        ? undefined
+                        : filters.mandatory
+                          ? "true"
+                          : "false"
+                    }
+                    onChange={(v) => {
+                      setPage(1);
+                      setFilters((f) => ({
+                        ...f,
+                        mandatory: v === undefined ? undefined : v === "true",
+                      }));
+                    }}
+                  />
+                  <Select
+                    allowClear
+                    placeholder="风险等级"
+                    style={{ minWidth: 110 }}
+                    options={RISK_OPTIONS}
+                    value={filters.risk_level}
+                    onChange={(v) => {
+                      setPage(1);
+                      setFilters((f) => ({ ...f, risk_level: v }));
+                    }}
+                  />
+                  <Select
+                    allowClear
+                    placeholder="审核"
+                    style={{ minWidth: 130 }}
+                    options={[
+                      { value: "true", label: "待人工审核" },
+                      { value: "false", label: "非待审核" },
+                    ]}
+                    value={
+                      filters.needs_review === undefined
+                        ? undefined
+                        : filters.needs_review
+                          ? "true"
+                          : "false"
+                    }
+                    onChange={(v) => {
+                      setPage(1);
+                      setFilters((f) => ({
+                        ...f,
+                        needs_review: v === undefined ? undefined : v === "true",
+                      }));
+                    }}
+                  />
+                  <Select
+                    allowClear
+                    showSearch
+                    optionFilterProp="label"
+                    placeholder="来源文档"
+                    style={{ minWidth: 160 }}
+                    options={sourceDocOptions}
+                    value={filters.source_document_id}
+                    onChange={(v) => {
+                      setPage(1);
+                      setFilters((f) => ({ ...f, source_document_id: v }));
+                    }}
+                  />
+                </div>
 
-      <div className="bp-req-table-wrap">
-        <Table<MatchSummary>
-          rowKey="id"
-          size="middle"
-          columns={columns}
-          dataSource={listQuery.data?.items ?? []}
-          loading={listQuery.isFetching}
-          scroll={{ x: 900 }}
-          pagination={{
-            current: page,
-            pageSize,
-            total: listQuery.data?.total ?? 0,
-            showSizeChanger: true,
-            showTotal: (t) => `共 ${t} 条`,
-            onChange: (p, ps) => {
-              setPage(p);
-              setPageSize(ps);
-            },
-          }}
-          onRow={(row) => ({
-            onClick: () => setSelectedId(row.id),
-            style: { cursor: "pointer" },
-          })}
-          locale={{
-            emptyText: (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选条件下无匹配结果" />
+                <div className="bp-req-table-wrap">
+                  <Table<MatchSummary>
+                    rowKey="id"
+                    size="middle"
+                    columns={columns}
+                    dataSource={listQuery.data?.items ?? []}
+                    loading={listQuery.isFetching}
+                    scroll={{ x: 900 }}
+                    pagination={{
+                      current: page,
+                      pageSize,
+                      total: listQuery.data?.total ?? 0,
+                      showSizeChanger: true,
+                      showTotal: (t) => `共 ${t} 条`,
+                      onChange: (p, ps) => {
+                        setPage(p);
+                        setPageSize(ps);
+                      },
+                    }}
+                    onRow={(row) => ({
+                      onClick: () => setSelectedId(row.id),
+                      style: { cursor: "pointer" },
+                    })}
+                    locale={{
+                      emptyText: (
+                        <Empty
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                          description="当前筛选条件下无匹配结果"
+                        />
+                      ),
+                    }}
+                  />
+                </div>
+              </>
             ),
-          }}
-        />
-      </div>
+          },
+          {
+            key: "review-queue",
+            label: `人工审核队列${stats.pendingReview ? ` (${stats.pendingReview})` : ""}`,
+            children: (
+              <ReviewQueuePanel
+                projectId={projectId}
+                onOpenMatch={(id) => setSelectedId(id)}
+              />
+            ),
+          },
+        ]}
+      />
 
       <Drawer
         title="匹配详情"

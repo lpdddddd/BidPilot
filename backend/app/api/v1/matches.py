@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -113,24 +113,51 @@ def list_requirement_matches(
 )
 def get_requirement_match_review_queue(
     project_id: UUID,
-    review_status: MatchReviewStatus | None = Query(default=None),
+    review_status: str | None = Query(default="pending"),
     status: EvidenceMatchStatus | None = Query(default=None),
+    match_status: EvidenceMatchStatus | None = Query(default=None),
     risk_level: RiskLevel | None = Query(default=None),
+    category: RequirementCategory | None = Query(default=None),
+    requirement_category: RequirementCategory | None = Query(default=None),
+    has_conflict: bool | None = Query(default=None),
+    has_scope_exclusion: bool | None = Query(default=None),
+    include_superseded: bool = Query(default=False),
     requirement_id: UUID | None = Query(default=None),
     page: int = Query(default=1, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=200),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int | None = Query(default=None, ge=0),
+    sort: str = Query(default="created_at_desc"),
     db: Session = Depends(get_db),
 ) -> ReviewQueueResponse:
+    if review_status is None or review_status in ("", "all"):
+        resolved_review: MatchReviewStatus | None = None
+    else:
+        try:
+            resolved_review = MatchReviewStatus(review_status)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422, detail=f"invalid review_status: {review_status}"
+            ) from exc
+    resolved_match_status = match_status if match_status is not None else status
+    resolved_category = (
+        requirement_category if requirement_category is not None else category
+    )
+    resolved_limit = page_size if page_size is not None else limit
     return RequirementMatchReviewService(db).review_queue(
         project_id,
-        review_status=review_status,
-        match_status=status,
+        review_status=resolved_review,
+        match_status=resolved_match_status,
         risk_level=risk_level,
+        requirement_category=resolved_category,
+        has_conflict=has_conflict,
+        has_scope_exclusion=has_scope_exclusion,
+        include_superseded=include_superseded,
         requirement_id=requirement_id,
         page=page,
-        limit=limit,
+        limit=resolved_limit,
         offset=offset,
+        sort=sort,
     )
 
 

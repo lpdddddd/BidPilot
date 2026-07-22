@@ -316,8 +316,20 @@ def _summary_tokens_ok(summary: str, requirement_text: str, evidence_text: str) 
     return True
 
 
+def _match_has_review_history(match: RequirementEvidenceMatch) -> bool:
+    """True when the match has immutable RequirementMatchReview rows."""
+    reviews = getattr(match, "reviews", None)
+    if reviews is not None:
+        return len(list(reviews)) > 0
+    return False
+
+
 def _is_protected_match(match: RequirementEvidenceMatch) -> bool:
-    """Manual / imported / human-reviewed / superseded matches must never be force-deleted."""
+    """Manual / imported / human-reviewed / superseded matches must never be force-deleted.
+
+    Matches that still have review history after reopen are not "protected" for
+    rematch eligibility, but they must never be deleted — only superseded.
+    """
     if match.is_review_protected:
         return True
     if match.review_status != MatchReviewStatus.pending:
@@ -339,6 +351,39 @@ def _is_active_protected_match(match: RequirementEvidenceMatch) -> bool:
     if match.is_review_protected:
         return True
     return match.review_status != MatchReviewStatus.pending
+
+
+def _needs_new_auto_version(
+    match: RequirementEvidenceMatch | None,
+    *,
+    force: bool,
+) -> bool:
+    """Whether a Requirement should get a new auto Match version.
+
+    Shared by pre-LLM filtering and ``_persist_matches`` so LLM is never called
+    for requirements that will be skipped at persist time.
+
+    - ``None`` → create
+    - protected / non-pending review / superseded → skip
+    - pending auto, no review history → skip under force=false (idempotent);
+      replace under force=true
+    - pending with review history (reopened) → create successor for both force modes
+    """
+    if match is None:
+        return True
+    if match.lifecycle_status != "active":
+        return False
+    if _is_protected_match(match):
+        return False
+    if match.is_review_protected:
+        return False
+    if match.review_status != MatchReviewStatus.pending:
+        return False
+    if _match_has_review_history(match):
+        # Reopened after review: never delete; supersede via a new version.
+        return True
+    # Active unverified pending auto with no review history.
+    return bool(force)
 
 
 def _batched(items: list[Any], size: int) -> list[list[Any]]:
@@ -671,11 +716,13 @@ class RequirementMatchService:
 
             force = bool((run.config_json or {}).get("force"))
             all_requirements = self._load_requirements(run)
-            protected_req_ids, skipped_reviewed_count = (
-                self._protected_requirement_ids(run.project_id, all_requirements)
+            skip_req_ids, protected_req_ids, skipped_reviewed_count = (
+                self._skip_requirement_ids(
+                    run.project_id, all_requirements, force=force
+                )
             )
             requirements = [
-                r for r in all_requirements if r.id not in protected_req_ids
+                r for r in all_requirements if r.id not in skip_req_ids
             ]
             company_chunks = self._load_company_chunks(run)
             scoped_requirement_ids = {r.id for r in requirements}
@@ -690,6 +737,9 @@ class RequirementMatchService:
                 ],
                 "protected_requirement_ids": [
                     str(i) for i in sorted(protected_req_ids, key=str)
+                ],
+                "skipped_requirement_ids": [
+                    str(i) for i in sorted(skip_req_ids, key=str)
                 ],
                 "protected_requirement_count": len(protected_req_ids),
                 "skipped_reviewed_requirement_count": skipped_reviewed_count,
@@ -711,12 +761,13 @@ class RequirementMatchService:
                     **(run.config_json or {}),
                     "result_kind": (
                         "all_requirements_protected"
-                        if protected_req_ids
+                        if protected_req_ids or skip_req_ids
                         else "empty_requirements"
                     ),
                 }
                 self.db.commit()
                 return
+
 
             if not company_chunks:
                 # Empty company materials: do NOT call LLM; fail run; keep old matches.
@@ -951,31 +1002,62 @@ class RequirementMatchService:
         )
         return rows
 
-    def _protected_requirement_ids(
+    def _skip_requirement_ids(
         self,
         project_id: UUID,
         requirements: list[Requirement],
-    ) -> tuple[set[UUID], int]:
-        """Return requirement IDs that have an active protected match, plus skip count."""
+        *,
+        force: bool,
+    ) -> tuple[set[UUID], set[UUID], int]:
+        """Return (skip_ids, protected_ids, skipped_reviewed_count).
+
+        skip_ids uses the same ``_needs_new_auto_version`` rule as persist so
+        LLM is never called for requirements that would be skipped later.
+        """
         if not requirements:
-            return set(), 0
+            return set(), set(), 0
         req_ids = {r.id for r in requirements}
         rows = list(
             self.db.scalars(
-                select(RequirementEvidenceMatch).where(
+                select(RequirementEvidenceMatch)
+                .where(
                     RequirementEvidenceMatch.project_id == project_id,
                     RequirementEvidenceMatch.requirement_id.in_(req_ids),
                     RequirementEvidenceMatch.lifecycle_status == "active",
                 )
+                .options(selectinload(RequirementEvidenceMatch.reviews))
             )
         )
+        active_by_req: dict[UUID, RequirementEvidenceMatch] = {}
+        for match in rows:
+            # Prefer the first active row per requirement (should be unique).
+            active_by_req.setdefault(match.requirement_id, match)
+
+        skip_ids: set[UUID] = set()
         protected: set[UUID] = set()
         skipped_reviewed = 0
-        for match in rows:
-            if not _is_active_protected_match(match):
+        for req in requirements:
+            active = active_by_req.get(req.id)
+            if active is not None and _is_active_protected_match(active):
+                protected.add(req.id)
+                skip_ids.add(req.id)
+                skipped_reviewed += 1
                 continue
-            protected.add(match.requirement_id)
-            skipped_reviewed += 1
+            if not _needs_new_auto_version(active, force=force):
+                skip_ids.add(req.id)
+        return skip_ids, protected, skipped_reviewed
+
+    def _protected_requirement_ids(
+        self,
+        project_id: UUID,
+        requirements: list[Requirement],
+        *,
+        force: bool = False,
+    ) -> tuple[set[UUID], int]:
+        """Compatibility wrapper: protected/skip-reviewed requirement IDs."""
+        _skip, protected, skipped_reviewed = self._skip_requirement_ids(
+            project_id, requirements, force=force
+        )
         return protected, skipped_reviewed
 
     def _load_company_chunks(self, run: RequirementMatchRun) -> list[_ChunkContext]:
@@ -1652,6 +1734,9 @@ class RequirementMatchService:
     ) -> dict[UUID, list[RequirementEvidenceMatch]]:
         """Delete unprotected pending auto matches without review history.
 
+        ``force=true`` may ONLY delete/replace active auto Matches that are:
+        pending, unprotected, and have NO review history.
+
         Returns remaining (non-deleted) matches keyed by requirement_id — including
         protected rows and pending autos that have review history (for supersede).
         """
@@ -1666,15 +1751,17 @@ class RequirementMatchService:
                     RequirementEvidenceMatch.requirement_id.in_(requirement_ids),
                 )
                 .options(selectinload(RequirementEvidenceMatch.reviews))
+                .with_for_update()
             )
         )
         for match in rows:
-            has_reviews = bool(match.reviews)
+            has_reviews = _match_has_review_history(match)
             if (
                 _is_protected_match(match)
                 or has_reviews
                 or match.review_status != MatchReviewStatus.pending
                 or match.lifecycle_status == "superseded"
+                or match.lifecycle_status != "active"
             ):
                 remaining.setdefault(match.requirement_id, []).append(match)
                 continue
@@ -1686,6 +1773,65 @@ class RequirementMatchService:
             self.db.delete(match)
         self.db.flush()
         return remaining
+
+    def _lock_scoped_matches(
+        self,
+        project_id: UUID,
+        requirement_ids: set[UUID],
+    ) -> dict[UUID, list[RequirementEvidenceMatch]]:
+        """Lock Match rows for scoped requirements (FOR UPDATE) keyed by req id."""
+        by_req: dict[UUID, list[RequirementEvidenceMatch]] = {}
+        if not requirement_ids:
+            return by_req
+        # Stable lock order to reduce deadlocks across concurrent runs.
+        # populate_existing: refresh identity-map rows after concurrent supersede.
+        rows = list(
+            self.db.scalars(
+                select(RequirementEvidenceMatch)
+                .where(
+                    RequirementEvidenceMatch.project_id == project_id,
+                    RequirementEvidenceMatch.requirement_id.in_(requirement_ids),
+                )
+                .options(selectinload(RequirementEvidenceMatch.reviews))
+                .order_by(
+                    RequirementEvidenceMatch.requirement_id.asc(),
+                    RequirementEvidenceMatch.created_at.asc(),
+                    RequirementEvidenceMatch.id.asc(),
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        )
+        for match in rows:
+            by_req.setdefault(match.requirement_id, []).append(match)
+        return by_req
+
+    def _advisory_lock_requirements(self, requirement_ids: set[UUID]) -> None:
+        """Serialize successor creation per Requirement across concurrent Match runs."""
+        if not requirement_ids:
+            return
+        # Stable order avoids deadlocks between sessions locking multiple reqs.
+        for req_id in sorted(requirement_ids, key=str):
+            # Two int4 keys from UUID bits — transaction-scoped advisory lock.
+            key1 = int(req_id.int & ((1 << 31) - 1))
+            key2 = int((req_id.int >> 31) & ((1 << 31) - 1))
+            self.db.execute(
+                select(func.pg_advisory_xact_lock(key1, key2))
+            )
+
+    def _active_auto_match(
+        self, matches: list[RequirementEvidenceMatch]
+    ) -> RequirementEvidenceMatch | None:
+        for match in matches:
+            if match.lifecycle_status != "active":
+                continue
+            if (match.metadata_json or {}).get("source") != AUTO_SOURCE:
+                continue
+            return match
+        for match in matches:
+            if match.lifecycle_status == "active":
+                return match
+        return None
 
     def _persist_matches(
         self,
@@ -1703,8 +1849,9 @@ class RequirementMatchService:
     ) -> dict[str, int | bool]:
         """Atomically persist matches or abort if cancel won the race.
 
-        Locks the run row with FOR UPDATE; on cancel → zero writes, keep cancelled.
-        On success → delete/write matches and mark run succeeded in the same transaction.
+        Locks the run row and related Match rows with FOR UPDATE so concurrent
+        runs for the same reopened Requirement produce at most one active successor.
+        On success → delete/supersede/write matches and mark run succeeded.
         """
         run = self.db.execute(
             select(RequirementMatchRun)
@@ -1740,21 +1887,24 @@ class RequirementMatchService:
                 "conflict_count": 0,
             }
 
-        existing_by_req: dict[UUID, list[RequirementEvidenceMatch]] = {}
+        # Serialize per-requirement successor creation, then lock Match rows.
+        self._advisory_lock_requirements(scoped_requirement_ids)
+        # Drop identity-map snapshots from pre-LLM filtering so concurrent
+        # supersede results are visible under READ COMMITTED.
+        self.db.expire_all()
+        existing_by_req = self._lock_scoped_matches(
+            project_id, scoped_requirement_ids
+        )
         if force:
+            # Only deletes pending unprotected autos with no review history.
             existing_by_req = self._delete_auto_matches(
                 project_id, requirement_ids=scoped_requirement_ids
             )
-        elif scoped_requirement_ids:
-            for row in self.db.scalars(
-                select(RequirementEvidenceMatch)
-                .where(
-                    RequirementEvidenceMatch.project_id == project_id,
-                    RequirementEvidenceMatch.requirement_id.in_(scoped_requirement_ids),
-                )
-                .options(selectinload(RequirementEvidenceMatch.reviews))
-            ):
-                existing_by_req.setdefault(row.requirement_id, []).append(row)
+            self.db.expire_all()
+            # Re-lock/refresh after deletes so concurrent runners see current state.
+            existing_by_req = self._lock_scoped_matches(
+                project_id, scoped_requirement_ids
+            )
 
         created = 0
         skipped = 0
@@ -1763,46 +1913,26 @@ class RequirementMatchService:
         missing_count = 0
         conflict_count = 0
 
+        def _bump_status_counts(st: EvidenceMatchStatus) -> None:
+            nonlocal matched_count, partial_count, missing_count, conflict_count
+            if st == EvidenceMatchStatus.supported:
+                matched_count += 1
+            elif st == EvidenceMatchStatus.partially_supported:
+                partial_count += 1
+            elif st == EvidenceMatchStatus.insufficient_evidence:
+                missing_count += 1
+            elif st == EvidenceMatchStatus.conflicting_evidence:
+                conflict_count += 1
+
         for item in validated:
             req_id = item.requirement.id
-            if not force:
-                autos = [
-                    m
-                    for m in existing_by_req.get(req_id, [])
-                    if (m.metadata_json or {}).get("source") == AUTO_SOURCE
-                    and m.lifecycle_status == "active"
-                ]
-                if autos:
-                    skipped += 1
-                    st = autos[0].status
-                    if st == EvidenceMatchStatus.supported:
-                        matched_count += 1
-                    elif st == EvidenceMatchStatus.partially_supported:
-                        partial_count += 1
-                    elif st == EvidenceMatchStatus.insufficient_evidence:
-                        missing_count += 1
-                    elif st == EvidenceMatchStatus.conflicting_evidence:
-                        conflict_count += 1
-                    continue
-            else:
-                # Skip creating a new match when an active protected match remains.
-                active_protected = [
-                    m
-                    for m in existing_by_req.get(req_id, [])
-                    if _is_active_protected_match(m)
-                ]
-                if active_protected:
-                    skipped += 1
-                    st = active_protected[0].status
-                    if st == EvidenceMatchStatus.supported:
-                        matched_count += 1
-                    elif st == EvidenceMatchStatus.partially_supported:
-                        partial_count += 1
-                    elif st == EvidenceMatchStatus.insufficient_evidence:
-                        missing_count += 1
-                    elif st == EvidenceMatchStatus.conflicting_evidence:
-                        conflict_count += 1
-                    continue
+            active = self._active_auto_match(existing_by_req.get(req_id, []))
+            # Re-evaluate under lock — same rule as pre-LLM filtering.
+            if not _needs_new_auto_version(active, force=force):
+                skipped += 1
+                if active is not None:
+                    _bump_status_counts(active.status)
+                continue
 
             meta = {
                 "source": AUTO_SOURCE,
@@ -1834,18 +1964,17 @@ class RequirementMatchService:
             self.db.add(row)
             self.db.flush()
 
-            # Supersede prior active unprotected pending matches that retained history.
-            if force:
-                for old in existing_by_req.get(req_id, []):
-                    if old.id == row.id:
-                        continue
-                    if old.lifecycle_status != "active":
-                        continue
-                    if _is_active_protected_match(old):
-                        continue
-                    old.lifecycle_status = "superseded"
-                    old.superseded_by_match_id = row.id
-                    row.supersedes_match_id = old.id
+            # Supersede prior active match (never delete review history).
+            # Mark old as superseded ONLY after new Match row flushed; links follow
+            # in this same transaction so a rollback leaves the old Match active.
+            if (
+                active is not None
+                and active.id != row.id
+                and active.lifecycle_status == "active"
+            ):
+                active.lifecycle_status = "superseded"
+                active.superseded_by_match_id = row.id
+                row.supersedes_match_id = active.id
 
             for doc, chunk, quote, role in item.company_links:
                 self.db.add(
@@ -1860,14 +1989,9 @@ class RequirementMatchService:
                 )
 
             created += 1
-            if item.status == EvidenceMatchStatus.supported:
-                matched_count += 1
-            elif item.status == EvidenceMatchStatus.partially_supported:
-                partial_count += 1
-            elif item.status == EvidenceMatchStatus.insufficient_evidence:
-                missing_count += 1
-            elif item.status == EvidenceMatchStatus.conflicting_evidence:
-                conflict_count += 1
+            _bump_status_counts(item.status)
+            # Track newly created row so a later duplicate in the same batch skips.
+            existing_by_req.setdefault(req_id, []).append(row)
 
         has_supported_or_partial = any(
             v.status

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import BidProject
@@ -19,6 +19,7 @@ from app.models.enums import (
     MatchReviewAction,
     MatchReviewReasonCode,
     MatchReviewStatus,
+    RequirementCategory,
     RiskLevel,
 )
 from app.models.match_run import RequirementEvidenceMatch, RequirementMatchReview
@@ -73,6 +74,15 @@ _COMMENT_REQUIRED = frozenset(
 )
 
 _MAX_COMMENT = 2000
+
+_SORT_COLUMNS = {
+    "created_at": RequirementEvidenceMatch.created_at,
+    "updated_at": RequirementEvidenceMatch.updated_at,
+    "reviewed_at": RequirementEvidenceMatch.reviewed_at,
+    "risk_level": RequirementEvidenceMatch.risk_level,
+    "status": RequirementEvidenceMatch.status,
+    "review_status": RequirementEvidenceMatch.review_status,
+}
 
 
 def _normalize_comment(raw: str | None, *, required: bool) -> str | None:
@@ -129,6 +139,37 @@ def _request_fingerprint(
     )
 
 
+def _parse_source_run_id(match: RequirementEvidenceMatch) -> UUID | None:
+    raw = (match.metadata_json or {}).get("run_id")
+    if not raw:
+        return None
+    try:
+        return UUID(str(raw))
+    except ValueError:
+        return None
+
+
+def _has_conflict(match: RequirementEvidenceMatch) -> bool:
+    if match.status == EvidenceMatchStatus.conflicting_evidence:
+        return True
+    meta = match.metadata_json or {}
+    if meta.get("requirement_potential_conflict") or meta.get("conflict_dimension"):
+        return True
+    req = match.requirement
+    if req is not None and bool((req.metadata_json or {}).get("potential_conflict")):
+        return True
+    return False
+
+
+def _has_scope_exclusion(match: RequirementEvidenceMatch) -> bool:
+    if match.status == EvidenceMatchStatus.not_applicable:
+        return True
+    meta = match.metadata_json or {}
+    if meta.get("not_applicable_basis") or meta.get("requirement_scope_chunk_id"):
+        return True
+    return False
+
+
 class RequirementMatchReviewService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -165,13 +206,18 @@ class RequirementMatchReviewService:
         self,
         project_id: UUID,
         *,
-        review_status: MatchReviewStatus | None = None,
+        review_status: MatchReviewStatus | None = MatchReviewStatus.pending,
         match_status: EvidenceMatchStatus | None = None,
         risk_level: RiskLevel | None = None,
+        requirement_category: RequirementCategory | None = None,
+        has_conflict: bool | None = None,
+        has_scope_exclusion: bool | None = None,
+        include_superseded: bool = False,
         requirement_id: UUID | None = None,
         page: int = 1,
         limit: int = 50,
         offset: int | None = None,
+        sort: str = "created_at_desc",
     ) -> ReviewQueueResponse:
         self._require_project(project_id)
         if page < 1:
@@ -179,58 +225,117 @@ class RequirementMatchReviewService:
         if offset is None:
             offset = (page - 1) * limit
 
-        base = (
-            select(RequirementEvidenceMatch)
-            .join(Requirement, Requirement.id == RequirementEvidenceMatch.requirement_id)
-            .where(
+        lifecycle_filter = (
+            True
+            if include_superseded
+            else RequirementEvidenceMatch.lifecycle_status == "active"
+        )
+
+        def _apply_filters(stmt):
+            stmt = stmt.where(
                 RequirementEvidenceMatch.project_id == project_id,
-                RequirementEvidenceMatch.lifecycle_status == "active",
+                lifecycle_filter,
+            )
+            if review_status is not None:
+                stmt = stmt.where(
+                    RequirementEvidenceMatch.review_status == review_status
+                )
+            if match_status is not None:
+                stmt = stmt.where(RequirementEvidenceMatch.status == match_status)
+            if risk_level is not None:
+                stmt = stmt.where(RequirementEvidenceMatch.risk_level == risk_level)
+            if requirement_category is not None:
+                stmt = stmt.where(Requirement.category == requirement_category)
+            if requirement_id is not None:
+                stmt = stmt.where(
+                    RequirementEvidenceMatch.requirement_id == requirement_id
+                )
+            if has_conflict is True:
+                stmt = stmt.where(
+                    or_(
+                        RequirementEvidenceMatch.status
+                        == EvidenceMatchStatus.conflicting_evidence,
+                        RequirementEvidenceMatch.metadata_json.contains(
+                            {"requirement_potential_conflict": True}
+                        ),
+                        Requirement.metadata_json.contains(
+                            {"potential_conflict": True}
+                        ),
+                    )
+                )
+            elif has_conflict is False:
+                stmt = stmt.where(
+                    and_(
+                        RequirementEvidenceMatch.status
+                        != EvidenceMatchStatus.conflicting_evidence,
+                        ~RequirementEvidenceMatch.metadata_json.contains(
+                            {"requirement_potential_conflict": True}
+                        ),
+                        ~Requirement.metadata_json.contains(
+                            {"potential_conflict": True}
+                        ),
+                    )
+                )
+            if has_scope_exclusion is True:
+                stmt = stmt.where(
+                    or_(
+                        RequirementEvidenceMatch.status
+                        == EvidenceMatchStatus.not_applicable,
+                        RequirementEvidenceMatch.metadata_json.has_key(
+                            "not_applicable_basis"
+                        ),
+                    )
+                )
+            elif has_scope_exclusion is False:
+                stmt = stmt.where(
+                    and_(
+                        RequirementEvidenceMatch.status
+                        != EvidenceMatchStatus.not_applicable,
+                        ~RequirementEvidenceMatch.metadata_json.has_key(
+                            "not_applicable_basis"
+                        ),
+                    )
+                )
+            return stmt
+
+        base = _apply_filters(
+            select(RequirementEvidenceMatch).join(
+                Requirement, Requirement.id == RequirementEvidenceMatch.requirement_id
             )
         )
-        count_base = (
+        count_base = _apply_filters(
             select(func.count())
             .select_from(RequirementEvidenceMatch)
-            .join(Requirement, Requirement.id == RequirementEvidenceMatch.requirement_id)
-            .where(
-                RequirementEvidenceMatch.project_id == project_id,
-                RequirementEvidenceMatch.lifecycle_status == "active",
+            .join(
+                Requirement, Requirement.id == RequirementEvidenceMatch.requirement_id
             )
         )
 
-        if review_status is not None:
-            base = base.where(RequirementEvidenceMatch.review_status == review_status)
-            count_base = count_base.where(
-                RequirementEvidenceMatch.review_status == review_status
-            )
-        if match_status is not None:
-            base = base.where(RequirementEvidenceMatch.status == match_status)
-            count_base = count_base.where(
-                RequirementEvidenceMatch.status == match_status
-            )
-        if risk_level is not None:
-            base = base.where(RequirementEvidenceMatch.risk_level == risk_level)
-            count_base = count_base.where(
-                RequirementEvidenceMatch.risk_level == risk_level
-            )
-        if requirement_id is not None:
-            base = base.where(
-                RequirementEvidenceMatch.requirement_id == requirement_id
-            )
-            count_base = count_base.where(
-                RequirementEvidenceMatch.requirement_id == requirement_id
-            )
-
         total = int(self.db.scalar(count_base) or 0)
+
+        sort_key = (sort or "created_at_desc").strip().lower()
+        descending = sort_key.endswith("_desc") or sort_key.startswith("-")
+        col_name = (
+            sort_key.removeprefix("-").removesuffix("_desc").removesuffix("_asc")
+        )
+        order_col = _SORT_COLUMNS.get(col_name, RequirementEvidenceMatch.created_at)
+        order_by = order_col.desc() if descending else order_col.asc()
+
         rows = list(
             self.db.scalars(
                 base.options(selectinload(RequirementEvidenceMatch.requirement))
-                .order_by(RequirementEvidenceMatch.created_at.desc())
+                .order_by(order_by, RequirementEvidenceMatch.id.desc())
                 .offset(offset)
                 .limit(limit)
             )
         )
 
         counts = ReviewQueueCounts()
+        aggregate_lifecycle = (
+            True
+            if include_superseded
+            else RequirementEvidenceMatch.lifecycle_status == "active"
+        )
         status_rows = self.db.execute(
             select(
                 RequirementEvidenceMatch.review_status,
@@ -238,7 +343,7 @@ class RequirementMatchReviewService:
             )
             .where(
                 RequirementEvidenceMatch.project_id == project_id,
-                RequirementEvidenceMatch.lifecycle_status == "active",
+                aggregate_lifecycle,
             )
             .group_by(RequirementEvidenceMatch.review_status)
         ).all()
@@ -254,30 +359,72 @@ class RequirementMatchReviewService:
             elif rs == MatchReviewStatus.needs_more_material:
                 counts.needs_more_material = n_int
 
-        items = [
-            ReviewQueueItem(
-                id=m.id,
-                project_id=m.project_id,
-                requirement_id=m.requirement_id,
-                status=m.status,
-                review_status=m.review_status,
-                risk_level=m.risk_level,
-                needs_review=m.needs_review,
-                is_review_protected=m.is_review_protected,
-                review_lock_version=m.review_lock_version,
-                lifecycle_status=m.lifecycle_status,
-                summary=m.summary,
-                reviewed_at=m.reviewed_at,
-                reviewed_by=m.reviewed_by,
-                requirement_title=m.requirement.title if m.requirement else None,
-                requirement_code=(
-                    m.requirement.requirement_code if m.requirement else None
-                ),
-                created_at=m.created_at,
-                updated_at=m.updated_at,
+        match_status_rows = self.db.execute(
+            select(
+                RequirementEvidenceMatch.status,
+                func.count(),
             )
-            for m in rows
-        ]
+            .where(
+                RequirementEvidenceMatch.project_id == project_id,
+                aggregate_lifecycle,
+            )
+            .group_by(RequirementEvidenceMatch.status)
+        ).all()
+        counts.by_match_status = {
+            (st.value if hasattr(st, "value") else str(st)): int(n)
+            for st, n in match_status_rows
+        }
+
+        risk_rows = self.db.execute(
+            select(
+                RequirementEvidenceMatch.risk_level,
+                func.count(),
+            )
+            .where(
+                RequirementEvidenceMatch.project_id == project_id,
+                aggregate_lifecycle,
+            )
+            .group_by(RequirementEvidenceMatch.risk_level)
+        ).all()
+        counts.by_risk_level = {
+            (rl.value if hasattr(rl, "value") else str(rl)): int(n)
+            for rl, n in risk_rows
+        }
+
+        items: list[ReviewQueueItem] = []
+        for m in rows:
+            req = m.requirement
+            items.append(
+                ReviewQueueItem(
+                    id=m.id,
+                    project_id=m.project_id,
+                    requirement_id=m.requirement_id,
+                    status=m.status,
+                    review_status=m.review_status,
+                    risk_level=m.risk_level,
+                    needs_review=m.needs_review,
+                    is_review_protected=m.is_review_protected,
+                    review_lock_version=m.review_lock_version,
+                    lifecycle_status=m.lifecycle_status,
+                    summary=m.summary,
+                    reviewed_at=m.reviewed_at,
+                    reviewed_by=m.reviewed_by,
+                    requirement_title=req.title if req else None,
+                    requirement_code=req.requirement_code if req else None,
+                    requirement_category=req.category if req else None,
+                    requirement_risk_level=req.risk_level if req else None,
+                    has_conflict=_has_conflict(m),
+                    has_scope_exclusion=_has_scope_exclusion(m),
+                    source_run_id=_parse_source_run_id(m),
+                    superseded_by_match_id=m.superseded_by_match_id,
+                    supersedes_match_id=m.supersedes_match_id,
+                    last_reviewer=m.reviewed_by,
+                    last_reviewed_at=m.reviewed_at,
+                    detail_id=m.id,
+                    created_at=m.created_at,
+                    updated_at=m.updated_at,
+                )
+            )
         return ReviewQueueResponse(
             counts=counts,
             items=items,
@@ -285,6 +432,7 @@ class RequirementMatchReviewService:
             page=page,
             limit=limit,
             offset=offset,
+            include_superseded=include_superseded,
         )
 
     def list_reviews(
@@ -424,7 +572,6 @@ class RequirementMatchReviewService:
 
         match = self._lock_match(project_id, match_id)
 
-        # Re-check idempotency under row lock (race with concurrent same key).
         if idempotency_key:
             replay = self._find_idempotent(
                 project_id,
@@ -478,7 +625,6 @@ class RequirementMatchReviewService:
         )
         self.db.add(review)
 
-        # Only mutate review workflow fields — never status/summary/evidence/run.
         match.review_status = target
         match.review_lock_version = match.review_lock_version + 1
         if action == MatchReviewAction.reopen:

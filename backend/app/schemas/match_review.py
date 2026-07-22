@@ -13,6 +13,7 @@ from app.models.enums import (
     MatchReviewAction,
     MatchReviewReasonCode,
     MatchReviewStatus,
+    RequirementCategory,
     RiskLevel,
 )
 
@@ -100,6 +101,8 @@ class ReviewQueueCounts(BaseModel):
     rejected: int = 0
     needs_more_material: int = 0
     total: int = 0
+    by_match_status: dict[str, int] = Field(default_factory=dict)
+    by_risk_level: dict[str, int] = Field(default_factory=dict)
 
 
 class ReviewQueueItem(BaseModel):
@@ -120,6 +123,16 @@ class ReviewQueueItem(BaseModel):
     reviewed_by: str | None = None
     requirement_title: str | None = None
     requirement_code: str | None = None
+    requirement_category: RequirementCategory | None = None
+    requirement_risk_level: RiskLevel | None = None
+    has_conflict: bool = False
+    has_scope_exclusion: bool = False
+    source_run_id: UUID | None = None
+    superseded_by_match_id: UUID | None = None
+    supersedes_match_id: UUID | None = None
+    last_reviewer: str | None = None
+    last_reviewed_at: datetime | None = None
+    detail_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -131,3 +144,4 @@ class ReviewQueueResponse(BaseModel):
     page: int
     limit: int
     offset: int
+    include_superseded: bool = False
