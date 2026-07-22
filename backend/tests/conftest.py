@@ -45,6 +45,10 @@ ENUM_TYPE_NAMES = [
     "compliance_severity",
     "compliance_finding_status",
     "compliance_rule_category",
+    "evaluation_run_status",
+    "evaluation_case_status",
+    "evaluation_target_type",
+    "evaluation_reference_kind",
 ]
 
 

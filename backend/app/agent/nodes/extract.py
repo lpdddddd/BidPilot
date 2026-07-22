@@ -23,7 +23,7 @@ def extract_requirements_node(state: AgentState) -> AgentState:
     if skipped:
         return state
     runtime = get_runtime()
-    project_id = UUID(state["project_id"])  # type: ignore[arg-type]
+    project_id = UUID(str(state["project_id"]))
 
     requested = list(state.get("requested_requirement_ids") or [])
     if requested:

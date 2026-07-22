@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -53,7 +53,7 @@ def build_graph(*, checkpointer: MemorySaver | None = None) -> Any:
             # Do not raise here: returning lets LangGraph persist the node
             # checkpoint so resume can stream(None). AgentRunService stops the
             # stream when it sees interrupt_requested after the update yield.
-            return out
+            return cast(AgentState, out)
 
         return inner
 

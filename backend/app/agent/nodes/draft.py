@@ -20,7 +20,7 @@ def generate_response_draft(state: AgentState) -> AgentState:
     if skipped:
         return state
     runtime = get_runtime()
-    project_id = UUID(state["project_id"])  # type: ignore[arg-type]
+    project_id = UUID(str(state["project_id"]))
 
     if state.get("draft_ids") and not state.get("metadata", {}).get("force_redraft"):
         run_tool(

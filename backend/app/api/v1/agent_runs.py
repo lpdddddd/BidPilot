@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.models.enums import AgentRunStatus
 from app.schemas.agent_run import (
     AgentEventsResponse,
     AgentResultResponse,
@@ -17,6 +18,12 @@ from app.schemas.agent_run import (
     AgentRunStartRequest,
 )
 from app.services.agent_run import tasks as agent_tasks
+from app.services.agent_run.claims import (
+    ClaimOutcome,
+    ClaimResult,
+    claim_or_http,
+    release_execution_claim,
+)
 from app.services.agent_run.service import AgentRunService
 from app.services.agent_run.sse import stream_agent_events_sse
 
@@ -24,6 +31,35 @@ from app.services.agent_run.sse import stream_agent_events_sse
 project_router = APIRouter()
 # Mounted at /agent-runs
 run_router = APIRouter()
+
+
+def _read_from_claim(svc: AgentRunService, result: ClaimResult) -> AgentRunRead:
+    run = claim_or_http(result)
+    return svc._to_read(run)
+
+
+def _schedule_or_release(
+    background_tasks: BackgroundTasks,
+    db: Session,
+    *,
+    result: ClaimResult,
+    task_fn,
+    run_id: UUID,
+    restore_status: AgentRunStatus,
+) -> None:
+    """Register background work only for a fresh claim; release if scheduling fails."""
+    if result.outcome != ClaimOutcome.claimed:
+        return
+    try:
+        background_tasks.add_task(task_fn, run_id, result.claim_token)
+    except Exception:
+        release_execution_claim(
+            db,
+            run_id,
+            claim_token=result.claim_token,
+            restore_status=restore_status,
+        )
+        raise
 
 
 @project_router.post(
@@ -43,18 +79,32 @@ def start_agent_run(
     ),
 ) -> AgentRunRead:
     svc = AgentRunService(db)
-    # Persist run first; graph runs in background so clients get run_id immediately.
+    # Persist + claim; graph runs in background so clients get run_id immediately.
     run = svc.start_run(
         project_id,
         payload or AgentRunStartRequest(),
         idempotency_key=idempotency_key,
         execute=False,
     )
+    claim = svc.last_claim
     if sync:
-        return svc.execute_run(run.id)
-    # Idempotent: do not start a second executor for the same run.
-    if not agent_tasks.is_execute_running(run.id):
-        background_tasks.add_task(agent_tasks.run_agent_execute, run.id)
+        # Idempotent re-entry (or concurrent claim): return current run as-is.
+        if claim is not None and claim.outcome == ClaimOutcome.already_running:
+            return run
+        return svc.execute_run(
+            run.id,
+            project_id=project_id,
+            claim_token=getattr(claim, "claim_token", None),
+        )
+    if claim is not None and claim.outcome == ClaimOutcome.claimed:
+        _schedule_or_release(
+            background_tasks,
+            db,
+            result=claim,
+            task_fn=agent_tasks.run_agent_execute,
+            run_id=run.id,
+            restore_status=AgentRunStatus.failed,
+        )
     return run
 
 
@@ -135,13 +185,18 @@ def resume_project_agent_run(
     ),
 ) -> AgentRunRead:
     svc = AgentRunService(db)
-    svc.get_run(run_id, project_id=project_id)
     if sync:
-        return svc.resume_run(run_id, execute=True)
-    run = svc.resume_run(run_id, execute=False)
-    if not agent_tasks.is_execute_running(run_id):
-        background_tasks.add_task(agent_tasks.run_agent_resume, run_id)
-    return run
+        return svc.resume_run(run_id, execute=True, project_id=project_id)
+    result = svc.prepare_resume(run_id, project_id=project_id)
+    _schedule_or_release(
+        background_tasks,
+        db,
+        result=result,
+        task_fn=agent_tasks.run_agent_resume,
+        run_id=run_id,
+        restore_status=AgentRunStatus.waiting_for_user,
+    )
+    return _read_from_claim(svc, result)
 
 
 @project_router.post(
@@ -159,13 +214,18 @@ def retry_project_agent_run(
     ),
 ) -> AgentRunRead:
     svc = AgentRunService(db)
-    svc.get_run(run_id, project_id=project_id)
     if sync:
-        return svc.retry_run(run_id, execute=True)
-    run = svc.retry_run(run_id, execute=False)
-    if not agent_tasks.is_execute_running(run_id):
-        background_tasks.add_task(agent_tasks.run_agent_retry, run_id)
-    return run
+        return svc.retry_run(run_id, execute=True, project_id=project_id)
+    result = svc.prepare_retry(run_id, project_id=project_id)
+    _schedule_or_release(
+        background_tasks,
+        db,
+        result=result,
+        task_fn=agent_tasks.run_agent_retry,
+        run_id=run_id,
+        restore_status=AgentRunStatus.failed,
+    )
+    return _read_from_claim(svc, result)
 
 
 @project_router.get("/{project_id}/agent-runs/{run_id}/events/stream")
@@ -225,13 +285,18 @@ def resume_agent_run(
     ),
 ) -> AgentRunRead:
     svc = AgentRunService(db)
-    svc.get_run(run_id, project_id=project_id)
     if sync:
-        return svc.resume_run(run_id, execute=True)
-    run = svc.resume_run(run_id, execute=False)
-    if not agent_tasks.is_execute_running(run_id):
-        background_tasks.add_task(agent_tasks.run_agent_resume, run_id)
-    return run
+        return svc.resume_run(run_id, execute=True, project_id=project_id)
+    result = svc.prepare_resume(run_id, project_id=project_id)
+    _schedule_or_release(
+        background_tasks,
+        db,
+        result=result,
+        task_fn=agent_tasks.run_agent_resume,
+        run_id=run_id,
+        restore_status=AgentRunStatus.waiting_for_user,
+    )
+    return _read_from_claim(svc, result)
 
 
 @run_router.post("/{run_id}/retry", response_model=AgentRunRead)
@@ -246,13 +311,18 @@ def retry_agent_run(
     ),
 ) -> AgentRunRead:
     svc = AgentRunService(db)
-    svc.get_run(run_id, project_id=project_id)
     if sync:
-        return svc.retry_run(run_id, execute=True)
-    run = svc.retry_run(run_id, execute=False)
-    if not agent_tasks.is_execute_running(run_id):
-        background_tasks.add_task(agent_tasks.run_agent_retry, run_id)
-    return run
+        return svc.retry_run(run_id, execute=True, project_id=project_id)
+    result = svc.prepare_retry(run_id, project_id=project_id)
+    _schedule_or_release(
+        background_tasks,
+        db,
+        result=result,
+        task_fn=agent_tasks.run_agent_retry,
+        run_id=run_id,
+        restore_status=AgentRunStatus.failed,
+    )
+    return _read_from_claim(svc, result)
 
 
 @run_router.get("/{run_id}/events/stream")

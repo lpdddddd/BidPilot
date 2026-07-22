@@ -66,8 +66,12 @@ jobs:
           pip install -e ".[dev]"
       - name: Ruff
         run: ruff check app tests
+      - name: Ruff format
+        run: ruff format --check app tests
       - name: Compileall
         run: python -m compileall app tests -q
+      - name: Mypy
+        run: mypy app
       - name: Alembic single head
         run: |
           heads=$(alembic heads | wc -l)
@@ -88,11 +92,21 @@ jobs:
             tests/test_agent_midrun_visibility.py \
             tests/test_agent_lifecycle_hardening.py \
             tests/test_agent_async_permissions.py \
+            tests/test_agent_persist_attempt_graph.py \
             tests/test_agent_api.py \
             tests/test_agent_sse.py \
             tests/test_compliance_api.py \
             tests/test_compliance_engine.py \
             tests/test_demo_import.py \
+            --tb=short
+      - name: Evaluation center
+        run: |
+          pytest -q \
+            tests/test_evaluation_suite.py \
+            tests/test_evaluation_metrics.py \
+            tests/test_evaluation_runner.py \
+            tests/test_evaluation_api.py \
+            tests/test_evaluation_permissions.py \
             --tb=short
       - name: Full backend suite
         run: pytest -q --tb=line

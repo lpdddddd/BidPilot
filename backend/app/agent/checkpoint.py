@@ -259,11 +259,13 @@ class DbCheckpointStore:
         if row is None:
             return None
         meta = row.metadata_json or {}
-        if isinstance(meta.get("lg_memory"), dict):
-            return meta["lg_memory"]
+        lg = meta.get("lg_memory")
+        if isinstance(lg, dict):
+            return dict(lg)
         blob = row.checkpoint_json or {}
-        if isinstance(blob.get("lg_memory"), dict):
-            return blob["lg_memory"]
+        lg2 = blob.get("lg_memory")
+        if isinstance(lg2, dict):
+            return dict(lg2)
         return None
 
     def list_for_run(self, agent_run_id: UUID) -> list[AgentCheckpoint]:

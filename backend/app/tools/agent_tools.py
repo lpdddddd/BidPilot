@@ -357,7 +357,7 @@ def generate_proposal_draft(
     execute = getattr(service, "execute_run", None)
     if callable(execute):
         execute(run.id)
-        run = service.get_run(payload.project_id, run.id)  # type: ignore[attr-defined]
+        run = service.get_run(payload.project_id, run.id)
     draft_id = getattr(run, "draft_id", None)
     return ToolResult(
         summary=f"draft_run={run.status} draft_id={draft_id}",

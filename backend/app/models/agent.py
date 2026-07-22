@@ -72,6 +72,9 @@ class AgentRun(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     event_sequence: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # Cross-worker background execution claim (Step 11 hardening).
+    execution_claim_token: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    execution_action: Mapped[str | None] = mapped_column(String(32))
 
     organization: Mapped[Organization] = relationship(back_populates="agent_runs")
     project: Mapped[BidProject | None] = relationship(back_populates="agent_runs")
@@ -89,6 +92,12 @@ class AgentStep(Base, UUIDPrimaryKeyMixin, TimestampMixin):
             "agent_run_id",
             "step_index",
             name="uq_agent_steps_agent_run_id_step_index",
+        ),
+        UniqueConstraint(
+            "agent_run_id",
+            "node_name",
+            "attempt",
+            name="uq_agent_steps_agent_run_id_node_name_attempt",
         ),
     )
 

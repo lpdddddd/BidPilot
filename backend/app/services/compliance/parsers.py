@@ -39,6 +39,8 @@ def parse_amount_to_yuan(value: Any) -> float | None:
         num = value.get("value") or value.get("amount") or value.get("num")
         unit = str(value.get("unit") or "元")
         try:
+            if num is None:
+                return None
             n = float(num)
         except (TypeError, ValueError):
             return None
@@ -68,6 +70,8 @@ def parse_years_to_years(value: Any) -> float | None:
         num = value.get("value") or value.get("years") or value.get("num")
         unit = str(value.get("unit") or "年")
         try:
+            if num is None:
+                return None
             n = float(num)
         except (TypeError, ValueError):
             return None
@@ -97,6 +101,8 @@ def parse_quantity(value: Any) -> float | None:
     if isinstance(value, dict):
         num = value.get("value") or value.get("quantity") or value.get("num")
         try:
+            if num is None:
+                return None
             return float(num)
         except (TypeError, ValueError):
             return None

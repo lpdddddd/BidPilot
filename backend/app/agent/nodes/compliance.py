@@ -22,7 +22,7 @@ def run_compliance_check(state: AgentState) -> AgentState:
     if skipped:
         return state
     runtime = get_runtime()
-    project_id = UUID(state["project_id"])  # type: ignore[arg-type]
+    project_id = UUID(str(state["project_id"]))
 
     if state.get("compliance_run_id"):
         run_tool(

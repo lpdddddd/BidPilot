@@ -141,6 +141,8 @@ def test_async_resume_returns_while_graph_still_running(db: Session, engine, mon
         db=db,
         sync=False,
     )
+    # DB claim is authoritative — second resume must not schedule another worker.
+    assert len(bg2.tasks) == 0
     release.set()
     done = threading.Event()
 

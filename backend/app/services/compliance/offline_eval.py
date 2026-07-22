@@ -332,7 +332,11 @@ def run_offline_eval(
 
     consistency = (matched / compared) if compared else None
     # Focus-only rate — do not imply 100% for rules without focus samples.
-    focus_rates = [v["rate"] for v in per_rule_consistency.values() if v.get("rate") is not None]
+    focus_rates = [
+        float(rate)
+        for v in per_rule_consistency.values()
+        if (rate := v.get("rate")) is not None and isinstance(rate, (int, float))
+    ]
     focus_label_consistency = sum(focus_rates) / len(focus_rates) if focus_rates else None
 
     directly_evaluated_ids = sorted(

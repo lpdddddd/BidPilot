@@ -214,7 +214,7 @@ def engine_verdict_from_findings(
 
     def _status(f: Any) -> str:
         s = getattr(f, "status", None)
-        if hasattr(s, "value"):
+        if s is not None and hasattr(s, "value"):
             return str(s.value)
         if isinstance(f, dict):
             return str(f.get("status") or "")
@@ -222,7 +222,7 @@ def engine_verdict_from_findings(
 
     def _severity_val(f: Any) -> str:
         s = getattr(f, "severity", None)
-        if hasattr(s, "value"):
+        if s is not None and hasattr(s, "value"):
             return str(s.value)
         if isinstance(f, dict):
             return str(f.get("severity") or "")

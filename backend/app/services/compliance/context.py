@@ -203,10 +203,12 @@ def load_compliance_context_for_check(
             else:
                 extra_doc_ids.add(uid)
     for link in company_links:
-        if getattr(link, "document_id", None):
-            extra_doc_ids.add(link.document_id)
-        if getattr(link, "chunk_id", None):
-            extra_chunk_ids.add(link.chunk_id)
+        doc_id = getattr(link, "document_id", None)
+        if doc_id is not None:
+            extra_doc_ids.add(doc_id)
+        chunk_id = getattr(link, "chunk_id", None)
+        if chunk_id is not None:
+            extra_chunk_ids.add(chunk_id)
 
     if extra_req_ids:
         for r in db.scalars(
@@ -237,12 +239,12 @@ def load_compliance_context_for_check(
                     matches.append(m)
 
     documents = list(db.scalars(select(Document).where(Document.project_id == project_id)).all())
-    documents_by_id = {d.id: d for d in documents}
+    documents_by_id: dict[UUID, Document] = {doc.id: doc for doc in documents}
     if extra_doc_ids:
         missing_docs = [i for i in extra_doc_ids if i not in documents_by_id]
         if missing_docs:
-            for d in db.scalars(select(Document).where(Document.id.in_(missing_docs))).all():
-                documents_by_id[d.id] = d
+            for doc in db.scalars(select(Document).where(Document.id.in_(missing_docs))).all():
+                documents_by_id[doc.id] = doc
 
     chunks = list(
         db.scalars(select(DocumentChunk).where(DocumentChunk.project_id == project_id)).all()

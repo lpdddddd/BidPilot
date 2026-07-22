@@ -213,20 +213,20 @@ def run_tool(
                 raise EventPersistError("tool_failed event persist failed") from persist_exc
         raise
 
-    summary = None
+    ok_summary: str | None = None
     if summary_on_ok is not None:
         try:
-            summary = safe_text(summary_on_ok(result))
+            ok_summary = safe_text(summary_on_ok(result))
         except Exception as exc:  # noqa: BLE001
             logger.warning("summary_on_ok failed for %s: %s", name, type(exc).__name__)
-            summary = None
+            ok_summary = None
     finished_at = now_iso()
     events = list(state.get("tool_events") or [])
     events.append(
         {
             "name": name,
             "status": "ok",
-            "summary": summary,
+            "summary": ok_summary,
             "attempt": resolved_attempt,
             "call_id": call_id,
             "started_at": started_at,
@@ -239,7 +239,7 @@ def run_tool(
             runtime.persist_tool_finish(
                 tool_call_id=getattr(tool_row, "id", tool_row),
                 status="ok",
-                summary=summary,
+                summary=ok_summary,
                 idempotency_key=(
                     f"tool_completed:{state.get('run_id')}:{call_id}:a{resolved_attempt}"
                 ),
@@ -358,23 +358,29 @@ def begin_node(state: AgentState, node: str) -> tuple[AgentState, bool]:
         return touch(state), True
 
     counts = dict(state.get("retry_counts") or {})
-    attempt = int(counts.get(node, 0)) + 1
+    # Attempt is allocated from DB in record_node_started — retry_counts is only
+    # a routing mirror, not the source of truth.
 
     runtime = _RUNTIME.get()
     if runtime is not None:
         runtime.current_node_name = node
-        runtime.current_node_attempt = attempt
         runtime.node_attempt_outcome = "running"
         runtime.tool_invocation_counts = {}
         if runtime.persist_node_start:
             try:
                 step = runtime.persist_node_start(
                     node_name=node,
-                    attempt=attempt,
-                    idempotency_key=f"node_started:{state.get('run_id')}:{node}:a{attempt}",
+                    # Omit attempt → DB allocates next (run_id, node_name) value.
+                    attempt=None,
+                    idempotency_key=None,
                 )
                 if step is not None and getattr(step, "id", None) is not None:
                     runtime.current_step_id = step.id
+                    attempt = int(getattr(step, "attempt", 1) or 1)
+                    runtime.current_node_attempt = attempt
+                    # Mirror for routing MAX_NODE_RETRIES (attempt N ⇒ count N-1 done).
+                    counts[node] = max(int(counts.get(node, 0)), attempt - 1)
+                    state["retry_counts"] = counts
                 _commit_required(runtime)
             except EventPersistError:
                 raise

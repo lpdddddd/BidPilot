@@ -135,7 +135,8 @@ def next_step_index(db: Session, agent_run_id: UUID) -> int:
             AgentStep.agent_run_id == agent_run_id
         )
     )
-    return int(current) + 1
+    # Important: step_index 0 is valid — do not use `current or -1`.
+    return int(current if current is not None else -1) + 1
 
 
 def record_node_started(
@@ -143,12 +144,24 @@ def record_node_started(
     *,
     agent_run_id: UUID,
     node_name: str,
-    attempt: int = 1,
+    attempt: int | None = None,
     idempotency_key: str | None = None,
 ) -> AgentStep:
-    """Create AgentStep (running) + ``node_started`` event."""
-    attempt = max(1, int(attempt or 1))
-    key = idempotency_key or f"node_started:{agent_run_id}:{node_name}:a{attempt}:{uuid4().hex[:8]}"
+    """Create AgentStep (running) + ``node_started`` event.
+
+    When ``attempt`` is omitted, allocate the next value from existing
+    ``AgentStep`` rows for ``(agent_run_id, node_name)`` under a run row lock.
+    """
+    from app.services.agent_run.claims import allocate_node_attempt
+
+    if attempt is None:
+        attempt = allocate_node_attempt(db, agent_run_id, node_name)
+    else:
+        # Still lock the run so concurrent writers serialize with allocate path.
+        db.execute(select(AgentRun.id).where(AgentRun.id == agent_run_id).with_for_update())
+        attempt = max(1, int(attempt))
+
+    key = idempotency_key or f"node_started:{agent_run_id}:{node_name}:a{attempt}"
     # If a running step already exists for this exact idempotency, reuse.
     existing_ev = db.scalar(
         select(AgentEvent).where(
@@ -190,6 +203,19 @@ def record_node_started(
             return step
         except IntegrityError as exc:
             last_err = exc
+            # Concurrent collision on attempt or step_index — refresh and retry.
+            attempt = allocate_node_attempt(db, agent_run_id, node_name)
+            key = f"node_started:{agent_run_id}:{node_name}:a{attempt}"
+            existing_ev = db.scalar(
+                select(AgentEvent).where(
+                    AgentEvent.agent_run_id == agent_run_id,
+                    AgentEvent.idempotency_key == key,
+                )
+            )
+            if existing_ev and existing_ev.agent_step_id:
+                step = db.get(AgentStep, existing_ev.agent_step_id)
+                if step is not None:
+                    return step
             continue
     assert last_err is not None
     raise last_err
