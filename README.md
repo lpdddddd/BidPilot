@@ -213,7 +213,19 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
     ```
   - 脱敏摘要写入 `docs/acceptance/rag_smoke_*.json`（已 gitignore，不入库原文）
 - 前端：「检索证据」保留；「带来源问答」仅在 `final` 后展示确认答案
-- **本步未包含**：微调 / LoRA、结构化抽取、企业匹配、LangGraph Agent
+- 真实联调记录：`docs/rag_e2e_acceptance.md`
+- **本步未包含**：微调 / LoRA、企业匹配、LangGraph Agent
+
+## 招标要求结构化抽取（第 7 步）
+
+从项目招标类文档的真实 chunks 抽取可追溯 Requirement + EvidenceLink（待人工审核）。
+详见 `docs/requirement_extraction.md`。
+
+- 文档范围：`tender` / `announcement` / `amendment` / `contract`（不含企业侧材料）
+- 异步 run 表：`requirement_extraction_runs`；证据校验 + 幂等去重 + 冲突标记（不自动裁决）
+- API：`POST/GET .../requirements/extractions`、`GET .../requirements`
+- 前端：项目详情「需求清单」Tab
+- **尚未实现**：RequirementMatch、企业材料匹配、LoRA、Agent
 
 ## 测试 / 静态检查
 

@@ -1,31 +1,14 @@
 import { useState } from "react";
-import { Alert, Button, Empty, Skeleton, Tabs, Tag } from "antd";
+import { Alert, Button, Skeleton, Tabs, Tag } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { getProject } from "../api/client";
 import DocumentCenter from "../features/documents/DocumentCenter";
+import RequirementsWorkspace from "../features/requirements/RequirementsWorkspace";
 import KnowledgeSearch from "../features/search/KnowledgeSearch";
 import type { Project } from "../types/api";
 import { usePageTitle } from "../components/usePageTitle";
-
-function PendingCapability({ title, step }: { title: string; step: string }) {
-  return (
-    <div className="bp-pending-capability">
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={
-          <div>
-            <div className="bp-pending-capability-title">{title}尚未开放</div>
-            <div className="bp-pending-capability-desc">
-              将在{step}接入。当前阶段不提供模拟审查结果或虚假风险分数。
-            </div>
-          </div>
-        }
-      />
-    </div>
-  );
-}
 
 const PROJECT_STATUS_LABELS: Record<string, string> = {
   draft: "草稿",
@@ -195,11 +178,17 @@ export default function ProjectDetailPage() {
             ),
           },
           {
-            key: "review",
-            label: "智能审查",
+            key: "requirements",
+            label: "需求清单",
             children: (
               <div className="bp-workspace-body">
-                <PendingCapability title="智能审查" step="后续规则与 Agent 工作流阶段" />
+                <RequirementsWorkspace
+                  projectId={project.id}
+                  onOpenSource={(documentId) => {
+                    setChunkFocusDocumentId(documentId);
+                    setActiveTab("documents");
+                  }}
+                />
               </div>
             ),
           },

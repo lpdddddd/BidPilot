@@ -94,3 +94,11 @@ class AgentRunStatus(StrEnum):
     completed = "completed"
     failed = "failed"
     cancelled = "cancelled"
+
+
+class ExtractionRunStatus(StrEnum):
+    queued = "queued"
+    running = "running"
+    succeeded = "succeeded"
+    failed = "failed"
+    cancelled = "cancelled"

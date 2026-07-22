@@ -6,6 +6,8 @@ import type {
   DocumentItem,
   DocumentListResponse,
   DocumentPreviewResponse,
+  ExtractionRun,
+  ExtractionStartPayload,
   HealthResponse,
   IndexSummaryResponse,
   Project,
@@ -13,6 +15,9 @@ import type {
   ProjectListResponse,
   ReadyResponse,
   ReindexResponse,
+  RequirementDetail,
+  RequirementListParams,
+  RequirementListResponse,
   SearchRequestPayload,
   SearchResponse,
 } from "../types/api";
@@ -173,6 +178,49 @@ export async function searchProject(
 
 export async function reindexProject(projectId: string): Promise<ReindexResponse> {
   const { data } = await http.post<ReindexResponse>(`/api/v1/projects/${projectId}/reindex`);
+  return data;
+}
+
+export async function startRequirementExtraction(
+  projectId: string,
+  payload: ExtractionStartPayload = {},
+): Promise<ExtractionRun> {
+  const { data } = await http.post<ExtractionRun>(
+    `/api/v1/projects/${projectId}/requirements/extractions`,
+    payload,
+    { timeout: 60000 },
+  );
+  return data;
+}
+
+export async function getRequirementExtractionRun(
+  projectId: string,
+  runId: string,
+): Promise<ExtractionRun> {
+  const { data } = await http.get<ExtractionRun>(
+    `/api/v1/projects/${projectId}/requirements/extractions/${runId}`,
+  );
+  return data;
+}
+
+export async function listRequirements(
+  projectId: string,
+  params: RequirementListParams = {},
+): Promise<RequirementListResponse> {
+  const { data } = await http.get<RequirementListResponse>(
+    `/api/v1/projects/${projectId}/requirements`,
+    { params },
+  );
+  return data;
+}
+
+export async function getRequirement(
+  projectId: string,
+  requirementId: string,
+): Promise<RequirementDetail> {
+  const { data } = await http.get<RequirementDetail>(
+    `/api/v1/projects/${projectId}/requirements/${requirementId}`,
+  );
   return data;
 }
 

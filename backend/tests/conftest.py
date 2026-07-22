@@ -28,6 +28,7 @@ ENUM_TYPE_NAMES = [
     "quality_level",
     "review_status",
     "match_status",
+    "extraction_run_status",
 ]
 
 

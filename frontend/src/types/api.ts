@@ -346,3 +346,124 @@ export type ReadyResponse = {
   status: "ok" | "degraded" | "error";
   services: ServiceStatus[];
 };
+
+export type ExtractionRunStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+
+export type RequirementCategory =
+  | "project_info"
+  | "qualification"
+  | "commercial"
+  | "technical"
+  | "scoring"
+  | "material"
+  | "deadline"
+  | "mandatory"
+  | "invalid_bid"
+  | "contract";
+
+export type RiskLevel = "low" | "medium" | "high" | "critical";
+
+export type QualityLevel = "gold" | "silver" | "pending";
+
+export type ReviewStatus = "reviewed" | "auto_checked" | "unreviewed";
+
+export type ExtractionStartPayload = {
+  document_ids?: string[];
+  document_types?: string[];
+  force?: boolean;
+};
+
+export type ExtractionRun = {
+  id: string;
+  project_id: string;
+  status: ExtractionRunStatus;
+  document_ids_json?: unknown[] | null;
+  document_types_json?: unknown[] | null;
+  total_chunks: number;
+  processed_chunks: number;
+  candidate_count: number;
+  created_count: number;
+  merged_count: number;
+  conflict_count: number;
+  failed_chunk_count: number;
+  error_summary?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  config_json?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EvidenceLink = {
+  id: string;
+  requirement_id: string;
+  document_id?: string | null;
+  chunk_id?: string | null;
+  evidence_type?: string | null;
+  confidence?: string | number | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  document_file_name?: string | null;
+  document_type?: string | null;
+  chunk_index?: number | null;
+  section?: string | null;
+  clause_id?: string | null;
+  page_start?: number | null;
+  page_end?: number | null;
+  document_center_path?: string | null;
+};
+
+export type RequirementSummary = {
+  id: string;
+  project_id: string;
+  source_document_id?: string | null;
+  requirement_code?: string | null;
+  category: RequirementCategory;
+  title: string;
+  normalized_requirement?: string | null;
+  mandatory: boolean;
+  score?: string | number | null;
+  risk_level: RiskLevel;
+  source_page?: number | null;
+  source_section?: string | null;
+  source_clause_id?: string | null;
+  quality_level: QualityLevel;
+  review_status: ReviewStatus;
+  metadata_json?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  evidence_count: number;
+  has_conflict: boolean;
+  source_document_file_name?: string | null;
+};
+
+export type RequirementListParams = {
+  category?: RequirementCategory;
+  mandatory?: boolean;
+  risk_level?: RiskLevel;
+  review_status?: ReviewStatus;
+  source_document_id?: string;
+  has_conflict?: boolean;
+  page?: number;
+  limit?: number;
+  offset?: number;
+};
+
+export type RequirementListResponse = {
+  items: RequirementSummary[];
+  total: number;
+  page: number;
+  limit: number;
+  offset: number;
+};
+
+export type RequirementDetail = RequirementSummary & {
+  evidence_required_json?: Record<string, unknown> | unknown[] | null;
+  evidence_links: EvidenceLink[];
+};
