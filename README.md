@@ -286,17 +286,24 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 
 异步跑图 + 真实 tool / 节点生命周期 + SSE/轮询时间线 UI。详见 [`docs/agent_workflow.md`](docs/agent_workflow.md)（Step 11 节）。
 
-- **异步启动**：`POST` 持久化 `AgentRun` 后立即返回 `run_id` / `thread_id` / `events_stream_path`；图在 FastAPI `BackgroundTasks` 执行；**resume / retry** 默认 prepare + 后台；测试可用 `?sync=true`；同 run 重复启动去重
-- **事件持久化失败**：`*_started` 失败则不执行 tool/node 体、rollback、run failed（仅 `safe_error_summary`）、抛 `EventPersistError`（不 suppress）
-- **节点生命周期**：每次 attempt 发 `node_started`（attempt 从 1）；成功 → `node_completed`；失败/可重试 → `node_failed` 后再试；未捕获 → `node_failed` + `run_failed`；失败 attempt 无 `node_completed`
-- **真实 tool 生命周期**：`run_tool()` 调用前 `tool_started`（短 commit），调用后 `tool_completed`/`tool_failed`；逻辑 `call_id` 跨重试稳定；每 attempt 一条物理 `ToolCall`；`idempotency_key` 含 attempt
-- **`safe_error_summary`**：状态/checkpoint/事件/API/SSE 不含 secrets、tokens、URLs、路径、traceback、prompts、原始 args
-- **中途可见**：节点/工具事件短提交后另一 Session 可读；真实图 mid-run 测试用 **barrier**（不用 sleep）
-- **项目作用域**：项目路径与裸 `/agent-runs`（必填 `project_id`）归属不匹配 → 404
-- **SSE**：`GET .../events/stream`；前端 backoff 重连 3 次 → 轮询 → 周期性 SSE 恢复；终态/unmount 清理；轮询回退同一事件模型
-- **前端**：`AgentLoopPanel` — 状态栏、执行时间线、结果、引用深链、恢复/重试
-- **进程重启**：checkpoint 持久化，但 BackgroundTasks **不会**自动续跑，需显式 resume
-- **尚未实现**：WebSocket、CoT 流式展示、评测中心、LoRA
+收尾硬化（已落地）：
+
+1. **持久化 attempt**：DB `FOR UPDATE` 分配，`(run, node, attempt)` 唯一；API retry 接续最大值。
+2. **原子 claim**：resume/retry 数据库 claim；仅 claimed 才挂 BackgroundTask。
+3. **完整 Graph+Service 中途可见性**：`test_agent_persist_attempt_graph.py` barrier 测试。
+4. CI：`ruff format --check` + `mypy app`。
+
+- **异步启动**：`POST` 持久化 `AgentRun` 后立即返回；图在 `BackgroundTasks` 执行；resume/retry 默认 prepare + 后台；`?sync=true` 同步；同 run 去重
+- **事件/节点/tool 生命周期**：attempt 从 1；失败 attempt 无 `node_completed`；逻辑 `call_id` 稳定；幂等键含 attempt
+- **中途可见**：短提交；完整 Graph 证明见 `test_full_graph_service_midrun_visibility`（barrier，无 sleep）
+- **项目作用域 / SSE / 前端**：归属不匹配 404；SSE + 轮询回退；`AgentLoopPanel`
+- **尚未实现（Agent）**：WebSocket、CoT 流式展示
+
+## 评测中心（第 12 步）
+
+项目级自动评测：复用 `datasets/eval/reference/`（140 auto_reference cases），确定性指标 + hard gates，前端评测中心。详见 [`docs/evaluation_center.md`](docs/evaluation_center.md)。
+
+- **尚未实现（训练）**：LoRA / 第 13 步训练数据构建
 
 ## 可追溯响应准备草稿
 
@@ -439,11 +446,12 @@ llamafactory-cli train /absolute/path/to/bidpilot/training/llamafactory/configs/
 14. 确定性规则合规检查引擎（coverage/evidence/资格风险/草稿安全/一致性）
 15. LangGraph Agent 业务闭环（可恢复 checkpoint / resume / retry）
 16. Agent 实时执行时间线（异步跑图、SSE、`AgentLoopPanel`）
+17. 评测中心（EvaluationSuite/Run、确定性指标、前端评测中心）
 
 ## 后续开发顺序建议
 
 1. 人工审核沉淀 gold 需求 / Match / RAG / SFT
-2. 评测中心
+2. 第 13 步：训练数据构建与 LoRA（在评测中心稳定之后）
 3. 合规公开源采集规模化 + OCR
 4. 认证授权与组织权限
 5. 多 GPU QLoRA 正式训练
