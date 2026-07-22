@@ -110,12 +110,13 @@ def test_compliance_rules_and_run_flow(client: TestClient, db: Session):
     assert rerun.json()["run"]["id"] != run_id
 
 
-def test_failed_compliance_run_persists_despite_rollback(client: TestClient, db: Session, monkeypatch):
+def test_failed_compliance_run_persists_despite_rollback(
+    client: TestClient, db: Session, monkeypatch
+):
     """Force engine failure → outer session rolls back, failed run still in DB."""
     from app.models.compliance import ComplianceRun
     from app.models.enums import ExtractionRunStatus
     from app.services.compliance import service as compliance_service_mod
-    from sqlalchemy import select
 
     project = _seed(db)
 

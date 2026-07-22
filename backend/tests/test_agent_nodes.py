@@ -21,6 +21,8 @@ from app.models import BidProject, Document, Organization, Requirement
 from app.models.document import DocumentChunk
 from app.models.enums import (
     DocumentType,
+    EvidenceMatchStatus,
+    MatchReviewStatus,
     ParseStatus,
     QualityLevel,
     RequirementCategory,
@@ -28,8 +30,13 @@ from app.models.enums import (
     RiskLevel,
 )
 from app.models.match_run import RequirementEvidenceMatch
-from app.models.enums import EvidenceMatchStatus, MatchReviewStatus
-from app.schemas.search import SearchRequest, SearchResponse, SearchResultItem, RetrievalTrace, StageLatency
+from app.schemas.search import (
+    RetrievalTrace,
+    SearchRequest,
+    SearchResponse,
+    SearchResultItem,
+    StageLatency,
+)
 from sqlalchemy.orm import Session
 
 
@@ -181,10 +188,8 @@ def test_compliance_draft_validate_revise_finalize(db: Session, runtime, monkeyp
         },
     )
     # Skip real compliance engine — patch tool.
-    from app.tools import compliance_tools
-    from app.schemas.compliance import ComplianceReport, ComplianceRunRead
+
     from app.models.enums import ExtractionRunStatus
-    from datetime import UTC, datetime
 
     class FakeResult:
         ok = True

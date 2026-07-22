@@ -68,6 +68,10 @@ class AgentRun(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     output_summary_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     error_code: Mapped[str | None] = mapped_column(String(128))
     error_summary: Mapped[str | None] = mapped_column(Text)
+    # Atomic counter for unified AgentEvent.sequence (next value to allocate).
+    event_sequence: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     organization: Mapped[Organization] = relationship(back_populates="agent_runs")
     project: Mapped[BidProject | None] = relationship(back_populates="agent_runs")
@@ -75,6 +79,7 @@ class AgentRun(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     steps: Mapped[list[AgentStep]] = relationship(back_populates="agent_run")
     tool_calls: Mapped[list[ToolCall]] = relationship(back_populates="agent_run")
     checkpoints: Mapped[list[AgentCheckpoint]] = relationship(back_populates="agent_run")
+    events: Mapped[list[AgentEvent]] = relationship(back_populates="agent_run")
 
 
 class AgentStep(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -111,6 +116,7 @@ class ToolCall(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __table_args__ = (
         Index("ix_tool_calls_agent_run_id", "agent_run_id"),
         Index("ix_tool_calls_tool_name", "tool_name"),
+        Index("ix_tool_calls_call_id", "call_id"),
     )
 
     agent_run_id: Mapped[UUID] = mapped_column(
@@ -124,14 +130,68 @@ class ToolCall(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     tool_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    call_id: Mapped[str | None] = mapped_column(String(64))
+    node_name: Mapped[str | None] = mapped_column(String(255))
     arguments_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     result_json: Mapped[dict[str, Any] | Any | None] = mapped_column(JSONB)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="pending")
     duration_ms: Mapped[int | None] = mapped_column(Integer)
     error_message: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     agent_run: Mapped[AgentRun] = relationship(back_populates="tool_calls")
     agent_step: Mapped[AgentStep | None] = relationship(back_populates="tool_calls")
+
+
+class AgentEvent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Unified, strictly ordered timeline for one AgentRun.
+
+    ``(agent_run_id, sequence)`` is unique. Sequence is allocated at write time
+    via ``AgentRun.event_sequence`` under a row lock — never guessed or offset.
+    """
+
+    __tablename__ = "agent_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "agent_run_id",
+            "sequence",
+            name="uq_agent_events_agent_run_id_sequence",
+        ),
+        Index("ix_agent_events_agent_run_id_sequence", "agent_run_id", "sequence"),
+        Index("ix_agent_events_event_type", "event_type"),
+    )
+
+    agent_run_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("agent_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    node_name: Mapped[str | None] = mapped_column(String(255))
+    tool_name: Mapped[str | None] = mapped_column(String(255))
+    status: Mapped[str | None] = mapped_column(String(64))
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    safe_summary: Mapped[str | None] = mapped_column(Text)
+    agent_step_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("agent_steps.id", ondelete="SET NULL"),
+        index=True,
+    )
+    tool_call_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("tool_calls.id", ondelete="SET NULL"),
+        index=True,
+    )
+    call_id: Mapped[str | None] = mapped_column(String(64))
+    payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    agent_run: Mapped[AgentRun] = relationship(back_populates="events")
+    agent_step: Mapped[AgentStep | None] = relationship()
+    tool_call: Mapped[ToolCall | None] = relationship()
 
 
 class AgentCheckpoint(Base, UUIDPrimaryKeyMixin, TimestampMixin):

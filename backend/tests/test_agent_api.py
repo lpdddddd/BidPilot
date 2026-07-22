@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from app.agent.checkpoint import DbCheckpointStore
 from app.models import BidProject, Document, Organization, Requirement
 from app.models.enums import (
     DocumentType,

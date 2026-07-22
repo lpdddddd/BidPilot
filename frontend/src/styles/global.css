@@ -1387,6 +1387,22 @@ body {
   background: var(--bp-surface-1);
 }
 
+.bp-chunk-card--highlight {
+  border-color: var(--bp-accent, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+  animation: bp-chunk-pulse 1.2s ease-in-out 2;
+}
+
+@keyframes bp-chunk-pulse {
+  0%,
+  100% {
+    background: var(--bp-surface-1);
+  }
+  50% {
+    background: rgba(59, 130, 246, 0.12);
+  }
+}
+
 /* ---------------------------------------------------------------- ant dark overrides */
 
 .ant-table {

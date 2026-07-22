@@ -422,8 +422,6 @@ def test_offline_adapter_formal_engine_parity():
 
 def test_offline_eval_fixture_honest_coverage(tmp_path):
     """Minimal versioned fixture must distinguish focus vs not_directly_evaluated."""
-    from pathlib import Path
-
     from app.services.compliance.offline_eval import (
         DEFAULT_FIXTURE_REFERENCE,
         run_offline_eval,
@@ -439,35 +437,69 @@ def test_offline_eval_fixture_honest_coverage(tmp_path):
     assert "focus_rules_evaluated" in report
     assert "rules_without_direct_reference_coverage" in report
     assert "coverage_matrix" in report
+    assert report["rules_executed_count"] == len(report["rules_executed"])
     all_ids = set(get_default_registry().all_rule_ids())
     focus = set(report["focus_rules_evaluated"])
     without = set(report["rules_without_direct_reference_coverage"])
     assert focus
     assert without == all_ids - focus
+    required_fields = {
+        "rule_id",
+        "category",
+        "description",
+        "executed_sample_count",
+        "focus_sample_count",
+        "positive_count",
+        "negative_count",
+        "insufficient_evidence_count",
+        "agreement_count",
+        "disagreement_count",
+        "agreement",
+        "coverage_status",
+    }
     for rid, row in report["coverage_matrix"].items():
+        assert required_fields <= set(row.keys()), rid
+        assert row["coverage_status"] in {
+            "directly_evaluated",
+            "partially_evaluated",
+            "executed_without_direct_reference",
+            "not_executed",
+        }
         if rid not in focus:
-            assert row["coverage"] in {
-                "not_directly_evaluated",
-                "executed_without_focus_sample",
+            assert row["coverage_status"] in {
+                "executed_without_direct_reference",
+                "not_executed",
+                "partially_evaluated",
             }
-            assert (
-                row.get("note") in {None, "not_directly_evaluated"}
-                or row["coverage"] == "not_directly_evaluated"
-            )
             # Must not claim a 100% rate for non-focus rules
-            assert row.get("rate") is None
+            if row["focus_sample_count"] == 0:
+                assert row["agreement"] is None
+                assert row.get("rate") is None
+        else:
+            assert row["focus_sample_count"] >= 1
+    assert report["summary_headline"]["rules_executed"] == 29 or report["summary_headline"][
+        "rules_executed"
+    ] == len(report["rules_executed"])
     # Reproducible on same fixture inputs (ignore ephemeral finding UUIDs)
     out2 = tmp_path / "offline_eval2.json"
     report2 = run_offline_eval(DEFAULT_FIXTURE_REFERENCE, out2)
     assert report["focus_rules_evaluated"] == report2["focus_rules_evaluated"]
     assert report["verdict_match_rate"] == report2["verdict_match_rate"]
-    assert report["rules_without_direct_reference_coverage"] == report2[
-        "rules_without_direct_reference_coverage"
-    ]
+    assert (
+        report["rules_without_direct_reference_coverage"]
+        == report2["rules_without_direct_reference_coverage"]
+    )
     assert report["sample_count"] == report2["sample_count"]
     assert [r.get("verdict_match") for r in report["results"]] == [
         r.get("verdict_match") for r in report2["results"]
     ]
+    assert report["coverage_matrix"].keys() == report2["coverage_matrix"].keys()
+    for rid in report["coverage_matrix"]:
+        a = report["coverage_matrix"][rid]
+        b = report2["coverage_matrix"][rid]
+        assert a["coverage_status"] == b["coverage_status"]
+        assert a["agreement"] == b["agreement"]
+        assert a["focus_sample_count"] == b["focus_sample_count"]
 
 
 def test_coverage_a004_a005(db: Session):

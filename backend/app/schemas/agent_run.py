@@ -82,9 +82,16 @@ class AgentEventItem(BaseModel):
     event_type: str
     sequence: int
     name: str
+    node_name: str | None = None
+    tool_name: str | None = None
     status: str
     summary: str | None = None
+    safe_summary: str | None = None
     created_at: datetime | None = None
+    timestamp: datetime | None = None
+    duration_ms: int | None = None
+    agent_step_id: UUID | None = None
+    tool_call_id: UUID | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
 
 

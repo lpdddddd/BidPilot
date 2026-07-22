@@ -5,7 +5,6 @@ from __future__ import annotations
 from app.agent import routing
 from app.agent.state import (
     NODE_DRAFT,
-    NODE_EXTRACT,
     NODE_FINALIZE,
     NODE_LOAD_CONTEXT,
     NODE_MATCH,

@@ -363,7 +363,6 @@ def test_e2e_4_draft_validate_revise_then_pass(db: Session, monkeypatch):
     monkeypatch.setattr(
         "app.agent.nodes.draft.generate_proposal_draft", fake_generate
     )
-    import sys
 
     revise_mod = sys.modules["app.agent.nodes.revise_draft"]
     monkeypatch.setattr(revise_mod, "generate_proposal_draft", fake_generate)

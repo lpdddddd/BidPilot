@@ -107,10 +107,20 @@ python -m app.services.compliance.offline_eval \
 `category_distribution`/`overall_consistency`/`per_rule_consistency`/`false_positives`/`false_negatives`，
 以及覆盖诚实性字段：
 
-- `rules_executed` — 引擎实际执行过的 rule_id 并集
-- `focus_rules_evaluated` — 参与 verdict 对照的 focus 规则
-- `rules_without_direct_reference_coverage` — 无直接 focus 样本的规则（`not_directly_evaluated`）
-- `coverage_matrix` — 每条 rule_id 的覆盖状态；无 focus 样本时 **不得** 声称 100%
+- `rules_executed` / `rules_executed_count` — 引擎实际执行过的 rule_id 并集（当前正式 A–E 共 29 条）
+- `focus_rules_evaluated` / `focus_rules_evaluated_count` — 有直接 reference label 可对照的 focus 规则（通常为 A001 / C003 / E003）
+- `directly_evaluated_rule_ids` — `coverage_status=directly_evaluated` 的规则
+- `rules_without_direct_reference_coverage` — 无直接 focus 样本的规则
+- `summary_headline` — 顶部口径：已执行规则数、直接 reference 评估数、具体 rule IDs；**100% 一致率仅覆盖 focus 样本/规则，不得推广到全部已执行规则**
+- `coverage_matrix` — 对全部正式 A–E 规则逐条给出：
+  - `rule_id` / `category` / `description`
+  - `executed_sample_count` — 正式引擎实际执行过该规则的样本数
+  - `focus_sample_count` — 存在可直接比较 reference label 的样本数
+  - `positive_count` / `negative_count` / `insufficient_evidence_count` — reference 期望触发 / 不触发 / 证据不足
+  - `agreement_count` / `disagreement_count` / `agreement` — 一致率分母仅 focus 样本；`focus_sample_count=0` 时 `agreement=null`
+  - `coverage_status`：`directly_evaluated` | `partially_evaluated` | `executed_without_direct_reference` | `not_executed`
+
+自动 reference **不是**人工 Gold。缺少真实证据时保留 `executed_without_direct_reference`，不生成虚构材料提高覆盖率。
 
 ## 限制（必读）
 

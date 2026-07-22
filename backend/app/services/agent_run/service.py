@@ -21,7 +21,7 @@ from app.agent.checkpoint import (
 from app.agent.graph import build_graph
 from app.agent.nodes._helpers import AgentInterrupt, AgentRuntime, reset_runtime, set_runtime
 from app.agent.state import GRAPH_VERSION, AgentState, empty_state
-from app.models.agent import AgentRun, AgentStep, ToolCall
+from app.models.agent import AgentEvent, AgentRun
 from app.models.enums import AgentRunStatus
 from app.models.project import BidProject
 from app.schemas.agent_run import (
@@ -33,7 +33,16 @@ from app.schemas.agent_run import (
     AgentRunStartRequest,
     AgentStateRead,
 )
-from app.services.agent_run.events import record_step, record_tool_call, status_from_str
+from app.services.agent_run.events import (
+    EVENT_RUN_COMPLETED,
+    EVENT_RUN_FAILED,
+    EVENT_RUN_RESUMED,
+    record_event,
+    record_node_finished,
+    record_node_started,
+    record_tool_call,
+    status_from_str,
+)
 from app.tools.agent_tools import RetrievalFn
 
 
@@ -188,6 +197,14 @@ class AgentRunService:
             state["status"] = "running"
         run.state_json = json.loads(json.dumps(state, default=str))
         run.status = AgentRunStatus.running
+        record_event(
+            self.db,
+            agent_run_id=run.id,
+            event_type=EVENT_RUN_RESUMED,
+            status="running",
+            node_name=state.get("current_node"),
+            safe_summary="run resumed",
+        )
         self.db.commit()
 
         # Prefer true LangGraph continue when a full MemorySaver dump exists;
@@ -277,6 +294,16 @@ class AgentRunService:
             db=self.db,
             llm=self.llm,
             retrieval_fn=self.retrieval_fn,
+            persist_node_start=lambda **kw: record_node_started(
+                self.db,
+                agent_run_id=run.id,
+                **kw,
+            ),
+            persist_node_finish=lambda **kw: record_node_finished(
+                self.db,
+                agent_run_id=run.id,
+                **kw,
+            ),
             persist_tool=lambda **kw: record_tool_call(
                 self.db,
                 agent_run_id=run.id,
@@ -385,19 +412,37 @@ class AgentRunService:
         *,
         memory: MemorySaver | None = None,
     ) -> None:
-        record_step(
-            self.db,
-            agent_run_id=run.id,
-            node_name=node_name,
-            status="succeeded" if state.get("status") != "failed" else "failed",
-            output_json={
-                "status": state.get("status"),
-                "warnings": state.get("warnings"),
-                "route_decision": state.get("route_decision"),
-                "completed_nodes": state.get("completed_nodes"),
-            },
-            error_message=state.get("error_summary"),
-        )
+        # Node opened via begin_node → persist_node_start; finish here after tools.
+        # Skipped completed nodes never set runtime.current_node_name — no events.
+        runtime = None
+        try:
+            from app.agent.nodes._helpers import get_runtime
+
+            runtime = get_runtime()
+        except RuntimeError:
+            runtime = None
+        started = runtime is not None and runtime.current_node_name == node_name
+        if started:
+            node_status = "failed" if state.get("status") == "failed" else "succeeded"
+            finish_kw = {
+                "node_name": node_name,
+                "status": node_status,
+                "agent_step_id": runtime.current_step_id,
+                "output_json": {
+                    "status": state.get("status"),
+                    "warnings": state.get("warnings"),
+                    "route_decision": state.get("route_decision"),
+                    "completed_nodes": state.get("completed_nodes"),
+                },
+                "error_message": state.get("error_summary"),
+            }
+            if runtime.persist_node_finish:
+                runtime.persist_node_finish(**finish_kw)
+            else:
+                record_node_finished(self.db, agent_run_id=run.id, **finish_kw)
+        if runtime is not None:
+            runtime.current_step_id = None
+            runtime.current_node_name = None
         lg_memory = serialize_memory_saver(memory) if memory is not None else None
         self.checkpoints.save(
             agent_run_id=run.id,
@@ -417,6 +462,7 @@ class AgentRunService:
         run.current_node = state.get("current_node")
         run.graph_version = state.get("graph_version") or GRAPH_VERSION
         run.output_summary_json = _safe_summary(state)
+        previous = run.status
         run.status = status_from_str(str(state.get("status") or "running"))
         run.error_code = state.get("error_code")
         run.error_summary = state.get("error_summary")
@@ -429,6 +475,24 @@ class AgentRunService:
             AgentRunStatus.cancelled,
         }:
             run.finished_at = _now()
+            if previous not in {
+                AgentRunStatus.completed,
+                AgentRunStatus.completed_with_warnings,
+                AgentRunStatus.blocked,
+                AgentRunStatus.failed,
+                AgentRunStatus.cancelled,
+            }:
+                event_type = (
+                    EVENT_RUN_FAILED if run.status == AgentRunStatus.failed else EVENT_RUN_COMPLETED
+                )
+                record_event(
+                    self.db,
+                    agent_run_id=run.id,
+                    event_type=event_type,
+                    status=(run.status.value if hasattr(run.status, "value") else str(run.status)),
+                    node_name=run.current_node,
+                    safe_summary=run.error_summary or f"run {event_type}",
+                )
         self.db.flush()
 
     def get_run(self, run_id: UUID, *, project_id: UUID | None = None) -> AgentRunRead:
@@ -441,64 +505,42 @@ class AgentRunService:
 
     def get_events(self, run_id: UUID, *, project_id: UUID | None = None) -> AgentEventsResponse:
         run = self.get_run(run_id, project_id=project_id)
-        steps = list(
+        rows = list(
             self.db.scalars(
-                select(AgentStep)
-                .where(AgentStep.agent_run_id == run_id)
-                .order_by(AgentStep.step_index.asc())
-            ).all()
-        )
-        tools = list(
-            self.db.scalars(
-                select(ToolCall)
-                .where(ToolCall.agent_run_id == run_id)
-                .order_by(ToolCall.created_at.asc())
+                select(AgentEvent)
+                .where(AgentEvent.agent_run_id == run_id)
+                .order_by(
+                    AgentEvent.sequence.asc(),
+                    AgentEvent.occurred_at.asc(),
+                    AgentEvent.id.asc(),
+                )
             ).all()
         )
         events: list[AgentEventItem] = []
-        for s in steps:
+        for row in rows:
+            name = row.tool_name or row.node_name or row.event_type
             events.append(
                 AgentEventItem(
-                    id=s.id,
-                    event_type="step",
-                    sequence=s.step_index,
-                    name=s.node_name,
-                    status=s.status,
-                    summary=(s.output_json or {}).get("status")
-                    if isinstance(s.output_json, dict)
-                    else None,
-                    created_at=s.created_at,
-                    payload={"output": s.output_json, "error": s.error_message},
+                    id=row.id,
+                    event_type=row.event_type,
+                    sequence=row.sequence,
+                    name=name,
+                    node_name=row.node_name,
+                    tool_name=row.tool_name,
+                    status=row.status or "ok",
+                    summary=row.safe_summary,
+                    safe_summary=row.safe_summary,
+                    created_at=row.occurred_at or row.created_at,
+                    timestamp=row.occurred_at or row.created_at,
+                    duration_ms=row.duration_ms,
+                    agent_step_id=row.agent_step_id,
+                    tool_call_id=row.tool_call_id,
+                    payload={
+                        "call_id": row.call_id,
+                        **(row.payload_json or {}),
+                    },
                 )
             )
-        for i, t in enumerate(tools):
-            summary = None
-            if isinstance(t.result_json, dict):
-                summary = t.result_json.get("summary")
-            events.append(
-                AgentEventItem(
-                    id=t.id,
-                    event_type="tool",
-                    sequence=10_000 + i,
-                    name=t.tool_name,
-                    status=t.status,
-                    summary=summary or t.error_message,
-                    created_at=t.created_at,
-                    payload={"duration_ms": t.duration_ms},
-                )
-            )
-        # Stable order: sequence, created_at, id (resume continues step sequence).
-        _min_dt = datetime.min.replace(tzinfo=UTC)
-        _nil = UUID(int=0)
-
-        def _event_sort_key(e: AgentEventItem):
-            return (
-                e.sequence,
-                e.created_at or _min_dt,
-                e.id or _nil,
-            )
-
-        events.sort(key=_event_sort_key)
         return AgentEventsResponse(run_id=run.id, items=events, total=len(events))
 
     def get_result(self, run_id: UUID, *, project_id: UUID | None = None) -> AgentResultResponse:

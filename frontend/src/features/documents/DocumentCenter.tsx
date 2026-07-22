@@ -179,11 +179,17 @@ function PreviewDrawer({
 export default function DocumentCenter({
   projectId,
   focusChunkDocumentId,
+  focusPage,
+  focusChunkId,
   onFocusConsumed,
+  onFocusError,
 }: {
   projectId: string;
   focusChunkDocumentId?: string | null;
+  focusPage?: number | null;
+  focusChunkId?: string | null;
   onFocusConsumed?: () => void;
+  onFocusError?: (message: string) => void;
 }) {
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
@@ -191,6 +197,8 @@ export default function DocumentCenter({
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [previewTarget, setPreviewTarget] = useState<DocumentItem | null>(null);
   const [chunkTarget, setChunkTarget] = useState<DocumentItem | null>(null);
+  const [activeFocusPage, setActiveFocusPage] = useState<number | null>(null);
+  const [activeFocusChunkId, setActiveFocusChunkId] = useState<string | null>(null);
 
   const query = useQuery({
     queryKey: ["documents", projectId],
@@ -213,16 +221,29 @@ export default function DocumentCenter({
     },
   });
 
-  // Jump target from the knowledge-search tab: open the chunk viewer for the
-  // requested document once the list is available.
+  // Jump target from citations / knowledge-search: open chunk viewer once list loads.
   useEffect(() => {
     if (!focusChunkDocumentId || !query.data) return;
     const target = query.data.items.find((item) => item.id === focusChunkDocumentId);
-    if (target) {
-      setChunkTarget(target);
+    if (!target) {
+      onFocusError?.(
+        "引用来源不存在或不属于当前项目（无效 document_id）。URL 参数已保留，但不会打开越权文档。",
+      );
+      onFocusConsumed?.();
+      return;
     }
+    setChunkTarget(target);
+    setActiveFocusPage(focusPage ?? null);
+    setActiveFocusChunkId(focusChunkId ?? null);
     onFocusConsumed?.();
-  }, [focusChunkDocumentId, query.data, onFocusConsumed]);
+  }, [
+    focusChunkDocumentId,
+    focusPage,
+    focusChunkId,
+    query.data,
+    onFocusConsumed,
+    onFocusError,
+  ]);
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) =>
@@ -589,7 +610,13 @@ export default function DocumentCenter({
       <ChunkViewer
         projectId={projectId}
         document={chunkTarget}
-        onClose={() => setChunkTarget(null)}
+        focusPage={activeFocusPage}
+        focusChunkId={activeFocusChunkId}
+        onClose={() => {
+          setChunkTarget(null);
+          setActiveFocusPage(null);
+          setActiveFocusChunkId(null);
+        }}
       />
     </div>
   );

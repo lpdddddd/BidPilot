@@ -54,7 +54,7 @@ import {
 
 type Props = {
   projectId: string;
-  onOpenSource?: (documentId: string) => void;
+  onOpenSource?: (documentId: string, chunkId?: string) => void;
 };
 
 function formatDt(value?: string | null) {

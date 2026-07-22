@@ -47,7 +47,12 @@ initialize_run
   - 若仅有 compact / 还原失败：新 `MemorySaver` + 从 START 重放，靠 `completed_nodes` 跳过已完成节点（避免重复调用服务）。
   - 二次 resume 对已完成 run 幂等返回。
 - **retry（同 run_id）**：`metadata.retry_attempt++`，记录 `retry_of_status`，清 errors，仅从 `completed_nodes` 移除失败节点（`current_node`）后重跑；保留更早 completed 与已有业务对象，避免重复创建。
-- 扩展表 `agent_runs` / `agent_checkpoints`；事件：`AgentStep.step_index`（从 0 递增；`coalesce(max, -1)+1`，避免 `0 or -1` 假值陷阱）+ `ToolCall`（tool_events 摘要，无密钥/全文）。
+- 扩展表 `agent_runs` / `agent_checkpoints` / **`agent_events`**（统一时间线）。
+- **统一事件模型**（`AgentEvent`）：同一 run 内所有可展示事件共享严格单调递增的 `sequence`，由 `AgentRun.event_sequence` 在行锁下原子分配；唯一约束 `(agent_run_id, sequence)`；冲突有限重试。
+- **事件类型**：`node_started` / `tool_started` / `tool_completed` / `tool_failed` / `node_completed` / `node_failed` / `run_resumed` / `run_completed` / `run_failed`。
+- **ToolCall ↔ AgentStep**：每次工具调用写入 `ToolCall`（含 `call_id`、`agent_step_id`、`node_name`、起止时间、安全摘要），并在统一事件流中夹在对应 `node_started` 与 `node_completed` 之间。不保存密钥、连接串、完整 PDF 或大段敏感正文。
+- **resume 后 sequence**：继续原 run 计数器，禁止从 0 重开；已完成节点跳过时不重复产生执行事件。
+- `AgentStep.step_index` 仍表示节点执行序号；**时间线排序唯一来源是 `AgentEvent.sequence`**（禁止 `10000+i` 等临时偏移）。
 - `Idempotency-Key`：同 project 同 key 返回已有 run。
 
 ## API
@@ -65,6 +70,8 @@ initialize_run
 | GET | `/api/v1/agent-runs/{run_id}` (+ events/result/resume/retry) |
 | GET | `.../events/stream` | SSE **stub**（完整实时时间线见 Step 11） |
 
+`events` 默认按 `sequence` 升序，并以 `occurred_at` / `id` 兜底。每条含：`sequence`、`event_type`、`node_name`、`tool_name`、`status`、`timestamp`、`duration_ms`、`safe_summary`、`agent_step_id`、`tool_call_id`。
+
 ## Tools
 
 `search_evidence` / `get_project_context` / `extract_requirements` / `match_company_evidence` / 既有 compliance tools（含 `check_draft_compliance`） / `generate_proposal_draft` / `get_proposal_draft` / `list_proposal_drafts`
@@ -73,8 +80,16 @@ initialize_run
 
 - 非法律意见、非人工 gold
 - 不编造企业资质；证据不足则 warning / blocked
-- **尚未实现**：Step 11 实时时间线 UI、Step 12 评测中心、LoRA
+- **尚未实现**：Step 11 实时时间线 UI / 动画 / 轮询面板、Step 12 评测中心、LoRA
 
 ## 前端
 
-项目详情 Tab「Agent 闭环」：启动 / 状态 / 当前节点 / 合规摘要 / 草稿与警告错误；刷新加载 latest。
+项目详情 Tab「Agent 闭环」：启动 / 状态 / 当前节点 / 合规摘要 / 草稿与警告错误 / 引用列表；刷新加载 latest。
+
+### 引用深度链接（真实定位）
+
+Agent / 合规引用 URL 形如：
+
+`/projects/{project_id}?tab=documents&document_id=...&page=...&chunk_id=...`
+
+`ProjectDetailPage` 消费这些参数：切换到文档中心 → 打开本项目文档的 Chunk 抽屉 → 定位页码 → 高亮对应 chunk。支持首次加载、路由跳转、浏览器前进后退与刷新恢复。无效 / 跨项目 `document_id` 显示安全提示，不白屏、不无限请求；定位完成后保留可分享 URL。跨项目文档因列表 API 仅返回本项目文档而被拒绝。

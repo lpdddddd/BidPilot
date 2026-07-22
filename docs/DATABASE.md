@@ -87,15 +87,45 @@ All tables use UUID primary keys plus `created_at` / `updated_at` (timestamptz).
 - FK: `conversation_id → conversations.id` ON DELETE SET NULL
 - Indexes: `status`, (`organization_id`, `project_id`), `conversation_id`
 - Enum `agent_run_status`: pending, running, waiting_for_user, completed, failed, cancelled
+- `event_sequence` (int): atomic counter for next `agent_events.sequence`
 
 ### agent_steps
 - FK: `agent_run_id → agent_runs.id` ON DELETE CASCADE
-- Index: (`agent_run_id`, `step_index`)
+- Unique: (`agent_run_id`, `step_index`)
 
 ### tool_calls
 - FK: `agent_run_id → agent_runs.id` ON DELETE CASCADE
 - FK: `agent_step_id → agent_steps.id` ON DELETE SET NULL
-- Indexes: `agent_run_id`, `tool_name`
+- Fields: `tool_name`, `call_id`, `node_name`, `status`, `duration_ms`, `started_at`, `finished_at`
+- Indexes: `agent_run_id`, `tool_name`, `call_id`
+- Safe summaries only (no secrets / full PDF bodies)
+
+### agent_events
+- Unified timeline for one run; **sole ordering source** for the events API
+- FK: `agent_run_id → agent_runs.id` ON DELETE CASCADE
+- FK: `agent_step_id → agent_steps.id` ON DELETE SET NULL
+- FK: `tool_call_id → tool_calls.id` ON DELETE SET NULL
+- Unique: (`agent_run_id`, `sequence`)
+- Fields: `event_type`, `node_name`, `tool_name`, `status`, `duration_ms`, `safe_summary`, `call_id`, `occurred_at`
+
+## Integration test database
+
+All backend PostgreSQL tests share one entry:
+
+- Env: `TEST_DATABASE_URL` (preferred) or `DATABASE_URL_TEST`
+- Default: `postgresql+psycopg://bidpilot@127.0.0.1:5432/bidpilot_test`
+- Safety: URL / DB name must contain `_test` (override only with `BIDPILOT_ALLOW_NONTEST_DB=1`)
+- Dedicated compose (port **5433**, does not touch prod volume):
+
+```bash
+./scripts/start_test_postgres.sh
+# or:
+docker compose -f infra/docker-compose.test.yml up -d
+export TEST_DATABASE_URL='postgresql+psycopg://bidpilot:bidpilot_test@127.0.0.1:5433/bidpilot_test'
+cd backend && alembic upgrade head && pytest
+```
+
+If PostgreSQL is unreachable, fixtures **fail with an explicit message** (no mass skip). Tear down test compose with `docker compose -f infra/docker-compose.test.yml down -v`.
 
 ## Migrations
 

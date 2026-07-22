@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Button, Skeleton, Tabs, Tag } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { getProject } from "../api/client";
 import DocumentCenter from "../features/documents/DocumentCenter";
 import MatchingWorkspace from "../features/matching/MatchingWorkspace";
@@ -12,6 +12,10 @@ import KnowledgeSearch from "../features/search/KnowledgeSearch";
 import AgentLoopPanel from "../features/agent/AgentLoopPanel";
 import type { Project } from "../types/api";
 import { usePageTitle } from "../components/usePageTitle";
+import {
+  buildProjectSearchParams,
+  parseProjectSearchParams,
+} from "./projectDetailParams";
 
 
 const PROJECT_STATUS_LABELS: Record<string, string> = {
@@ -65,14 +69,68 @@ function ProjectOverview({ project }: { project: Project }) {
 
 export default function ProjectDetailPage() {
   const { projectId = "" } = useParams();
-  const [activeTab, setActiveTab] = useState("overview");
-  const [chunkFocusDocumentId, setChunkFocusDocumentId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focus = useMemo(
+    () => parseProjectSearchParams(searchParams),
+    [searchParams],
+  );
+  const [activeTab, setActiveTab] = useState(focus.tab);
+  const [chunkFocusDocumentId, setChunkFocusDocumentId] = useState<string | null>(
+    focus.documentId,
+  );
+  const [focusPage, setFocusPage] = useState<number | null>(focus.page);
+  const [focusChunkId, setFocusChunkId] = useState<string | null>(focus.chunkId);
+  const [sourceAlert, setSourceAlert] = useState<string | null>(null);
+
+  // Sync URL → page state (initial load, in-app navigation, back/forward).
+  useEffect(() => {
+    setActiveTab(focus.tab);
+    setChunkFocusDocumentId(focus.documentId);
+    setFocusPage(focus.page);
+    setFocusChunkId(focus.chunkId);
+    setSourceAlert(null);
+  }, [focus.tab, focus.documentId, focus.page, focus.chunkId]);
+
   const query = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => getProject(projectId),
     enabled: Boolean(projectId),
   });
   usePageTitle(query.data ? query.data.project_name : "项目详情");
+
+  const openSource = useCallback(
+    (documentId: string, chunkId?: string | null, page?: number | null) => {
+      setChunkFocusDocumentId(documentId);
+      setFocusChunkId(chunkId ?? null);
+      setFocusPage(page ?? null);
+      setActiveTab("documents");
+      setSourceAlert(null);
+      setSearchParams(
+        buildProjectSearchParams({
+          tab: "documents",
+          documentId,
+          page: page ?? null,
+          chunkId: chunkId ?? null,
+        }),
+        { replace: false },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const handleTabChange = useCallback(
+    (key: string) => {
+      setActiveTab(key);
+      const next = buildProjectSearchParams({
+        tab: key,
+        documentId: key === "documents" ? chunkFocusDocumentId : null,
+        page: key === "documents" ? focusPage : null,
+        chunkId: key === "documents" ? focusChunkId : null,
+      });
+      setSearchParams(next, { replace: true });
+    },
+    [chunkFocusDocumentId, focusChunkId, focusPage, setSearchParams],
+  );
 
   if (query.isLoading) {
     return (
@@ -108,7 +166,7 @@ export default function ProjectDetailPage() {
   const project = query.data;
 
   return (
-    <div>
+    <div data-testid="project-detail-page">
       <header className="bp-workspace-banner">
         <div className="bp-workspace-title-row">
           <div>
@@ -139,10 +197,23 @@ export default function ProjectDetailPage() {
         </div>
       </header>
 
+      {sourceAlert && (
+        <Alert
+          type="warning"
+          showIcon
+          closable
+          style={{ marginBottom: 12 }}
+          message="无法打开引用来源"
+          description={sourceAlert}
+          data-testid="source-link-alert"
+          onClose={() => setSourceAlert(null)}
+        />
+      )}
+
       <Tabs
         className="bp-workspace-nav"
         activeKey={activeTab}
-        onChange={setActiveTab}
+        onChange={handleTabChange}
         items={[
           {
             key: "overview",
@@ -157,11 +228,16 @@ export default function ProjectDetailPage() {
             key: "documents",
             label: "文档中心",
             children: (
-              <div className="bp-workspace-body">
+              <div className="bp-workspace-body" data-testid="documents-tab-panel">
                 <DocumentCenter
                   projectId={project.id}
                   focusChunkDocumentId={chunkFocusDocumentId}
-                  onFocusConsumed={() => setChunkFocusDocumentId(null)}
+                  focusPage={focusPage}
+                  focusChunkId={focusChunkId}
+                  onFocusConsumed={() => {
+                    /* keep URL shareable; clear only transient open-once intent if needed */
+                  }}
+                  onFocusError={(msg) => setSourceAlert(msg)}
                 />
               </div>
             ),
@@ -173,10 +249,7 @@ export default function ProjectDetailPage() {
               <div className="bp-workspace-body">
                 <KnowledgeSearch
                   projectId={project.id}
-                  onOpenSource={(documentId) => {
-                    setChunkFocusDocumentId(documentId);
-                    setActiveTab("documents");
-                  }}
+                  onOpenSource={(documentId, chunkId) => openSource(documentId, chunkId)}
                 />
               </div>
             ),
@@ -188,10 +261,7 @@ export default function ProjectDetailPage() {
               <div className="bp-workspace-body">
                 <RequirementsWorkspace
                   projectId={project.id}
-                  onOpenSource={(documentId) => {
-                    setChunkFocusDocumentId(documentId);
-                    setActiveTab("documents");
-                  }}
+                  onOpenSource={(documentId, chunkId) => openSource(documentId, chunkId)}
                 />
               </div>
             ),
@@ -203,10 +273,7 @@ export default function ProjectDetailPage() {
               <div className="bp-workspace-body">
                 <MatchingWorkspace
                   projectId={project.id}
-                  onOpenSource={(documentId) => {
-                    setChunkFocusDocumentId(documentId);
-                    setActiveTab("documents");
-                  }}
+                  onOpenSource={(documentId, chunkId) => openSource(documentId, chunkId)}
                 />
               </div>
             ),
@@ -218,10 +285,7 @@ export default function ProjectDetailPage() {
               <div className="bp-workspace-body">
                 <ProposalDraftsWorkspace
                   projectId={project.id}
-                  onOpenSource={(documentId) => {
-                    setChunkFocusDocumentId(documentId);
-                    setActiveTab("documents");
-                  }}
+                  onOpenSource={(documentId, chunkId) => openSource(documentId, chunkId)}
                 />
               </div>
             ),

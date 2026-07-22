@@ -1,4 +1,4 @@
-from app.models.agent import AgentCheckpoint, AgentRun, AgentStep, ToolCall
+from app.models.agent import AgentCheckpoint, AgentEvent, AgentRun, AgentStep, ToolCall
 from app.models.company import CompanyProfile
 from app.models.compliance import ComplianceFinding, ComplianceRun
 from app.models.conversation import Conversation, Message
@@ -59,6 +59,7 @@ from app.models.requirement import (
 __all__ = [
     "ActorAuthn",
     "AgentCheckpoint",
+    "AgentEvent",
     "AgentRun",
     "AgentRunStatus",
     "AgentStep",

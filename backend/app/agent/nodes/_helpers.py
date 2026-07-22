@@ -32,9 +32,13 @@ class AgentRuntime:
     retrieval_fn: RetrievalFn | None = None
     persist_step: Callable[..., Any] | None = None
     persist_tool: Callable[..., Any] | None = None
+    persist_node_start: Callable[..., Any] | None = None
+    persist_node_finish: Callable[..., Any] | None = None
     save_checkpoint: Callable[..., Any] | None = None
     config: dict[str, Any] = field(default_factory=dict)
     last_state: dict[str, Any] | None = None
+    current_step_id: UUID | None = None
+    current_node_name: str | None = None
 
 
 _RUNTIME: contextvars.ContextVar[AgentRuntime | None] = contextvars.ContextVar(
@@ -92,6 +96,8 @@ def record_tool_event(
                 status=status,
                 summary=summary,
                 duration_ms=duration_ms,
+                agent_step_id=runtime.current_step_id,
+                node_name=runtime.current_node_name,
             )
 
 
@@ -132,16 +138,35 @@ def mark_node_completed(state: AgentState, node: str) -> None:
 
 
 def begin_node(state: AgentState, node: str) -> tuple[AgentState, bool]:
-    """Start a node; return ``(state, skipped)`` when already completed."""
+    """Start a node; return ``(state, skipped)`` when already completed.
+
+    On a real start, persists ``node_started`` + AgentStep via runtime.
+    Skipped (already completed) nodes do not emit execution events.
+    """
     state = mark_node_start(state, node)
     if should_skip_completed(state, node):
-        record_tool_event(
-            state,
-            name=node,
-            status="ok",
-            summary="skipped_completed",
+        # In-memory marker only — no DB execution events on resume skip.
+        events = list(state.get("tool_events") or [])
+        events.append(
+            {
+                "name": node,
+                "status": "ok",
+                "summary": "skipped_completed",
+                "started_at": now_iso(),
+                "finished_at": now_iso(),
+            }
         )
+        state["tool_events"] = events
         return touch(state), True
+
+    runtime = _RUNTIME.get()
+    if runtime is not None:
+        runtime.current_node_name = node
+        if runtime.persist_node_start:
+            with contextlib.suppress(Exception):
+                step = runtime.persist_node_start(node_name=node)
+                if step is not None and getattr(step, "id", None) is not None:
+                    runtime.current_step_id = step.id
     return state, False
 
 

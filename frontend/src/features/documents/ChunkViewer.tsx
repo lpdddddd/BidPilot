@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -25,13 +25,34 @@ function pageRangeLabel(chunk: ChunkItem): string {
     : `第 ${chunk.page_start}-${chunk.page_end} 页`;
 }
 
-function ChunkCard({ chunk }: { chunk: ChunkItem }) {
+function ChunkCard({
+  chunk,
+  highlighted,
+}: {
+  chunk: ChunkItem;
+  highlighted?: boolean;
+}) {
   const meta = chunk.metadata_json;
   const overlapChars = meta?.overlap_prefix_chars ?? 0;
   const hashShort = chunk.content_hash ? chunk.content_hash.slice(0, 12) : null;
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (highlighted && ref.current) {
+      const el = ref.current as HTMLElement & { scrollIntoView?: (arg?: unknown) => void };
+      if (typeof el.scrollIntoView === "function") {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }, [highlighted]);
 
   return (
-    <div className="bp-chunk-card">
+    <div
+      ref={ref}
+      className={`bp-chunk-card${highlighted ? " bp-chunk-card--highlight" : ""}`}
+      data-testid={`chunk-card-${chunk.id}`}
+      data-highlighted={highlighted ? "true" : "false"}
+    >
       <div className="bp-evidence-source" style={{ marginBottom: 10 }}>
         <span className="bp-rank" style={{ minWidth: 22, height: 22, fontSize: 11 }}>
           #{chunk.chunk_index}
@@ -70,13 +91,20 @@ function ChunkCard({ chunk }: { chunk: ChunkItem }) {
 export default function ChunkViewer({
   projectId,
   document,
+  focusPage,
+  focusChunkId,
   onClose,
 }: {
   projectId: string;
   document: DocumentItem | null;
+  focusPage?: number | null;
+  focusChunkId?: string | null;
   onClose: () => void;
 }) {
   const [page, setPage] = useState(1);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [chunkMissing, setChunkMissing] = useState<string | null>(null);
+  const [resolvedFocus, setResolvedFocus] = useState(false);
 
   const summary = useQuery({
     queryKey: ["chunk-summary", projectId, document?.id],
@@ -96,8 +124,73 @@ export default function ChunkViewer({
     retry: 0,
   });
 
+  // Locate focus chunk / page once when the drawer opens for a document.
+  useEffect(() => {
+    setResolvedFocus(false);
+    setHighlightId(null);
+    setChunkMissing(null);
+    setPage(1);
+  }, [document?.id, focusChunkId, focusPage]);
+
+  useEffect(() => {
+    if (!document || resolvedFocus || !summary.data) return;
+    const total = summary.data.chunk_count || 0;
+    if (!focusChunkId && focusPage == null) {
+      setResolvedFocus(true);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      // Scan pages to find the target chunk (or first chunk covering focusPage).
+      const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE) || 1);
+      for (let p = 1; p <= pageCount; p += 1) {
+        if (cancelled) return;
+        const resp = await listDocumentChunks(projectId, document.id, {
+          skip: (p - 1) * PAGE_SIZE,
+          limit: PAGE_SIZE,
+        });
+        const match = resp.items.find((c) => {
+          if (focusChunkId && c.id === focusChunkId) return true;
+          if (
+            focusPage != null &&
+            c.page_start != null &&
+            c.page_end != null &&
+            focusPage >= c.page_start &&
+            focusPage <= c.page_end
+          ) {
+            return true;
+          }
+          return false;
+        });
+        if (match) {
+          if (cancelled) return;
+          setPage(p);
+          setHighlightId(match.id);
+          setResolvedFocus(true);
+          // Clear highlight after a short pulse so it is visible but not permanent.
+          window.setTimeout(() => setHighlightId((cur) => (cur === match.id ? null : cur)), 3200);
+          return;
+        }
+      }
+      if (!cancelled) {
+        if (focusChunkId) {
+          setChunkMissing("指定 chunk 不存在或不属于当前文档。");
+        }
+        setResolvedFocus(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [document, focusChunkId, focusPage, projectId, resolvedFocus, summary.data]);
+
   const handleClose = () => {
     setPage(1);
+    setHighlightId(null);
+    setChunkMissing(null);
+    setResolvedFocus(false);
     onClose();
   };
 
@@ -107,7 +200,26 @@ export default function ChunkViewer({
       open={Boolean(document)}
       onClose={handleClose}
       width={760}
+      data-testid="chunk-viewer-drawer"
     >
+      {focusPage != null && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={`定位页码：第 ${focusPage} 页`}
+          data-testid="chunk-focus-page"
+        />
+      )}
+      {chunkMissing && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={chunkMissing}
+          data-testid="chunk-missing-alert"
+        />
+      )}
       {summary.isLoading ? (
         <Skeleton active paragraph={{ rows: 3 }} />
       ) : summary.isError ? (
@@ -193,7 +305,11 @@ export default function ChunkViewer({
         ) : (
           <>
             {chunks.data.items.map((chunk) => (
-              <ChunkCard key={chunk.id} chunk={chunk} />
+              <ChunkCard
+                key={chunk.id}
+                chunk={chunk}
+                highlighted={highlightId === chunk.id}
+              />
             ))}
             {chunks.data.total > PAGE_SIZE && (
               <div style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>

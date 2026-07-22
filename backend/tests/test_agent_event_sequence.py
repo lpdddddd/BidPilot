@@ -1,16 +1,14 @@
-"""Agent step_index / events sequence integrity."""
+"""Agent step_index / events sequence integrity (legacy + unified)."""
 
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from app.models import BidProject, Organization
-from app.models.agent import AgentRun, AgentStep, ToolCall
+from app.models.agent import AgentRun
 from app.models.enums import AgentRunStatus
 from app.services.agent_run.events import next_step_index, record_step
-from app.services.agent_run.service import AgentRunService
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -92,48 +90,3 @@ def test_concurrent_sequences_unique(db: Session, engine):
     assert len(indices) == 12
     assert len(set(indices)) == 12
     assert sorted(indices) == list(range(12))
-
-
-def test_events_api_order_stable(db: Session):
-    project = _seed(db)
-    run = _make_run(db, project)
-    base = datetime.now(UTC)
-    # Insert out of chronological order intentionally.
-    s1 = AgentStep(
-        agent_run_id=run.id,
-        step_index=1,
-        node_name="second",
-        status="succeeded",
-        created_at=base + timedelta(seconds=2),
-        updated_at=base + timedelta(seconds=2),
-        started_at=base,
-        finished_at=base,
-    )
-    s0 = AgentStep(
-        agent_run_id=run.id,
-        step_index=0,
-        node_name="first",
-        status="succeeded",
-        created_at=base + timedelta(seconds=5),
-        updated_at=base + timedelta(seconds=5),
-        started_at=base,
-        finished_at=base,
-    )
-    t0 = ToolCall(
-        agent_run_id=run.id,
-        tool_name="tool_a",
-        status="ok",
-        created_at=base + timedelta(seconds=1),
-        updated_at=base + timedelta(seconds=1),
-    )
-    db.add_all([s1, s0, t0])
-    db.flush()
-
-    events = AgentRunService(db).get_events(run.id, project_id=project.id)
-    # Steps ordered by sequence first; tools use 10000+ offset.
-    step_events = [e for e in events.items if e.event_type == "step"]
-    assert [e.name for e in step_events] == ["first", "second"]
-    assert [e.sequence for e in step_events] == [0, 1]
-    # Full list: sequence, created_at, id
-    sequences = [e.sequence for e in events.items]
-    assert sequences == sorted(sequences)

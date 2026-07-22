@@ -13,7 +13,14 @@ DEMO = ROOT / "demo_data"
 
 @pytest.fixture()
 def demo_db_url(monkeypatch):
-    url = "postgresql+psycopg://bidpilot@127.0.0.1:5432/bidpilot_test"
+    """Use the unified TEST_DATABASE_URL from conftest — never hardcode hosts."""
+    from tests.conftest import POSTGRES_ERROR, POSTGRES_OK, TEST_DATABASE_URL
+
+    if not POSTGRES_OK:
+        pytest.fail(
+            f"PostgreSQL required for demo import idempotent test but unreachable: {POSTGRES_ERROR}"
+        )
+    url = TEST_DATABASE_URL
     eng = create_engine(url, future=True)
     Base.metadata.drop_all(bind=eng)
     Base.metadata.create_all(bind=eng)

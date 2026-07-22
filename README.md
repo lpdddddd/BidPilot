@@ -305,6 +305,22 @@ make validate-sft              # alias of validate-sft-real
 make validate-sft-sample       # sample_sharegpt.json only
 ```
 
+### PostgreSQL 集成测试
+
+统一环境变量：`TEST_DATABASE_URL`（兼容 `DATABASE_URL_TEST`）。默认连接 `bidpilot_test`；库名须含 `_test`，禁止误连开发/生产库。
+
+```bash
+./scripts/start_test_postgres.sh   # docker compose -f infra/docker-compose.test.yml（5433）
+export TEST_DATABASE_URL='postgresql+psycopg://bidpilot:bidpilot_test@127.0.0.1:5433/bidpilot_test'
+cd backend && alembic upgrade head && pytest
+```
+
+本地已有 `bidpilot_test` 时可直接 `export TEST_DATABASE_URL=postgresql+psycopg://bidpilot@127.0.0.1:5432/bidpilot_test`。数据库不可达时测试会 **明确失败**（不再大量 skip）。详见 `docs/DATABASE.md`。
+
+### Agent 引用定位
+
+前端引用链接：`/projects/{id}?tab=documents&document_id=&page=&chunk_id=`。项目详情页会切换文档 Tab、打开本项目文档并高亮 chunk；无效/跨项目来源显示安全提示。Agent 时间线见 `docs/agent_workflow.md`（统一 `AgentEvent.sequence`）。**Step 11 实时执行页尚未实现。**
+
 ## 数据流水线：从原始文件到 LLaMAFactory
 
 `data_pipeline/` 是独立 Python 包（`bidpilot-data`），与业务后端解耦；后端不 import `llamafactory`。

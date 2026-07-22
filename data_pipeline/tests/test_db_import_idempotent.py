@@ -15,7 +15,11 @@ from bidpilot_data.utils import write_jsonl
     reason="DB tests skipped",
 )
 def test_company_import_idempotent(tmp_repo, tmp_datasets):
-    url = os.getenv("DATABASE_URL_TEST", "postgresql+psycopg://bidpilot@127.0.0.1:5432/bidpilot_test")
+    url = (
+        os.getenv("TEST_DATABASE_URL")
+        or os.getenv("DATABASE_URL_TEST")
+        or "postgresql+psycopg://bidpilot@127.0.0.1:5432/bidpilot_test"
+    )
     try:
         from sqlalchemy import create_engine, text
 
