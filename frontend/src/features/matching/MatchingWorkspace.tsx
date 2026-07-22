@@ -92,9 +92,20 @@ const NOT_APPLICABLE_BASIS_LABELS: Record<string, string> = {
   project_scope_exclusion: "企业/项目范围排除",
 };
 
+const CONFLICT_DIMENSION_LABELS: Record<string, string> = {
+  qualification_level: "资质等级冲突",
+  certificate_validity: "证书有效性冲突",
+  effective_period: "有效期冲突",
+  quantity: "数量冲突",
+  coverage_scope: "覆盖范围冲突",
+  technical_parameter: "技术参数冲突",
+  affirmative_negation: "肯定/否定冲突",
+};
+
 const COMPANY_LINK_ROLE_LABELS: Record<string, string> = {
   company_support: "支持侧证据",
   company_conflict: "冲突侧证据",
+  company_scope_exclusion: "当前范围排除证据",
 };
 
 const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS).map(([value, label]) => ({
@@ -294,21 +305,88 @@ function MatchDetailPanel({
     typeof matchMeta?.not_applicable_basis === "string"
       ? matchMeta.not_applicable_basis
       : null;
-  const naQuote =
-    typeof matchMeta?.not_applicable_evidence_quote === "string"
-      ? matchMeta.not_applicable_evidence_quote
+  const reqScopeQuote =
+    typeof matchMeta?.requirement_scope_quote === "string"
+      ? matchMeta.requirement_scope_quote
+      : typeof matchMeta?.not_applicable_evidence_quote === "string"
+        ? matchMeta.not_applicable_evidence_quote
+        : null;
+  const reqScopeLocation =
+    matchMeta?.requirement_scope_location &&
+    typeof matchMeta.requirement_scope_location === "object"
+      ? (matchMeta.requirement_scope_location as Record<string, unknown>)
+      : matchMeta?.not_applicable_location &&
+          typeof matchMeta.not_applicable_location === "object"
+        ? (matchMeta.not_applicable_location as Record<string, unknown>)
+        : null;
+  const currentScopeQuote =
+    typeof matchMeta?.current_scope_quote === "string"
+      ? matchMeta.current_scope_quote
       : null;
-  const naLocation =
-    matchMeta?.not_applicable_location &&
-    typeof matchMeta.not_applicable_location === "object"
-      ? (matchMeta.not_applicable_location as Record<string, unknown>)
+  const currentScopeLocation =
+    matchMeta?.current_scope_location &&
+    typeof matchMeta.current_scope_location === "object"
+      ? (matchMeta.current_scope_location as Record<string, unknown>)
+      : null;
+  const naNote =
+    typeof matchMeta?.not_applicable_note === "string"
+      ? matchMeta.not_applicable_note
+      : null;
+  const conflictDimension =
+    typeof matchMeta?.conflict_dimension === "string"
+      ? matchMeta.conflict_dimension
+      : null;
+  const conflictSubject =
+    typeof matchMeta?.conflict_subject === "string" ? matchMeta.conflict_subject : null;
+  const primaryClaim =
+    typeof matchMeta?.primary_claim_value === "string"
+      ? matchMeta.primary_claim_value
+      : null;
+  const conflictingClaim =
+    typeof matchMeta?.conflicting_claim_value === "string"
+      ? matchMeta.conflicting_claim_value
       : null;
 
   const supportLinks = match.company_links.filter((l) => l.role === "company_support");
   const conflictLinks = match.company_links.filter((l) => l.role === "company_conflict");
-  const otherLinks = match.company_links.filter(
-    (l) => l.role !== "company_support" && l.role !== "company_conflict",
+  const scopeExclusionLinks = match.company_links.filter(
+    (l) => l.role === "company_scope_exclusion",
   );
+  const otherLinks = match.company_links.filter(
+    (l) =>
+      l.role !== "company_support" &&
+      l.role !== "company_conflict" &&
+      l.role !== "company_scope_exclusion",
+  );
+
+  const renderScopeLocation = (loc: Record<string, unknown> | null) => {
+    if (!loc) return null;
+    return (
+      <>
+        <div className="bp-meta-item">
+          <div className="bp-meta-label">来源文件</div>
+          <div className="bp-meta-value">
+            {typeof loc.file_name === "string" ? loc.file_name : "-"}
+          </div>
+        </div>
+        <div className="bp-meta-item">
+          <div className="bp-meta-label">定位</div>
+          <div className="bp-meta-value">
+            {[
+              typeof loc.section === "string" ? `章节 ${loc.section}` : null,
+              typeof loc.clause_id === "string" ? `条款 ${loc.clause_id}` : null,
+              pageRangeLabel(
+                typeof loc.page_start === "number" ? loc.page_start : null,
+                typeof loc.page_end === "number" ? loc.page_end : null,
+              ),
+            ]
+              .filter(Boolean)
+              .join(" · ") || "-"}
+          </div>
+        </div>
+      </>
+    );
+  };
 
   const renderCompanyLink = (link: CompanyEvidenceLink) => (
     <article key={link.id} className="bp-req-evidence-card">
@@ -420,50 +498,62 @@ function MatchDetailPanel({
                 {naBasis ? (NOT_APPLICABLE_BASIS_LABELS[naBasis] ?? naBasis) : "-"}
               </div>
             </div>
-            {naLocation && (
-              <>
-                <div className="bp-meta-item">
-                  <div className="bp-meta-label">来源文件</div>
-                  <div className="bp-meta-value">
-                    {typeof naLocation.file_name === "string" ? naLocation.file_name : "-"}
-                  </div>
-                </div>
-                <div className="bp-meta-item">
-                  <div className="bp-meta-label">定位</div>
-                  <div className="bp-meta-value">
-                    {[
-                      typeof naLocation.section === "string" ? `章节 ${naLocation.section}` : null,
-                      typeof naLocation.clause_id === "string"
-                        ? `条款 ${naLocation.clause_id}`
-                        : null,
-                      pageRangeLabel(
-                        typeof naLocation.page_start === "number" ? naLocation.page_start : null,
-                        typeof naLocation.page_end === "number" ? naLocation.page_end : null,
-                      ),
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || "-"}
-                  </div>
-                </div>
-              </>
-            )}
           </div>
-          {naQuote && <div className="bp-req-quote-block" style={{ marginTop: 12 }}>{naQuote}</div>}
+          {naNote && <div className="bp-req-quote-block" style={{ marginTop: 12 }}>{naNote}</div>}
+
+          <h3 className="bp-req-subhead">招标要求范围限定</h3>
+          <div className="bp-meta-grid">{renderScopeLocation(reqScopeLocation)}</div>
+          {reqScopeQuote && (
+            <div className="bp-req-quote-block" style={{ marginTop: 12 }}>{reqScopeQuote}</div>
+          )}
           {onOpenSource &&
-            typeof naLocation?.document_id === "string" &&
-            naLocation.document_id && (
+            typeof reqScopeLocation?.document_id === "string" &&
+            reqScopeLocation.document_id && (
               <Button
                 type="link"
                 size="small"
                 className="bp-req-open-source"
                 onClick={() =>
                   onOpenSource(
-                    naLocation.document_id as string,
-                    typeof naLocation.chunk_id === "string" ? naLocation.chunk_id : undefined,
+                    reqScopeLocation.document_id as string,
+                    typeof reqScopeLocation.chunk_id === "string"
+                      ? reqScopeLocation.chunk_id
+                      : undefined,
                   )
                 }
               >
-                在文档中心打开
+                在文档中心打开招标范围证据
+              </Button>
+            )}
+
+          <h3 className="bp-req-subhead">当前对象范围</h3>
+          <div className="bp-meta-grid">{renderScopeLocation(currentScopeLocation)}</div>
+          {currentScopeQuote && (
+            <div className="bp-req-quote-block" style={{ marginTop: 12 }}>{currentScopeQuote}</div>
+          )}
+          {scopeExclusionLinks.length > 0 && (
+            <div className="bp-req-evidence-list" style={{ marginTop: 12 }}>
+              {scopeExclusionLinks.map(renderCompanyLink)}
+            </div>
+          )}
+          {onOpenSource &&
+            scopeExclusionLinks.length === 0 &&
+            typeof currentScopeLocation?.document_id === "string" &&
+            currentScopeLocation.document_id && (
+              <Button
+                type="link"
+                size="small"
+                className="bp-req-open-source"
+                onClick={() =>
+                  onOpenSource(
+                    currentScopeLocation.document_id as string,
+                    typeof currentScopeLocation.chunk_id === "string"
+                      ? currentScopeLocation.chunk_id
+                      : undefined,
+                  )
+                }
+              >
+                在文档中心打开当前范围证据
               </Button>
             )}
         </>
@@ -529,6 +619,39 @@ function MatchDetailPanel({
 
       {match.status === "conflicting_evidence" ? (
         <>
+          {(conflictDimension || conflictSubject || primaryClaim || conflictingClaim) && (
+            <>
+              <h3 className="bp-req-subhead">冲突证明</h3>
+              <div className="bp-meta-grid">
+                {conflictDimension && (
+                  <div className="bp-meta-item">
+                    <div className="bp-meta-label">冲突维度</div>
+                    <div className="bp-meta-value">
+                      {CONFLICT_DIMENSION_LABELS[conflictDimension] ?? conflictDimension}
+                    </div>
+                  </div>
+                )}
+                {conflictSubject && (
+                  <div className="bp-meta-item">
+                    <div className="bp-meta-label">冲突主体</div>
+                    <div className="bp-meta-value">{conflictSubject}</div>
+                  </div>
+                )}
+                {primaryClaim && (
+                  <div className="bp-meta-item">
+                    <div className="bp-meta-label">支持侧主张</div>
+                    <div className="bp-meta-value">{primaryClaim}</div>
+                  </div>
+                )}
+                {conflictingClaim && (
+                  <div className="bp-meta-item">
+                    <div className="bp-meta-label">冲突侧主张</div>
+                    <div className="bp-meta-value">{conflictingClaim}</div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
           <h3 className="bp-req-subhead">冲突支持侧证据（{supportLinks.length}）</h3>
           {supportLinks.length === 0 ? (
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无支持侧企业证据" />

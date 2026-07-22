@@ -75,6 +75,17 @@ class MatchRunResponse(BaseModel):
     updated_at: datetime
 
 
+ConflictDimension = Literal[
+    "qualification_level",
+    "certificate_validity",
+    "effective_period",
+    "quantity",
+    "coverage_scope",
+    "technical_parameter",
+    "affirmative_negation",
+]
+
+
 class MatchCandidateItem(BaseModel):
     requirement_id: UUID
     status: EvidenceMatchStatus
@@ -84,15 +95,25 @@ class MatchCandidateItem(BaseModel):
     additional_company_chunk_ids: list[UUID] = Field(default_factory=list)
     needs_review: bool = True
     conflict_note: str | None = None
-    # not_applicable: must prove scope exclusion with locatable evidence
+    # conflicting_evidence: dual company-side evidence + direct conflict proof
+    conflicting_company_chunk_id: UUID | None = None
+    conflicting_company_evidence_quote: str | None = None
+    conflict_dimension: ConflictDimension | None = None
+    conflict_subject: str | None = None
+    primary_claim_value: str | None = None
+    conflicting_claim_value: str | None = None
+    # not_applicable: dual-scope exclusion (requirement + current object scopes)
     not_applicable_basis: (
         Literal["requirement_scope_exclusion", "project_scope_exclusion"] | None
     ) = None
+    requirement_scope_chunk_id: UUID | None = None
+    requirement_scope_quote: str | None = None
+    current_scope_chunk_id: UUID | None = None
+    current_scope_quote: str | None = None
+    not_applicable_note: str | None = None
+    # Legacy single-evidence fields — accepting them alone must fail validation.
     not_applicable_evidence_quote: str | None = None
     not_applicable_evidence_chunk_id: UUID | None = None
-    # conflicting_evidence: second company-side evidence (conflict side)
-    conflicting_company_chunk_id: UUID | None = None
-    conflicting_company_evidence_quote: str | None = None
 
 
 class MatchBatchResult(BaseModel):
