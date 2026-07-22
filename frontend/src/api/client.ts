@@ -6,6 +6,7 @@ import type {
   DocumentItem,
   DocumentListResponse,
   DocumentPreviewResponse,
+  EvidenceMatchStatus,
   ExtractionRun,
   ExtractionStartPayload,
   HealthResponse,
@@ -13,6 +14,10 @@ import type {
   MatchDetail,
   MatchListParams,
   MatchListResponse,
+  MatchReopenRequest,
+  MatchReviewListResponse,
+  MatchReviewRequest,
+  MatchReviewStatus,
   MatchRun,
   MatchStartPayload,
   Project,
@@ -23,6 +28,8 @@ import type {
   RequirementDetail,
   RequirementListParams,
   RequirementListResponse,
+  ReviewQueueResponse,
+  RiskLevel,
   SearchRequestPayload,
   SearchResponse,
 } from "../types/api";
@@ -280,6 +287,69 @@ export async function getRequirementMatch(
 ): Promise<MatchDetail> {
   const { data } = await http.get<MatchDetail>(
     `/api/v1/projects/${projectId}/requirement-matches/${matchId}`,
+  );
+  return data;
+}
+
+export async function getRequirementMatchReviewQueue(
+  projectId: string,
+  params: {
+    review_status?: MatchReviewStatus;
+    status?: EvidenceMatchStatus;
+    risk_level?: RiskLevel;
+    requirement_id?: string;
+    page?: number;
+    limit?: number;
+    offset?: number;
+  } = {},
+): Promise<ReviewQueueResponse> {
+  const { data } = await http.get<ReviewQueueResponse>(
+    `/api/v1/projects/${projectId}/requirement-matches/review-queue`,
+    { params },
+  );
+  return data;
+}
+
+export async function listRequirementMatchReviews(
+  projectId: string,
+  matchId: string,
+): Promise<MatchReviewListResponse> {
+  const { data } = await http.get<MatchReviewListResponse>(
+    `/api/v1/projects/${projectId}/requirement-matches/${matchId}/reviews`,
+  );
+  return data;
+}
+
+export async function reviewRequirementMatch(
+  projectId: string,
+  matchId: string,
+  payload: MatchReviewRequest,
+  idempotencyKey?: string,
+): Promise<MatchDetail> {
+  const { data } = await http.post<MatchDetail>(
+    `/api/v1/projects/${projectId}/requirement-matches/${matchId}/review`,
+    payload,
+    {
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      timeout: 60000,
+    },
+  );
+  return data;
+}
+
+export async function reopenRequirementMatch(
+  projectId: string,
+  matchId: string,
+  payload: MatchReopenRequest,
+  idempotencyKey?: string,
+): Promise<MatchDetail> {
+  const { data } = await http.post<MatchDetail>(
+    `/api/v1/projects/${projectId}/requirement-matches/${matchId}/reopen`,
+    payload,
+    {
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      timeout: 60000,
+    },
   );
   return data;
 }

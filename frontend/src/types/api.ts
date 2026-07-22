@@ -496,10 +496,51 @@ export type MatchRun = {
   missing_evidence_count: number;
   conflict_count: number;
   failed_requirement_count: number;
+  protected_requirement_count?: number;
+  skipped_reviewed_requirement_count?: number;
   error_summary?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
   config_json?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MatchReviewStatus =
+  | "pending"
+  | "confirmed"
+  | "rejected"
+  | "needs_more_material";
+
+export type MatchReviewAction =
+  | "confirm"
+  | "reject"
+  | "needs_more_material"
+  | "reopen";
+
+export type MatchReviewReasonCode =
+  | "evidence_insufficient"
+  | "evidence_incorrect"
+  | "status_incorrect"
+  | "scope_unclear"
+  | "needs_updated_material"
+  | "other";
+
+export type ActorAuthn = "authenticated" | "unverified_local_operator";
+
+export type MatchReview = {
+  id: string;
+  project_id: string;
+  match_id: string;
+  action: MatchReviewAction;
+  from_review_status: MatchReviewStatus;
+  to_review_status: MatchReviewStatus;
+  comment?: string | null;
+  reason_code?: MatchReviewReasonCode | null;
+  actor_id?: string | null;
+  actor_label: string;
+  actor_authn: ActorAuthn;
+  idempotency_key?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -537,12 +578,21 @@ export type MatchSummary = {
   primary_company_chunk_id?: string | null;
   primary_company_quote?: string | null;
   metadata_json?: Record<string, unknown> | null;
+  review_status?: MatchReviewStatus;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+  is_review_protected?: boolean;
+  review_lock_version?: number;
+  lifecycle_status?: string;
+  superseded_by_match_id?: string | null;
+  supersedes_match_id?: string | null;
   created_at: string;
   updated_at: string;
   requirement?: RequirementSummary | null;
   primary_company_document_file_name?: string | null;
   primary_company_document_type?: string | null;
   document_center_path?: string | null;
+  recent_reviews?: MatchReview[];
 };
 
 export type MatchListParams = {
@@ -552,6 +602,7 @@ export type MatchListParams = {
   category?: RequirementCategory;
   mandatory?: boolean;
   needs_review?: boolean;
+  review_status?: MatchReviewStatus;
   source_document_id?: string;
   page?: number;
   limit?: number;
@@ -571,4 +622,60 @@ export type MatchDetail = MatchSummary & {
   company_links: CompanyEvidenceLink[];
   requirement_category?: RequirementCategory | null;
   requirement_mandatory?: boolean | null;
+};
+
+export type MatchReviewRequest = {
+  action: Exclude<MatchReviewAction, "reopen">;
+  actor_label: string;
+  comment?: string | null;
+  reason_code?: MatchReviewReasonCode | null;
+  review_lock_version: number;
+};
+
+export type MatchReopenRequest = {
+  actor_label: string;
+  comment: string;
+  review_lock_version: number;
+};
+
+export type ReviewQueueCounts = {
+  pending: number;
+  confirmed: number;
+  rejected: number;
+  needs_more_material: number;
+  total: number;
+};
+
+export type ReviewQueueItem = {
+  id: string;
+  project_id: string;
+  requirement_id: string;
+  status: EvidenceMatchStatus;
+  review_status: MatchReviewStatus;
+  risk_level: RiskLevel;
+  needs_review: boolean;
+  is_review_protected: boolean;
+  review_lock_version: number;
+  lifecycle_status: string;
+  summary?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+  requirement_title?: string | null;
+  requirement_code?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ReviewQueueResponse = {
+  counts: ReviewQueueCounts;
+  items: ReviewQueueItem[];
+  total: number;
+  page: number;
+  limit: number;
+  offset: number;
+};
+
+export type MatchReviewListResponse = {
+  items: MatchReview[];
+  total: number;
 };

@@ -11,9 +11,11 @@ from app.models.enums import (
     DocumentType,
     EvidenceMatchStatus,
     ExtractionRunStatus,
+    MatchReviewStatus,
     RequirementCategory,
     RiskLevel,
 )
+from app.schemas.match_review import MatchReviewRead
 from app.schemas.requirement import EvidenceLinkRead, RequirementSummary
 
 DEFAULT_MATCH_DOCUMENT_TYPES: list[DocumentType] = [
@@ -67,6 +69,8 @@ class MatchRunResponse(BaseModel):
     missing_evidence_count: int
     conflict_count: int
     failed_requirement_count: int
+    protected_requirement_count: int = 0
+    skipped_reviewed_requirement_count: int = 0
     error_summary: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -157,6 +161,14 @@ class MatchSummary(BaseModel):
     primary_company_chunk_id: UUID | None = None
     primary_company_quote: str | None = None
     metadata_json: dict[str, Any] | None = None
+    review_status: MatchReviewStatus = MatchReviewStatus.pending
+    reviewed_at: datetime | None = None
+    reviewed_by: str | None = None
+    is_review_protected: bool = False
+    review_lock_version: int = 0
+    lifecycle_status: str = "active"
+    superseded_by_match_id: UUID | None = None
+    supersedes_match_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
     # Nested requirement summary (list enrichment)
@@ -164,6 +176,7 @@ class MatchSummary(BaseModel):
     primary_company_document_file_name: str | None = None
     primary_company_document_type: str | None = None
     document_center_path: str | None = None
+    recent_reviews: list[MatchReviewRead] = Field(default_factory=list)
 
 
 class MatchListResponse(BaseModel):

@@ -114,3 +114,31 @@ class EvidenceMatchStatus(StrEnum):
     insufficient_evidence = "insufficient_evidence"
     conflicting_evidence = "conflicting_evidence"
     not_applicable = "not_applicable"
+
+
+class MatchReviewStatus(StrEnum):
+    pending = "pending"
+    confirmed = "confirmed"
+    rejected = "rejected"
+    needs_more_material = "needs_more_material"
+
+
+class MatchReviewAction(StrEnum):
+    confirm = "confirm"
+    reject = "reject"
+    needs_more_material = "needs_more_material"
+    reopen = "reopen"
+
+
+class MatchReviewReasonCode(StrEnum):
+    evidence_insufficient = "evidence_insufficient"
+    evidence_incorrect = "evidence_incorrect"
+    status_incorrect = "status_incorrect"
+    scope_unclear = "scope_unclear"
+    needs_updated_material = "needs_updated_material"
+    other = "other"
+
+
+class ActorAuthn(StrEnum):
+    authenticated = "authenticated"
+    unverified_local_operator = "unverified_local_operator"

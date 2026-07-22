@@ -194,7 +194,11 @@ POST /api/v1/projects/{project_id}/requirement-matches/runs
 GET  /api/v1/projects/{project_id}/requirement-matches/runs/{run_id}
 POST /api/v1/projects/{project_id}/requirement-matches/runs/{run_id}/cancel
 GET  /api/v1/projects/{project_id}/requirement-matches
+GET  /api/v1/projects/{project_id}/requirement-matches/review-queue
 GET  /api/v1/projects/{project_id}/requirement-matches/{match_id}
+GET  /api/v1/projects/{project_id}/requirement-matches/{match_id}/reviews
+POST /api/v1/projects/{project_id}/requirement-matches/{match_id}/review
+POST /api/v1/projects/{project_id}/requirement-matches/{match_id}/reopen
 ```
 
 启动体示例：
@@ -214,8 +218,20 @@ GET  /api/v1/projects/{project_id}/requirement-matches/{match_id}
 }
 ```
 
-项目详情 → **材料匹配**：空态 / 运行态（真实轮询与真实取消）/ 结果态 / 双侧证据详情。  
-结果一律标记**待人工审核**；无自动裁决、通过率、投标建议或提交操作。
+项目详情 → **材料匹配**：空态 / 运行态（真实轮询与真实取消）/ 结果态 / 双侧证据详情 /
+人工审核闭环。  
+结果一律可进入**人工审核**；无自动裁决、通过率、投标建议或提交操作。
+
+人工审核、force 保护与 supersede 语义见
+[requirement_match_review.md](./requirement_match_review.md)（第 9 步）。
+
+### Force 与已审核保护（第 9 步衔接）
+
+- 已人工确认 / 驳回 / 需补充材料，或 `is_review_protected` 的 active Match：**跳过 LLM**，
+  计入 `protected_requirement_count` / `skipped_reviewed_requirement_count`；
+- `force=true` **不得**删除受保护 Match；有审核历史的 pending（如 reopen 后）改为
+  `lifecycle_status=superseded` 并链接新旧 Match，而非硬删；
+- 全部 Requirement 均被保护跳过 → run `succeeded`、零写入。
 
 ## 与第 7 步 force 成功语义的关系
 
@@ -224,7 +240,7 @@ GET  /api/v1/projects/{project_id}/requirement-matches/{match_id}
 
 ## 当前限制
 
-- 匹配结论均为**自动生成、待人工审核**；
+- 匹配结论为自动生成，经第 9 步人工审核后方可标记为受保护；
 - **尚未**实现 LoRA / QLoRA / SFT 微调、LangGraph Agent、自动投标方案生成或投标提交；
 - Qwen3-8B 仅作基础结构化匹配验证，未微调。
 

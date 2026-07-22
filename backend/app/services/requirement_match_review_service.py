@@ -1,0 +1,494 @@
+"""Auditable human review closed-loop for RequirementEvidenceMatch rows.
+
+Never mutates EvidenceMatchStatus, summary, EvidenceLinks, or match-run records.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from uuid import UUID
+
+from fastapi import HTTPException, status
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
+
+from app.models import BidProject
+from app.models.enums import (
+    ActorAuthn,
+    EvidenceMatchStatus,
+    MatchReviewAction,
+    MatchReviewReasonCode,
+    MatchReviewStatus,
+    RiskLevel,
+)
+from app.models.match_run import RequirementEvidenceMatch, RequirementMatchReview
+from app.models.requirement import Requirement
+from app.schemas.match import MatchDetail
+from app.schemas.match_review import (
+    MatchReopenRequest,
+    MatchReviewListResponse,
+    MatchReviewRead,
+    MatchReviewRequest,
+    ReviewQueueCounts,
+    ReviewQueueItem,
+    ReviewQueueResponse,
+)
+from app.services.requirement_match_service import RequirementMatchService
+
+_TRANSITIONS: dict[tuple[MatchReviewStatus, MatchReviewAction], MatchReviewStatus] = {
+    (MatchReviewStatus.pending, MatchReviewAction.confirm): MatchReviewStatus.confirmed,
+    (MatchReviewStatus.pending, MatchReviewAction.reject): MatchReviewStatus.rejected,
+    (
+        MatchReviewStatus.pending,
+        MatchReviewAction.needs_more_material,
+    ): MatchReviewStatus.needs_more_material,
+    (
+        MatchReviewStatus.confirmed,
+        MatchReviewAction.reopen,
+    ): MatchReviewStatus.pending,
+    (
+        MatchReviewStatus.rejected,
+        MatchReviewAction.reopen,
+    ): MatchReviewStatus.pending,
+    (
+        MatchReviewStatus.needs_more_material,
+        MatchReviewAction.reopen,
+    ): MatchReviewStatus.pending,
+}
+
+_TERMINAL = frozenset(
+    {
+        MatchReviewStatus.confirmed,
+        MatchReviewStatus.rejected,
+        MatchReviewStatus.needs_more_material,
+    }
+)
+
+_COMMENT_REQUIRED = frozenset(
+    {
+        MatchReviewAction.reject,
+        MatchReviewAction.needs_more_material,
+        MatchReviewAction.reopen,
+    }
+)
+
+_MAX_COMMENT = 2000
+
+
+def _normalize_comment(raw: str | None, *, required: bool) -> str | None:
+    if raw is None:
+        if required:
+            raise HTTPException(
+                status_code=422,
+                detail="comment is required for this action",
+            )
+        return None
+    cleaned = " ".join(raw.split())
+    if not cleaned:
+        if required:
+            raise HTTPException(
+                status_code=422,
+                detail="comment is required for this action",
+            )
+        return None
+    if len(cleaned) > _MAX_COMMENT:
+        raise HTTPException(
+            status_code=422,
+            detail=f"comment must be at most {_MAX_COMMENT} characters",
+        )
+    return cleaned
+
+
+def _validate_actor_label(label: str) -> str:
+    cleaned = " ".join(label.split())
+    if not cleaned or len(cleaned) > 64:
+        raise HTTPException(
+            status_code=422,
+            detail="actor_label must be 1-64 printable characters",
+        )
+    if any(ord(ch) < 32 for ch in cleaned):
+        raise HTTPException(
+            status_code=422,
+            detail="actor_label must be printable",
+        )
+    return cleaned
+
+
+def _request_fingerprint(
+    *,
+    action: MatchReviewAction,
+    actor_label: str,
+    comment: str | None,
+    reason_code: MatchReviewReasonCode | None,
+) -> tuple[str, str, str | None, str | None]:
+    return (
+        action.value,
+        actor_label,
+        comment,
+        reason_code.value if reason_code else None,
+    )
+
+
+class RequirementMatchReviewService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+        self._match_svc = RequirementMatchService(db)
+
+    def _require_project(self, project_id: UUID) -> BidProject:
+        project = self.db.get(BidProject, project_id)
+        if project is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="项目不存在",
+            )
+        return project
+
+    def _lock_match(
+        self, project_id: UUID, match_id: UUID
+    ) -> RequirementEvidenceMatch:
+        match = self.db.execute(
+            select(RequirementEvidenceMatch)
+            .where(
+                RequirementEvidenceMatch.id == match_id,
+                RequirementEvidenceMatch.project_id == project_id,
+            )
+            .with_for_update()
+        ).scalar_one_or_none()
+        if match is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="匹配结果不存在",
+            )
+        return match
+
+    def review_queue(
+        self,
+        project_id: UUID,
+        *,
+        review_status: MatchReviewStatus | None = None,
+        match_status: EvidenceMatchStatus | None = None,
+        risk_level: RiskLevel | None = None,
+        requirement_id: UUID | None = None,
+        page: int = 1,
+        limit: int = 50,
+        offset: int | None = None,
+    ) -> ReviewQueueResponse:
+        self._require_project(project_id)
+        if page < 1:
+            page = 1
+        if offset is None:
+            offset = (page - 1) * limit
+
+        base = (
+            select(RequirementEvidenceMatch)
+            .join(Requirement, Requirement.id == RequirementEvidenceMatch.requirement_id)
+            .where(
+                RequirementEvidenceMatch.project_id == project_id,
+                RequirementEvidenceMatch.lifecycle_status == "active",
+            )
+        )
+        count_base = (
+            select(func.count())
+            .select_from(RequirementEvidenceMatch)
+            .join(Requirement, Requirement.id == RequirementEvidenceMatch.requirement_id)
+            .where(
+                RequirementEvidenceMatch.project_id == project_id,
+                RequirementEvidenceMatch.lifecycle_status == "active",
+            )
+        )
+
+        if review_status is not None:
+            base = base.where(RequirementEvidenceMatch.review_status == review_status)
+            count_base = count_base.where(
+                RequirementEvidenceMatch.review_status == review_status
+            )
+        if match_status is not None:
+            base = base.where(RequirementEvidenceMatch.status == match_status)
+            count_base = count_base.where(
+                RequirementEvidenceMatch.status == match_status
+            )
+        if risk_level is not None:
+            base = base.where(RequirementEvidenceMatch.risk_level == risk_level)
+            count_base = count_base.where(
+                RequirementEvidenceMatch.risk_level == risk_level
+            )
+        if requirement_id is not None:
+            base = base.where(
+                RequirementEvidenceMatch.requirement_id == requirement_id
+            )
+            count_base = count_base.where(
+                RequirementEvidenceMatch.requirement_id == requirement_id
+            )
+
+        total = int(self.db.scalar(count_base) or 0)
+        rows = list(
+            self.db.scalars(
+                base.options(selectinload(RequirementEvidenceMatch.requirement))
+                .order_by(RequirementEvidenceMatch.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+        )
+
+        counts = ReviewQueueCounts()
+        status_rows = self.db.execute(
+            select(
+                RequirementEvidenceMatch.review_status,
+                func.count(),
+            )
+            .where(
+                RequirementEvidenceMatch.project_id == project_id,
+                RequirementEvidenceMatch.lifecycle_status == "active",
+            )
+            .group_by(RequirementEvidenceMatch.review_status)
+        ).all()
+        for rs, n in status_rows:
+            n_int = int(n)
+            counts.total += n_int
+            if rs == MatchReviewStatus.pending:
+                counts.pending = n_int
+            elif rs == MatchReviewStatus.confirmed:
+                counts.confirmed = n_int
+            elif rs == MatchReviewStatus.rejected:
+                counts.rejected = n_int
+            elif rs == MatchReviewStatus.needs_more_material:
+                counts.needs_more_material = n_int
+
+        items = [
+            ReviewQueueItem(
+                id=m.id,
+                project_id=m.project_id,
+                requirement_id=m.requirement_id,
+                status=m.status,
+                review_status=m.review_status,
+                risk_level=m.risk_level,
+                needs_review=m.needs_review,
+                is_review_protected=m.is_review_protected,
+                review_lock_version=m.review_lock_version,
+                lifecycle_status=m.lifecycle_status,
+                summary=m.summary,
+                reviewed_at=m.reviewed_at,
+                reviewed_by=m.reviewed_by,
+                requirement_title=m.requirement.title if m.requirement else None,
+                requirement_code=(
+                    m.requirement.requirement_code if m.requirement else None
+                ),
+                created_at=m.created_at,
+                updated_at=m.updated_at,
+            )
+            for m in rows
+        ]
+        return ReviewQueueResponse(
+            counts=counts,
+            items=items,
+            total=total,
+            page=page,
+            limit=limit,
+            offset=offset,
+        )
+
+    def list_reviews(
+        self, project_id: UUID, match_id: UUID
+    ) -> MatchReviewListResponse:
+        self._require_project(project_id)
+        match = self.db.scalar(
+            select(RequirementEvidenceMatch).where(
+                RequirementEvidenceMatch.id == match_id,
+                RequirementEvidenceMatch.project_id == project_id,
+            )
+        )
+        if match is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="匹配结果不存在",
+            )
+        rows = list(
+            self.db.scalars(
+                select(RequirementMatchReview)
+                .where(
+                    RequirementMatchReview.project_id == project_id,
+                    RequirementMatchReview.match_id == match_id,
+                )
+                .order_by(RequirementMatchReview.created_at.desc())
+            )
+        )
+        items = [MatchReviewRead.model_validate(r) for r in rows]
+        return MatchReviewListResponse(items=items, total=len(items))
+
+    def apply_review(
+        self,
+        project_id: UUID,
+        match_id: UUID,
+        request: MatchReviewRequest,
+        *,
+        idempotency_key: str | None = None,
+    ) -> MatchDetail:
+        return self._apply_action(
+            project_id,
+            match_id,
+            action=request.action,
+            actor_label=request.actor_label,
+            comment=request.comment,
+            reason_code=request.reason_code,
+            review_lock_version=request.review_lock_version,
+            idempotency_key=idempotency_key,
+        )
+
+    def reopen(
+        self,
+        project_id: UUID,
+        match_id: UUID,
+        request: MatchReopenRequest,
+        *,
+        idempotency_key: str | None = None,
+    ) -> MatchDetail:
+        return self._apply_action(
+            project_id,
+            match_id,
+            action=MatchReviewAction.reopen,
+            actor_label=request.actor_label,
+            comment=request.comment,
+            reason_code=None,
+            review_lock_version=request.review_lock_version,
+            idempotency_key=idempotency_key,
+        )
+
+    def _find_idempotent(
+        self,
+        project_id: UUID,
+        match_id: UUID,
+        idempotency_key: str,
+        *,
+        action: MatchReviewAction,
+        actor_label: str,
+        comment: str | None,
+        reason_code: MatchReviewReasonCode | None,
+    ) -> MatchDetail | None:
+        existing = self.db.scalar(
+            select(RequirementMatchReview).where(
+                RequirementMatchReview.project_id == project_id,
+                RequirementMatchReview.match_id == match_id,
+                RequirementMatchReview.idempotency_key == idempotency_key,
+            )
+        )
+        if existing is None:
+            return None
+        expected = _request_fingerprint(
+            action=action,
+            actor_label=actor_label,
+            comment=comment,
+            reason_code=reason_code,
+        )
+        actual = _request_fingerprint(
+            action=existing.action,
+            actor_label=existing.actor_label,
+            comment=existing.comment,
+            reason_code=existing.reason_code,
+        )
+        if expected != actual:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Idempotency-Key reused with a different request body",
+            )
+        return self._match_svc.get_match(project_id, match_id)
+
+    def _apply_action(
+        self,
+        project_id: UUID,
+        match_id: UUID,
+        *,
+        action: MatchReviewAction,
+        actor_label: str,
+        comment: str | None,
+        reason_code: MatchReviewReasonCode | None,
+        review_lock_version: int,
+        idempotency_key: str | None,
+    ) -> MatchDetail:
+        self._require_project(project_id)
+        actor_label = _validate_actor_label(actor_label)
+        comment_required = action in _COMMENT_REQUIRED
+        comment = _normalize_comment(comment, required=comment_required)
+
+        if idempotency_key:
+            replay = self._find_idempotent(
+                project_id,
+                match_id,
+                idempotency_key,
+                action=action,
+                actor_label=actor_label,
+                comment=comment,
+                reason_code=reason_code,
+            )
+            if replay is not None:
+                return replay
+
+        match = self._lock_match(project_id, match_id)
+
+        # Re-check idempotency under row lock (race with concurrent same key).
+        if idempotency_key:
+            replay = self._find_idempotent(
+                project_id,
+                match_id,
+                idempotency_key,
+                action=action,
+                actor_label=actor_label,
+                comment=comment,
+                reason_code=reason_code,
+            )
+            if replay is not None:
+                return replay
+
+        if match.review_lock_version != review_lock_version:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "review_lock_version mismatch; refresh the match and retry"
+                ),
+            )
+
+        current = match.review_status
+        if action != MatchReviewAction.reopen and current in _TERMINAL:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"match review is already terminal ({current.value})",
+            )
+
+        target = _TRANSITIONS.get((current, action))
+        if target is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"invalid transition: {current.value} + {action.value}"
+                ),
+            )
+
+        now = datetime.now(UTC)
+        review = RequirementMatchReview(
+            project_id=project_id,
+            match_id=match_id,
+            action=action,
+            from_review_status=current,
+            to_review_status=target,
+            comment=comment,
+            reason_code=reason_code,
+            actor_id=None,
+            actor_label=actor_label,
+            actor_authn=ActorAuthn.unverified_local_operator,
+            idempotency_key=idempotency_key,
+        )
+        self.db.add(review)
+
+        # Only mutate review workflow fields — never status/summary/evidence/run.
+        match.review_status = target
+        match.review_lock_version = match.review_lock_version + 1
+        if action == MatchReviewAction.reopen:
+            match.needs_review = True
+            match.is_review_protected = False
+        else:
+            match.needs_review = False
+            match.is_review_protected = True
+            match.reviewed_at = now
+            match.reviewed_by = actor_label
+
+        self.db.commit()
+        return self._match_svc.get_match(project_id, match_id)

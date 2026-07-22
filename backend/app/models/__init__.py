@@ -3,10 +3,14 @@ from app.models.company import CompanyProfile
 from app.models.conversation import Conversation, Message
 from app.models.document import Document, DocumentChunk, DocumentVersion
 from app.models.enums import (
+    ActorAuthn,
     AgentRunStatus,
     DocumentType,
     EvidenceMatchStatus,
     ExtractionRunStatus,
+    MatchReviewAction,
+    MatchReviewReasonCode,
+    MatchReviewStatus,
     MatchRunStatus,
     MatchStatus,
     MemberRole,
@@ -22,6 +26,7 @@ from app.models.extraction_run import RequirementExtractionRun
 from app.models.match_run import (
     RequirementEvidenceMatch,
     RequirementEvidenceMatchLink,
+    RequirementMatchReview,
     RequirementMatchRun,
 )
 from app.models.organization import Organization, OrganizationMember, User
@@ -34,6 +39,7 @@ from app.models.requirement import (
 )
 
 __all__ = [
+    "ActorAuthn",
     "AgentRun",
     "AgentRunStatus",
     "AgentStep",
@@ -47,6 +53,9 @@ __all__ = [
     "EvidenceLink",
     "EvidenceMatchStatus",
     "ExtractionRunStatus",
+    "MatchReviewAction",
+    "MatchReviewReasonCode",
+    "MatchReviewStatus",
     "MatchRunStatus",
     "MatchStatus",
     "MemberRole",
@@ -64,6 +73,7 @@ __all__ = [
     "RequirementExtractionRun",
     "RequirementMatch",
     "RequirementMatchEvidence",
+    "RequirementMatchReview",
     "RequirementMatchRun",
     "ReviewStatus",
     "RiskLevel",

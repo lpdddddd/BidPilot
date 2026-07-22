@@ -5,6 +5,7 @@ import {
   Checkbox,
   Drawer,
   Empty,
+  Input,
   Modal,
   Select,
   Skeleton,
@@ -12,6 +13,7 @@ import {
   Table,
   Tag,
   Typography,
+  message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -24,19 +26,46 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import {
   cancelRequirementMatchRun,
   getRequirementMatch,
+  getRequirementMatchReviewQueue,
   getRequirementMatchRun,
   listDocuments,
+  listRequirementMatchReviews,
   listRequirementMatches,
+  reopenRequirementMatch,
+  reviewRequirementMatch,
   startRequirementMatching,
 } from "../../api/client";
+import { ApiError } from "../../api/http";
 import type {
   CompanyEvidenceLink,
   EvidenceMatchStatus,
+  MatchReview,
+  MatchReviewAction,
+  MatchReviewStatus,
   MatchRun,
   MatchSummary,
   RequirementCategory,
   RiskLevel,
 } from "../../types/api";
+
+const ACTOR_LABEL_KEY = "bidpilot.matchReview.actorLabel";
+const DEFAULT_ACTOR_LABEL = "local-reviewer";
+
+function loadActorLabel(): string {
+  try {
+    return localStorage.getItem(ACTOR_LABEL_KEY) || DEFAULT_ACTOR_LABEL;
+  } catch {
+    return DEFAULT_ACTOR_LABEL;
+  }
+}
+
+function saveActorLabel(label: string) {
+  try {
+    localStorage.setItem(ACTOR_LABEL_KEY, label);
+  } catch {
+    /* ignore */
+  }
+}
 
 const MATCH_DOC_TYPES = [
   "company_profile",
@@ -124,6 +153,44 @@ const MATCH_STATUS_OPTIONS = (Object.keys(MATCH_STATUS_LABELS) as EvidenceMatchS
     label: MATCH_STATUS_LABELS[value],
   }),
 );
+
+const REVIEW_STATUS_LABELS: Record<MatchReviewStatus, string> = {
+  pending: "待人工审核",
+  confirmed: "已人工确认",
+  rejected: "已人工驳回",
+  needs_more_material: "待补充材料",
+};
+
+const REVIEW_ACTION_LABELS: Record<MatchReviewAction, string> = {
+  confirm: "确认可采纳",
+  reject: "驳回",
+  needs_more_material: "需补充材料",
+  reopen: "重新开启审核",
+};
+
+const REVIEW_STATUS_OPTIONS = (Object.keys(REVIEW_STATUS_LABELS) as MatchReviewStatus[]).map(
+  (value) => ({
+    value,
+    label: REVIEW_STATUS_LABELS[value],
+  }),
+);
+
+function reviewStatusTag(status?: MatchReviewStatus) {
+  const value = status ?? "pending";
+  const color =
+    value === "confirmed"
+      ? "success"
+      : value === "rejected"
+        ? "error"
+        : value === "needs_more_material"
+          ? "warning"
+          : "processing";
+  return (
+    <Tag bordered={false} color={color}>
+      {REVIEW_STATUS_LABELS[value]}
+    </Tag>
+  );
+}
 
 function pageRangeLabel(start?: number | null, end?: number | null): string {
   if (start == null && end == null) return "无可靠页码";
@@ -237,6 +304,14 @@ function MatchProgress({
         <CounterRow label="证据不足" value={run.missing_evidence_count} />
         <CounterRow label="材料冲突" value={run.conflict_count} />
         <CounterRow label="失败条目" value={run.failed_requirement_count} />
+        <CounterRow
+          label="已跳过已审核"
+          value={run.skipped_reviewed_requirement_count ?? 0}
+        />
+        <CounterRow
+          label="受保护需求"
+          value={run.protected_requirement_count ?? 0}
+        />
       </div>
       {run.total_requirements > 0 && (
         <div className="bp-req-chunk-hint">
@@ -258,16 +333,111 @@ function MatchProgress({
 function MatchDetailPanel({
   projectId,
   matchId,
+  actorLabel,
+  onActorLabelChange,
   onOpenSource,
+  onReviewed,
 }: {
   projectId: string;
   matchId: string;
+  actorLabel: string;
+  onActorLabelChange: (v: string) => void;
   onOpenSource?: (documentId: string, chunkId?: string) => void;
+  onReviewed?: () => void;
 }) {
+  const queryClient = useQueryClient();
+  const [commentModal, setCommentModal] = useState<{
+    action: Exclude<MatchReviewAction, "confirm">;
+  } | null>(null);
+  const [commentDraft, setCommentDraft] = useState("");
+
   const detail = useQuery({
     queryKey: ["requirement-match", projectId, matchId],
     queryFn: () => getRequirementMatch(projectId, matchId),
   });
+
+  const reviewsQuery = useQuery({
+    queryKey: ["requirement-match-reviews", projectId, matchId],
+    queryFn: () => listRequirementMatchReviews(projectId, matchId),
+  });
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ["requirement-match", projectId, matchId] });
+    void queryClient.invalidateQueries({
+      queryKey: ["requirement-match-reviews", projectId, matchId],
+    });
+    onReviewed?.();
+  };
+
+  const reviewMutation = useMutation({
+    mutationFn: async (opts: {
+      action: Exclude<MatchReviewAction, "reopen">;
+      comment?: string;
+    }) => {
+      const lock = detail.data?.review_lock_version ?? 0;
+      return reviewRequirementMatch(
+        projectId,
+        matchId,
+        {
+          action: opts.action,
+          actor_label: actorLabel.trim() || DEFAULT_ACTOR_LABEL,
+          comment: opts.comment,
+          review_lock_version: lock,
+        },
+        crypto.randomUUID(),
+      );
+    },
+    onSuccess: () => {
+      saveActorLabel(actorLabel.trim() || DEFAULT_ACTOR_LABEL);
+      setCommentModal(null);
+      setCommentDraft("");
+      message.success("审核已记录");
+      invalidate();
+    },
+    onError: (err: unknown) => {
+      const status = err instanceof ApiError ? err.status : undefined;
+      if (status === 409) {
+        message.error("审核冲突（可能已终态或版本过期），请刷新后重试");
+        invalidate();
+        return;
+      }
+      message.error(err instanceof Error ? err.message : "审核失败");
+    },
+  });
+
+  const reopenMutation = useMutation({
+    mutationFn: async (comment: string) => {
+      const lock = detail.data?.review_lock_version ?? 0;
+      return reopenRequirementMatch(
+        projectId,
+        matchId,
+        {
+          actor_label: actorLabel.trim() || DEFAULT_ACTOR_LABEL,
+          comment,
+          review_lock_version: lock,
+        },
+        crypto.randomUUID(),
+      );
+    },
+    onSuccess: () => {
+      saveActorLabel(actorLabel.trim() || DEFAULT_ACTOR_LABEL);
+      setCommentModal(null);
+      setCommentDraft("");
+      message.success("已重新打开审核");
+      invalidate();
+    },
+    onError: (err: unknown) => {
+      const status = err instanceof ApiError ? err.status : undefined;
+      if (status === 409) {
+        message.error("无法重新打开（版本冲突或状态不允许），请刷新后重试");
+        invalidate();
+        return;
+      }
+      message.error(err instanceof Error ? err.message : "重新打开失败");
+    },
+  });
+
+  const busy = reviewMutation.isPending || reopenMutation.isPending;
 
   if (detail.isLoading) {
     return <Skeleton active paragraph={{ rows: 8 }} />;
@@ -290,6 +460,12 @@ function MatchDetailPanel({
   }
 
   const match = detail.data;
+  const reviewStatus = match.review_status ?? "pending";
+  const isPending = reviewStatus === "pending";
+  const isTerminal = !isPending;
+  const history: MatchReview[] =
+    reviewsQuery.data?.items ?? match.recent_reviews ?? [];
+
   const req = match.requirement;
   const reqMeta = req?.metadata_json ?? undefined;
   const matchMeta = match.metadata_json ?? undefined;
@@ -430,6 +606,12 @@ function MatchDetailPanel({
           {req?.title || "匹配详情"}
         </Typography.Title>
         {matchStatusTag(match.status)}
+        {reviewStatusTag(reviewStatus)}
+        {match.is_review_protected && (
+          <Tag bordered={false} color="purple">
+            审核保护
+          </Tag>
+        )}
         {match.needs_review && (
           <Tag bordered={false} color="warning">
             待人工审核
@@ -446,6 +628,10 @@ function MatchDetailPanel({
         <div className="bp-meta-item">
           <div className="bp-meta-label">匹配状态</div>
           <div className="bp-meta-value">{matchStatusTag(match.status)}</div>
+        </div>
+        <div className="bp-meta-item">
+          <div className="bp-meta-label">审核状态</div>
+          <div className="bp-meta-value">{reviewStatusTag(reviewStatus)}</div>
         </div>
         <div className="bp-meta-item">
           <div className="bp-meta-label">自动风险</div>
@@ -478,6 +664,10 @@ function MatchDetailPanel({
                 match.primary_company_document_type)
               : "-"}
           </div>
+        </div>
+        <div className="bp-meta-item">
+          <div className="bp-meta-label">审核人</div>
+          <div className="bp-meta-value">{match.reviewed_by || "-"}</div>
         </div>
       </div>
 
@@ -720,6 +910,136 @@ function MatchDetailPanel({
           )}
         </>
       )}
+
+      <h3 className="bp-req-subhead">人工审核</h3>
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        message="审核操作员未经验证"
+        description="当前仅记录本地操作者标签（unverified_local_operator），不构成正式身份认证。"
+      />
+      <div style={{ marginBottom: 12 }}>
+        <div className="bp-meta-label" style={{ marginBottom: 4 }}>
+          操作者标签（actor_label）
+        </div>
+        <Input
+          value={actorLabel}
+          onChange={(e) => onActorLabelChange(e.target.value)}
+          placeholder={DEFAULT_ACTOR_LABEL}
+          maxLength={64}
+          disabled={busy}
+        />
+      </div>
+      <Space wrap style={{ marginBottom: 16 }}>
+        {isPending && (
+          <>
+            <Button
+              type="primary"
+              disabled={busy || !actorLabel.trim()}
+              loading={reviewMutation.isPending && reviewMutation.variables?.action === "confirm"}
+              onClick={() => reviewMutation.mutate({ action: "confirm" })}
+            >
+              确认
+            </Button>
+            <Button
+              danger
+              disabled={busy || !actorLabel.trim()}
+              onClick={() => {
+                setCommentDraft("");
+                setCommentModal({ action: "reject" });
+              }}
+            >
+              驳回
+            </Button>
+            <Button
+              disabled={busy || !actorLabel.trim()}
+              onClick={() => {
+                setCommentDraft("");
+                setCommentModal({ action: "needs_more_material" });
+              }}
+            >
+              需补充材料
+            </Button>
+          </>
+        )}
+        {isTerminal && (
+          <Button
+            disabled={busy || !actorLabel.trim()}
+            onClick={() => {
+              setCommentDraft("");
+              setCommentModal({ action: "reopen" });
+            }}
+          >
+            重新打开
+          </Button>
+        )}
+      </Space>
+
+      <h3 className="bp-req-subhead">审核历史</h3>
+      {history.length === 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚无审核记录" />
+      ) : (
+        <div className="bp-req-evidence-list">
+          {history.map((rev) => (
+            <article key={rev.id} className="bp-req-evidence-card">
+              <div className="bp-req-evidence-head">
+                <strong>{REVIEW_ACTION_LABELS[rev.action]}</strong>
+                <span className="bp-text-faint">
+                  {rev.from_review_status} → {rev.to_review_status}
+                </span>
+              </div>
+              <div className="bp-req-evidence-meta">
+                <span>{rev.actor_label}</span>
+                <span>{rev.actor_authn}</span>
+                <span>{new Date(rev.created_at).toLocaleString("zh-CN")}</span>
+              </div>
+              {rev.comment && (
+                <blockquote className="bp-req-evidence-quote">{rev.comment}</blockquote>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+
+      <Modal
+        title={
+          commentModal
+            ? `${REVIEW_ACTION_LABELS[commentModal.action]}（需填写原因）`
+            : "审核备注"
+        }
+        open={Boolean(commentModal)}
+        onCancel={() => {
+          if (busy) return;
+          setCommentModal(null);
+          setCommentDraft("");
+        }}
+        onOk={() => {
+          if (!commentModal) return;
+          const cleaned = commentDraft.trim();
+          if (!cleaned) {
+            message.warning("请填写审核备注");
+            return;
+          }
+          if (commentModal.action === "reopen") {
+            reopenMutation.mutate(cleaned);
+            return;
+          }
+          reviewMutation.mutate({ action: commentModal.action, comment: cleaned });
+        }}
+        confirmLoading={busy}
+        okText="提交"
+        cancelText="取消"
+        destroyOnClose
+      >
+        <Input.TextArea
+          rows={4}
+          maxLength={2000}
+          value={commentDraft}
+          onChange={(e) => setCommentDraft(e.target.value)}
+          placeholder="请说明原因（必填）"
+        />
+      </Modal>
     </div>
   );
 }
@@ -730,6 +1050,7 @@ type Filters = {
   mandatory?: boolean;
   risk_level?: RiskLevel;
   needs_review?: boolean;
+  review_status?: MatchReviewStatus;
   source_document_id?: string;
 };
 
@@ -747,6 +1068,7 @@ export default function MatchingWorkspace({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selectedDocTypes, setSelectedDocTypes] = useState<string[]>([...MATCH_DOC_TYPES]);
+  const [actorLabel, setActorLabel] = useState(loadActorLabel);
 
   const runQuery = useQuery({
     queryKey: ["requirement-match-run", projectId, runId],
@@ -849,6 +1171,12 @@ export default function MatchingWorkspace({
     ],
   });
 
+  const reviewQueueQuery = useQuery({
+    queryKey: ["requirement-match-review-queue", projectId],
+    queryFn: () => getRequirementMatchReviewQueue(projectId, { limit: 1, page: 1 }),
+    enabled: !isMatching,
+  });
+
   const stats = useMemo(
     () => ({
       total: statsQueries[0]?.data?.total ?? 0,
@@ -857,13 +1185,20 @@ export default function MatchingWorkspace({
       insufficient: statsQueries[3]?.data?.total ?? 0,
       highRisk: (statsQueries[4]?.data?.total ?? 0) + (statsQueries[5]?.data?.total ?? 0),
       needsReview: statsQueries[6]?.data?.total ?? 0,
+      pendingReview: reviewQueueQuery.data?.counts.pending ?? 0,
+      confirmed: reviewQueueQuery.data?.counts.confirmed ?? 0,
+      rejected: reviewQueueQuery.data?.counts.rejected ?? 0,
+      needsMaterial: reviewQueueQuery.data?.counts.needs_more_material ?? 0,
     }),
-    [statsQueries],
+    [statsQueries, reviewQueueQuery.data],
   );
 
   const invalidateMatches = () => {
     void queryClient.invalidateQueries({ queryKey: ["requirement-matches", projectId] });
     void queryClient.invalidateQueries({ queryKey: ["requirement-matches-stat", projectId] });
+    void queryClient.invalidateQueries({
+      queryKey: ["requirement-match-review-queue", projectId],
+    });
   };
 
   useEffect(() => {
@@ -941,6 +1276,22 @@ export default function MatchingWorkspace({
       ellipsis: true,
       width: 160,
       render: (v: string | null | undefined) => v || "-",
+    },
+    {
+      title: "审核状态",
+      dataIndex: "review_status",
+      key: "review_status",
+      width: 120,
+      render: (v: MatchReviewStatus | undefined, row) => (
+        <Space size={4}>
+          {reviewStatusTag(v)}
+          {row.is_review_protected && (
+            <Tag bordered={false} color="purple">
+              保护
+            </Tag>
+          )}
+        </Space>
+      ),
     },
     {
       title: "审核",
@@ -1136,6 +1487,20 @@ export default function MatchingWorkspace({
 
   return (
     <div className="bp-req-workspace bp-match-workspace">
+      <Alert
+        type="warning"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message="当前结果仅为企业材料与招标 Requirement 的可追溯匹配及人工审核记录，不构成自动投标结论。"
+      />
+      {matchingSucceeded && run && (run.skipped_reviewed_requirement_count ?? 0) > 0 && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`本次匹配跳过 ${run.skipped_reviewed_requirement_count} 条已审核/受保护需求（受保护 ${run.protected_requirement_count ?? 0}）。`}
+        />
+      )}
       <div className="bp-req-toolbar">
         <div>
           <h2 className="bp-section-title" style={{ marginBottom: 4 }}>
@@ -1191,6 +1556,13 @@ export default function MatchingWorkspace({
         <StatCard label="待人工审核" value={stats.needsReview} hint="非自动终裁" />
       </div>
 
+      <div className="bp-req-stats bp-match-stats" style={{ marginTop: 8 }}>
+        <StatCard label="待人工审核" value={stats.pendingReview} />
+        <StatCard label="已人工确认" value={stats.confirmed} />
+        <StatCard label="已人工驳回" value={stats.rejected} />
+        <StatCard label="待补充材料" value={stats.needsMaterial} />
+      </div>
+
       <div className="bp-req-filters">
         <Select
           allowClear
@@ -1201,6 +1573,17 @@ export default function MatchingWorkspace({
           onChange={(v) => {
             setPage(1);
             setFilters((f) => ({ ...f, status: v }));
+          }}
+        />
+        <Select
+          allowClear
+          placeholder="审核状态"
+          style={{ minWidth: 140 }}
+          options={REVIEW_STATUS_OPTIONS}
+          value={filters.review_status}
+          onChange={(v) => {
+            setPage(1);
+            setFilters((f) => ({ ...f, review_status: v }));
           }}
         />
         <Select
@@ -1325,7 +1708,10 @@ export default function MatchingWorkspace({
           <MatchDetailPanel
             projectId={projectId}
             matchId={selectedId}
+            actorLabel={actorLabel}
+            onActorLabelChange={setActorLabel}
             onOpenSource={onOpenSource}
+            onReviewed={invalidateMatches}
           />
         )}
       </Drawer>

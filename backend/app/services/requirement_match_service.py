@@ -26,6 +26,7 @@ from app.models.enums import (
     DocumentType,
     EvidenceMatchStatus,
     ExtractionRunStatus,
+    MatchReviewStatus,
     RequirementCategory,
     ReviewStatus,
     RiskLevel,
@@ -47,6 +48,7 @@ from app.schemas.match import (
     MatchStartRequest,
     MatchSummary,
 )
+from app.schemas.match_review import MatchReviewRead
 from app.schemas.requirement import EvidenceLinkRead, RequirementSummary
 from app.services.evidence_validate import (
     extract_critical_tokens,
@@ -315,14 +317,28 @@ def _summary_tokens_ok(summary: str, requirement_text: str, evidence_text: str) 
 
 
 def _is_protected_match(match: RequirementEvidenceMatch) -> bool:
-    """Manual / imported / human-reviewed matches must never be force-deleted."""
+    """Manual / imported / human-reviewed / superseded matches must never be force-deleted."""
+    if match.is_review_protected:
+        return True
+    if match.review_status != MatchReviewStatus.pending:
+        return True
+    if match.lifecycle_status == "superseded":
+        return True
     meta = match.metadata_json or {}
-    source = meta.get("source")
-    if source != AUTO_SOURCE:
+    if meta.get("source") != AUTO_SOURCE:
         return True
     if meta.get("reviewed") is True:
         return True
-    return meta.get("review_status") == ReviewStatus.reviewed.value
+    return meta.get("review_status") == "reviewed"  # legacy
+
+
+def _is_active_protected_match(match: RequirementEvidenceMatch) -> bool:
+    """Active match that must be skipped from subsequent LLM matching."""
+    if match.lifecycle_status != "active":
+        return False
+    if match.is_review_protected:
+        return True
+    return match.review_status != MatchReviewStatus.pending
 
 
 def _batched(items: list[Any], size: int) -> list[list[Any]]:
@@ -446,6 +462,7 @@ class RequirementMatchService:
         category: RequirementCategory | None = None,
         mandatory: bool | None = None,
         needs_review: bool | None = None,
+        review_status: MatchReviewStatus | None = None,
         source_document_id: UUID | None = None,
         page: int = 1,
         limit: int = 50,
@@ -491,6 +508,11 @@ class RequirementMatchService:
             count_stmt = count_stmt.where(
                 RequirementEvidenceMatch.needs_review == needs_review
             )
+        if review_status is not None:
+            stmt = stmt.where(RequirementEvidenceMatch.review_status == review_status)
+            count_stmt = count_stmt.where(
+                RequirementEvidenceMatch.review_status == review_status
+            )
         if source_document_id is not None:
             stmt = stmt.where(Requirement.source_document_id == source_document_id)
             count_stmt = count_stmt.where(
@@ -505,6 +527,7 @@ class RequirementMatchService:
                         Requirement.source_document
                     ),
                     selectinload(RequirementEvidenceMatch.primary_company_document),
+                    selectinload(RequirementEvidenceMatch.reviews),
                 )
                 .order_by(RequirementEvidenceMatch.created_at.desc())
                 .offset(offset)
@@ -546,6 +569,7 @@ class RequirementMatchService:
                 ),
                 selectinload(RequirementEvidenceMatch.primary_company_document),
                 selectinload(RequirementEvidenceMatch.primary_company_chunk),
+                selectinload(RequirementEvidenceMatch.reviews),
             )
         )
         if match is None:
@@ -646,22 +670,52 @@ class RequirementMatchService:
                 return
 
             force = bool((run.config_json or {}).get("force"))
-            requirements = self._load_requirements(run)
+            all_requirements = self._load_requirements(run)
+            protected_req_ids, skipped_reviewed_count = (
+                self._protected_requirement_ids(run.project_id, all_requirements)
+            )
+            requirements = [
+                r for r in all_requirements if r.id not in protected_req_ids
+            ]
             company_chunks = self._load_company_chunks(run)
             scoped_requirement_ids = {r.id for r in requirements}
 
             run.total_requirements = len(requirements)
+            run.protected_requirement_count = len(protected_req_ids)
+            run.skipped_reviewed_requirement_count = skipped_reviewed_count
             run.config_json = {
                 **(run.config_json or {}),
                 "scoped_requirement_ids": [
                     str(i) for i in sorted(scoped_requirement_ids, key=str)
                 ],
+                "protected_requirement_ids": [
+                    str(i) for i in sorted(protected_req_ids, key=str)
+                ],
+                "protected_requirement_count": len(protected_req_ids),
+                "skipped_reviewed_requirement_count": skipped_reviewed_count,
                 "company_chunk_count": len(company_chunks),
             }
             self.db.commit()
 
             if self._is_cancel_requested(run_id):
                 self._mark_cancelled(run, processed=0, failed=0)
+                return
+
+            if not requirements:
+                # All in-scope requirements are protected/skipped — legal empty success.
+                run.status = ExtractionRunStatus.succeeded
+                run.finished_at = datetime.now(UTC)
+                run.processed_requirements = 0
+                run.error_summary = None
+                run.config_json = {
+                    **(run.config_json or {}),
+                    "result_kind": (
+                        "all_requirements_protected"
+                        if protected_req_ids
+                        else "empty_requirements"
+                    ),
+                }
+                self.db.commit()
                 return
 
             if not company_chunks:
@@ -677,18 +731,6 @@ class RequirementMatchService:
                 run.config_json = {
                     **(run.config_json or {}),
                     "result_kind": "empty_company_materials",
-                }
-                self.db.commit()
-                return
-
-            if not requirements:
-                run.status = ExtractionRunStatus.succeeded
-                run.finished_at = datetime.now(UTC)
-                run.processed_requirements = 0
-                run.error_summary = "无可匹配的招标 Requirement"
-                run.config_json = {
-                    **(run.config_json or {}),
-                    "result_kind": "empty_requirements",
                 }
                 self.db.commit()
                 return
@@ -908,6 +950,33 @@ class RequirementMatchService:
             )
         )
         return rows
+
+    def _protected_requirement_ids(
+        self,
+        project_id: UUID,
+        requirements: list[Requirement],
+    ) -> tuple[set[UUID], int]:
+        """Return requirement IDs that have an active protected match, plus skip count."""
+        if not requirements:
+            return set(), 0
+        req_ids = {r.id for r in requirements}
+        rows = list(
+            self.db.scalars(
+                select(RequirementEvidenceMatch).where(
+                    RequirementEvidenceMatch.project_id == project_id,
+                    RequirementEvidenceMatch.requirement_id.in_(req_ids),
+                    RequirementEvidenceMatch.lifecycle_status == "active",
+                )
+            )
+        )
+        protected: set[UUID] = set()
+        skipped_reviewed = 0
+        for match in rows:
+            if not _is_active_protected_match(match):
+                continue
+            protected.add(match.requirement_id)
+            skipped_reviewed += 1
+        return protected, skipped_reviewed
 
     def _load_company_chunks(self, run: RequirementMatchRun) -> list[_ChunkContext]:
         defaults = [t.value for t in DEFAULT_MATCH_DOCUMENT_TYPES]
@@ -1580,20 +1649,34 @@ class RequirementMatchService:
         project_id: UUID,
         *,
         requirement_ids: set[UUID],
-    ) -> int:
+    ) -> dict[UUID, list[RequirementEvidenceMatch]]:
+        """Delete unprotected pending auto matches without review history.
+
+        Returns remaining (non-deleted) matches keyed by requirement_id — including
+        protected rows and pending autos that have review history (for supersede).
+        """
+        remaining: dict[UUID, list[RequirementEvidenceMatch]] = {}
         if not requirement_ids:
-            return 0
+            return remaining
         rows = list(
             self.db.scalars(
-                select(RequirementEvidenceMatch).where(
+                select(RequirementEvidenceMatch)
+                .where(
                     RequirementEvidenceMatch.project_id == project_id,
                     RequirementEvidenceMatch.requirement_id.in_(requirement_ids),
                 )
+                .options(selectinload(RequirementEvidenceMatch.reviews))
             )
         )
-        deleted = 0
         for match in rows:
-            if _is_protected_match(match):
+            has_reviews = bool(match.reviews)
+            if (
+                _is_protected_match(match)
+                or has_reviews
+                or match.review_status != MatchReviewStatus.pending
+                or match.lifecycle_status == "superseded"
+            ):
+                remaining.setdefault(match.requirement_id, []).append(match)
                 continue
             self.db.execute(
                 delete(RequirementEvidenceMatchLink).where(
@@ -1601,9 +1684,8 @@ class RequirementMatchService:
                 )
             )
             self.db.delete(match)
-            deleted += 1
         self.db.flush()
-        return deleted
+        return remaining
 
     def _persist_matches(
         self,
@@ -1658,18 +1740,19 @@ class RequirementMatchService:
                 "conflict_count": 0,
             }
 
+        existing_by_req: dict[UUID, list[RequirementEvidenceMatch]] = {}
         if force:
-            self._delete_auto_matches(
+            existing_by_req = self._delete_auto_matches(
                 project_id, requirement_ids=scoped_requirement_ids
             )
-
-        existing_by_req: dict[UUID, list[RequirementEvidenceMatch]] = {}
-        if scoped_requirement_ids:
+        elif scoped_requirement_ids:
             for row in self.db.scalars(
-                select(RequirementEvidenceMatch).where(
+                select(RequirementEvidenceMatch)
+                .where(
                     RequirementEvidenceMatch.project_id == project_id,
                     RequirementEvidenceMatch.requirement_id.in_(scoped_requirement_ids),
                 )
+                .options(selectinload(RequirementEvidenceMatch.reviews))
             ):
                 existing_by_req.setdefault(row.requirement_id, []).append(row)
 
@@ -1687,10 +1770,30 @@ class RequirementMatchService:
                     m
                     for m in existing_by_req.get(req_id, [])
                     if (m.metadata_json or {}).get("source") == AUTO_SOURCE
+                    and m.lifecycle_status == "active"
                 ]
                 if autos:
                     skipped += 1
                     st = autos[0].status
+                    if st == EvidenceMatchStatus.supported:
+                        matched_count += 1
+                    elif st == EvidenceMatchStatus.partially_supported:
+                        partial_count += 1
+                    elif st == EvidenceMatchStatus.insufficient_evidence:
+                        missing_count += 1
+                    elif st == EvidenceMatchStatus.conflicting_evidence:
+                        conflict_count += 1
+                    continue
+            else:
+                # Skip creating a new match when an active protected match remains.
+                active_protected = [
+                    m
+                    for m in existing_by_req.get(req_id, [])
+                    if _is_active_protected_match(m)
+                ]
+                if active_protected:
+                    skipped += 1
+                    st = active_protected[0].status
                     if st == EvidenceMatchStatus.supported:
                         matched_count += 1
                     elif st == EvidenceMatchStatus.partially_supported:
@@ -1723,9 +1826,26 @@ class RequirementMatchService:
                 ),
                 primary_company_quote=item.primary_quote,
                 metadata_json=meta,
+                review_status=MatchReviewStatus.pending,
+                is_review_protected=False,
+                review_lock_version=0,
+                lifecycle_status="active",
             )
             self.db.add(row)
             self.db.flush()
+
+            # Supersede prior active unprotected pending matches that retained history.
+            if force:
+                for old in existing_by_req.get(req_id, []):
+                    if old.id == row.id:
+                        continue
+                    if old.lifecycle_status != "active":
+                        continue
+                    if _is_active_protected_match(old):
+                        continue
+                    old.lifecycle_status = "superseded"
+                    old.superseded_by_match_id = row.id
+                    row.supersedes_match_id = old.id
 
             for doc, chunk, quote, role in item.company_links:
                 self.db.add(
@@ -1828,6 +1948,10 @@ class RequirementMatchService:
                 match.primary_company_document_id,
                 match.primary_company_chunk_id,
             )
+        recent_reviews: list[MatchReviewRead] = []
+        reviews = getattr(match, "reviews", None) or []
+        for rev in list(reviews)[:10]:
+            recent_reviews.append(MatchReviewRead.model_validate(rev))
         return MatchSummary(
             id=match.id,
             project_id=match.project_id,
@@ -1841,6 +1965,14 @@ class RequirementMatchService:
             primary_company_chunk_id=match.primary_company_chunk_id,
             primary_company_quote=match.primary_company_quote,
             metadata_json=match.metadata_json,
+            review_status=match.review_status or MatchReviewStatus.pending,
+            reviewed_at=match.reviewed_at,
+            reviewed_by=match.reviewed_by,
+            is_review_protected=bool(match.is_review_protected),
+            review_lock_version=int(match.review_lock_version or 0),
+            lifecycle_status=match.lifecycle_status or "active",
+            superseded_by_match_id=match.superseded_by_match_id,
+            supersedes_match_id=match.supersedes_match_id,
             created_at=match.created_at,
             updated_at=match.updated_at,
             requirement=req_summary,
@@ -1855,4 +1987,5 @@ class RequirementMatchService:
                 else None
             ),
             document_center_path=path,
+            recent_reviews=recent_reviews,
         )

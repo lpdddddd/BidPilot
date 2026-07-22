@@ -75,12 +75,26 @@ dual-scope `not_applicable` / cancel-vs-persist race)
 Atomic / dual-evidence hardenings: **PASS via automated tests**; live re-acceptance
 **N/A**（无真实企业数据时仅用脱敏合成样例；未做新 live run）。
 
+## Step 9 — Human review (mock acceptance)
+
+| Item | Status |
+|------|--------|
+| Scope | Auditable confirm / reject / needs_more_material / reopen only |
+| Live E2E | **N/A** — use **脱敏合成样例** + mock LLM; no real bid submission |
+| Automated | `tests/test_requirement_match_review.py` |
+| Force protection | Confirmed/rejected/needs_more_material matches skipped & retained |
+| Supersede | Reopen → force rematch keeps review history, marks old `superseded` |
+| Disclaimer | UI banner: 可追溯匹配及人工审核记录，不构成自动投标结论 |
+
+Docs: [requirement_match_review.md](./requirement_match_review.md).
+
 ## Blockers / N/A
 
 - Live `partially_supported` / `conflicting_evidence` / `not_applicable` / cancel race
   not forced in the prior fixture (covered by mock LLM unit tests).
 - Uploaded company file is a **脱敏合成样例** for acceptance only; not production
   customer data.
+- Step 9 human review live pass with real operators: **N/A** (mock + 脱敏合成样例).
 
 ## Reproduce
 

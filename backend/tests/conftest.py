@@ -30,6 +30,10 @@ ENUM_TYPE_NAMES = [
     "match_status",
     "extraction_run_status",
     "evidence_match_status",
+    "match_review_status",
+    "match_review_action",
+    "match_review_reason_code",
+    "actor_authn",
 ]
 
 

@@ -19,7 +19,11 @@ if TYPE_CHECKING:
     from app.models.conversation import Conversation
     from app.models.document import Document, DocumentChunk
     from app.models.extraction_run import RequirementExtractionRun
-    from app.models.match_run import RequirementEvidenceMatch, RequirementMatchRun
+    from app.models.match_run import (
+        RequirementEvidenceMatch,
+        RequirementMatchReview,
+        RequirementMatchRun,
+    )
     from app.models.organization import Organization
     from app.models.requirement import Requirement
 
@@ -66,5 +70,8 @@ class BidProject(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     match_runs: Mapped[list[RequirementMatchRun]] = relationship(back_populates="project")
     evidence_matches: Mapped[list[RequirementEvidenceMatch]] = relationship(
+        back_populates="project"
+    )
+    match_reviews: Mapped[list[RequirementMatchReview]] = relationship(
         back_populates="project"
     )

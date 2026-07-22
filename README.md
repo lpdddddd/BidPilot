@@ -237,7 +237,16 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 - 固定状态：`supported` / `partially_supported` / `insufficient_evidence` / `conflicting_evidence` / `not_applicable`
 - API：`POST/GET .../requirement-matches/runs`、`GET .../requirement-matches`
 - 前端：项目详情「材料匹配」Tab；`insufficient_evidence` 文案为「当前材料未找到充分证据」
-- **尚未实现**：LoRA / Agent / 自动投标方案生成 / 投标提交
+
+## 匹配结果人工审核（第 9 步）
+
+对自动 Match 建立可审计审核闭环（confirm / reject / needs_more_material / reopen）。
+详见 `docs/requirement_match_review.md`。
+
+- 追加式 `RequirementMatchReview` 审计；Match 保留原始自动结果与证据链
+- 已审核 Match 受 `force` 保护；reopen 后可 supersede 再匹配且不丢历史
+- 无完整认证：`actor_authn=unverified_local_operator` + 本地 `actor_label`
+- **尚未实现**：LoRA / Agent / 自动投标结论 / 投标方案生成 / 投标提交
 
 ## 测试 / 静态检查
 
