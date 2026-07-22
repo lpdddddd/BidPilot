@@ -43,9 +43,7 @@ class FakeLlm:
     def chat(self, messages, **kwargs):
         self.chat_calls.append({"messages": messages, **kwargs})
         payload = self._responder(messages)
-        content = (
-            payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
-        )
+        content = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
         return ChatResult(
             content=content,
             model=self.model,
@@ -290,10 +288,7 @@ def test_e2e_4_draft_validate_revise_then_pass(db: Session, monkeypatch):
     from app.tools.agent_tools import ToolResult
 
     project, req, _ = _seed(db)
-    bad_md = (
-        f"{UNEVIDENCED_MARKER} 保证中标并完全满足要求。"
-        "补充说明文字以使草稿超过最短长度。"
-    )
+    bad_md = f"{UNEVIDENCED_MARKER} 保证中标并完全满足要求。补充说明文字以使草稿超过最短长度。"
     good_md = (
         "根据现有材料，本公司可按招标文件要求提供相关资质证明与响应说明，"
         "供评审参考，本稿不含满足性承诺。"
@@ -360,9 +355,7 @@ def test_e2e_4_draft_validate_revise_then_pass(db: Session, monkeypatch):
             },
         )
 
-    monkeypatch.setattr(
-        "app.agent.nodes.draft.generate_proposal_draft", fake_generate
-    )
+    monkeypatch.setattr("app.agent.nodes.draft.generate_proposal_draft", fake_generate)
 
     revise_mod = sys.modules["app.agent.nodes.revise_draft"]
     monkeypatch.setattr(revise_mod, "generate_proposal_draft", fake_generate)
@@ -384,9 +377,7 @@ def test_e2e_4_draft_validate_revise_then_pass(db: Session, monkeypatch):
     assert str(good.id) in (run.state.draft_ids or [])
     assert run.state.draft_validation_ok is True
     check_events = [
-        e
-        for e in (run.state.tool_events or [])
-        if e.get("name") == "check_draft_compliance"
+        e for e in (run.state.tool_events or []) if e.get("name") == "check_draft_compliance"
     ]
     assert check_events, "formal compliance path must run"
 
@@ -418,9 +409,9 @@ def test_e2e_5_interrupt_resume_no_duplicate_business(db: Session):
     from app.models.compliance import ComplianceRun
 
     before = db.scalar(
-        select(func.count()).select_from(ComplianceRun).where(
-            ComplianceRun.project_id == project.id
-        )
+        select(func.count())
+        .select_from(ComplianceRun)
+        .where(ComplianceRun.project_id == project.id)
     )
 
     resumed = svc.resume_run(run.id)
@@ -429,8 +420,8 @@ def test_e2e_5_interrupt_resume_no_duplicate_business(db: Session):
     assert resumed.state.compliance_run_id == compliance_id
 
     after = db.scalar(
-        select(func.count()).select_from(ComplianceRun).where(
-            ComplianceRun.project_id == project.id
-        )
+        select(func.count())
+        .select_from(ComplianceRun)
+        .where(ComplianceRun.project_id == project.id)
     )
     assert after == before

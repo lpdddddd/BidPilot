@@ -101,9 +101,7 @@ class ProposalDraftReviewRequest(BaseModel):
 
     @field_validator("action")
     @classmethod
-    def _only_mark_reviewed(
-        cls, value: ProposalDraftReviewAction
-    ) -> ProposalDraftReviewAction:
+    def _only_mark_reviewed(cls, value: ProposalDraftReviewAction) -> ProposalDraftReviewAction:
         if value != ProposalDraftReviewAction.mark_reviewed:
             raise ValueError("use /reopen for reopen action")
         return value

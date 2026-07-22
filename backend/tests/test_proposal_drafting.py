@@ -68,9 +68,7 @@ class FakeLlm:
     def chat(self, messages, **kwargs):
         self.chat_calls.append({"messages": messages, **kwargs})
         payload = self._responder(messages)
-        content = (
-            payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
-        )
+        content = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
         return ChatResult(
             content=content,
             model=self.model,
@@ -390,9 +388,7 @@ def _good_llm_payload(whitelist, *, title: str = "响应准备草稿") -> dict:
 
     for key, blocks in blocks_by_section.items():
         if blocks:
-            sections.append(
-                {"section_key": key, "title": "资格与证明材料", "blocks": blocks}
-            )
+            sections.append({"section_key": key, "title": "资格与证明材料", "blocks": blocks})
     if not sections:
         sections.append(
             {
@@ -420,13 +416,9 @@ def _good_llm_payload(whitelist, *, title: str = "响应准备草稿") -> dict:
 @pytest.fixture()
 def company_pack(db: Session):
     project = _org_project(db)
-    doc = _doc(
-        db, project, document_type=DocumentType.qualification, file_name="qual.pdf"
-    )
+    doc = _doc(db, project, document_type=DocumentType.qualification, file_name="qual.pdf")
     chunk = _chunk(db, project, doc, index=0, content="本公司具备一级资质证书。")
-    doc2 = _doc(
-        db, project, document_type=DocumentType.qualification, file_name="qual2.pdf"
-    )
+    doc2 = _doc(db, project, document_type=DocumentType.qualification, file_name="qual2.pdf")
     chunk2 = _chunk(db, project, doc2, index=0, content="本公司仅为二级资质。")
     return project, doc, chunk, doc2, chunk2
 
@@ -484,11 +476,7 @@ def test_eligibility_routing_by_match_status(db: Session, company_pack):
     by_id = {
         i.requirement_id: i
         for i in (
-            elig.eligible
-            + elig.excluded
-            + elig.material_gaps
-            + elig.risks
-            + elig.scope_items
+            elig.eligible + elig.excluded + elig.material_gaps + elig.risks + elig.scope_items
         )
     }
     for req, (_status, bucket) in zip(reqs, cases, strict=True):
@@ -540,9 +528,7 @@ def test_successful_generation_atomic_persist(db: Session, company_pack, monkeyp
     assert version.is_current
     sources = list(
         db.scalars(
-            select(ProposalDraftSource).where(
-                ProposalDraftSource.draft_version_id == version.id
-            )
+            select(ProposalDraftSource).where(ProposalDraftSource.draft_version_id == version.id)
         )
     )
     assert sources
@@ -642,9 +628,7 @@ def test_cross_project_requirement_rejected(db: Session, company_pack):
     project, doc, chunk, _, _ = company_pack
     other = _org_project(db, code="PD-OTHER")
     req_other = _requirement(db, other)
-    other_doc = _doc(
-        db, other, document_type=DocumentType.qualification, file_name="o.pdf"
-    )
+    other_doc = _doc(db, other, document_type=DocumentType.qualification, file_name="o.pdf")
     other_chunk = _chunk(db, other, other_doc, index=0, content="other")
     _confirmed_match(
         db,
@@ -671,9 +655,7 @@ def test_cross_project_requirement_rejected(db: Session, company_pack):
         svc._build_whitelist(project.id, [req.id, req_other.id])
 
 
-def test_manual_revision_review_reopen_export(
-    db: Session, company_pack, client: TestClient
-):
+def test_manual_revision_review_reopen_export(db: Session, company_pack, client: TestClient):
     project, doc, chunk, _, _ = company_pack
     req = _requirement(db, project)
     _confirmed_match(
@@ -717,9 +699,7 @@ def test_manual_revision_review_reopen_export(
     revised = svc.create_manual_revision(
         project.id,
         draft_id,
-        ProposalDraftManualRevisionRequest(
-            content_json=content, created_by="editor-1"
-        ),
+        ProposalDraftManualRevisionRequest(content_json=content, created_by="editor-1"),
     )
     assert revised.current_version.version_number == 2
     assert revised.current_version.version_kind == ProposalDraftVersionKind.manual_revision
@@ -740,9 +720,7 @@ def test_manual_revision_review_reopen_export(
     # Remove unevidenced block and review
     clean = dict(revised.current_version.content_json)
     clean["sections"][0]["blocks"] = [
-        b
-        for b in clean["sections"][0]["blocks"]
-        if b.get("block_kind") != "manual_unreferenced"
+        b for b in clean["sections"][0]["blocks"] if b.get("block_kind") != "manual_unreferenced"
     ]
     clean.pop("has_unevidenced_manual_content", None)
     cleaned = svc.create_manual_revision(
@@ -767,9 +745,7 @@ def test_manual_revision_review_reopen_export(
         svc.create_manual_revision(
             project.id,
             draft_id,
-            ProposalDraftManualRevisionRequest(
-                content_json=clean, created_by="editor-1"
-            ),
+            ProposalDraftManualRevisionRequest(content_json=clean, created_by="editor-1"),
         )
 
     md_body, md_type, md_name = svc.export(project.id, draft_id, fmt="markdown")
@@ -823,9 +799,7 @@ def test_snapshot_survives_match_supersede(db: Session, company_pack):
     sources_before = [
         (s.evidence_link_id, s.source_quote)
         for s in db.scalars(
-            select(ProposalDraftSource).where(
-                ProposalDraftSource.draft_version_id == version_id
-            )
+            select(ProposalDraftSource).where(ProposalDraftSource.draft_version_id == version_id)
         )
     ]
     # Supersede match (simulate step 9 reopen successor)
@@ -835,9 +809,7 @@ def test_snapshot_survives_match_supersede(db: Session, company_pack):
     sources_after = [
         (s.evidence_link_id, s.source_quote)
         for s in db.scalars(
-            select(ProposalDraftSource).where(
-                ProposalDraftSource.draft_version_id == version_id
-            )
+            select(ProposalDraftSource).where(ProposalDraftSource.draft_version_id == version_id)
         )
     ]
     assert sources_before == sources_after
@@ -923,11 +895,7 @@ def test_integration_matrix_all_statuses(db: Session, company_pack):
     run = db.get(ProposalDraftGenerationRun, run.id)
     assert run.status == ExtractionRunStatus.succeeded
     version = db.get(ProposalDraftVersion, run.draft_version_id)
-    kinds = {
-        b["block_kind"]
-        for s in version.content_json["sections"]
-        for b in s["blocks"]
-    }
+    kinds = {b["block_kind"] for s in version.content_json["sections"] for b in s["blocks"]}
     assert "supported_response" in kinds
     assert "partial_response" in kinds
     assert "material_gap" in kinds
@@ -1016,7 +984,5 @@ def test_wrong_project_draft_404(db: Session, company_pack, client: TestClient):
     )
     svc.execute_run(run.id)
     run = db.get(ProposalDraftGenerationRun, run.id)
-    resp = client.get(
-        f"/api/v1/projects/{other.id}/proposal-drafts/{run.draft_id}"
-    )
+    resp = client.get(f"/api/v1/projects/{other.id}/proposal-drafts/{run.draft_id}")
     assert resp.status_code == 404

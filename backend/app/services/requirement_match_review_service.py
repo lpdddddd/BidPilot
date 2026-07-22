@@ -181,9 +181,7 @@ class RequirementMatchReviewService:
             )
         return project
 
-    def _lock_match(
-        self, project_id: UUID, match_id: UUID
-    ) -> RequirementEvidenceMatch:
+    def _lock_match(self, project_id: UUID, match_id: UUID) -> RequirementEvidenceMatch:
         match = self.db.execute(
             select(RequirementEvidenceMatch)
             .where(
@@ -223,9 +221,7 @@ class RequirementMatchReviewService:
             offset = (page - 1) * limit
 
         lifecycle_filter = (
-            True
-            if include_superseded
-            else RequirementEvidenceMatch.lifecycle_status == "active"
+            True if include_superseded else RequirementEvidenceMatch.lifecycle_status == "active"
         )
 
         def _apply_filters(stmt):
@@ -234,9 +230,7 @@ class RequirementMatchReviewService:
                 lifecycle_filter,
             )
             if review_status is not None:
-                stmt = stmt.where(
-                    RequirementEvidenceMatch.review_status == review_status
-                )
+                stmt = stmt.where(RequirementEvidenceMatch.review_status == review_status)
             if match_status is not None:
                 stmt = stmt.where(RequirementEvidenceMatch.status == match_status)
             if risk_level is not None:
@@ -244,53 +238,39 @@ class RequirementMatchReviewService:
             if requirement_category is not None:
                 stmt = stmt.where(Requirement.category == requirement_category)
             if requirement_id is not None:
-                stmt = stmt.where(
-                    RequirementEvidenceMatch.requirement_id == requirement_id
-                )
+                stmt = stmt.where(RequirementEvidenceMatch.requirement_id == requirement_id)
             if has_conflict is True:
                 stmt = stmt.where(
                     or_(
-                        RequirementEvidenceMatch.status
-                        == EvidenceMatchStatus.conflicting_evidence,
+                        RequirementEvidenceMatch.status == EvidenceMatchStatus.conflicting_evidence,
                         RequirementEvidenceMatch.metadata_json.contains(
                             {"requirement_potential_conflict": True}
                         ),
-                        Requirement.metadata_json.contains(
-                            {"potential_conflict": True}
-                        ),
+                        Requirement.metadata_json.contains({"potential_conflict": True}),
                     )
                 )
             elif has_conflict is False:
                 stmt = stmt.where(
                     and_(
-                        RequirementEvidenceMatch.status
-                        != EvidenceMatchStatus.conflicting_evidence,
+                        RequirementEvidenceMatch.status != EvidenceMatchStatus.conflicting_evidence,
                         ~RequirementEvidenceMatch.metadata_json.contains(
                             {"requirement_potential_conflict": True}
                         ),
-                        ~Requirement.metadata_json.contains(
-                            {"potential_conflict": True}
-                        ),
+                        ~Requirement.metadata_json.contains({"potential_conflict": True}),
                     )
                 )
             if has_scope_exclusion is True:
                 stmt = stmt.where(
                     or_(
-                        RequirementEvidenceMatch.status
-                        == EvidenceMatchStatus.not_applicable,
-                        RequirementEvidenceMatch.metadata_json.has_key(
-                            "not_applicable_basis"
-                        ),
+                        RequirementEvidenceMatch.status == EvidenceMatchStatus.not_applicable,
+                        RequirementEvidenceMatch.metadata_json.has_key("not_applicable_basis"),
                     )
                 )
             elif has_scope_exclusion is False:
                 stmt = stmt.where(
                     and_(
-                        RequirementEvidenceMatch.status
-                        != EvidenceMatchStatus.not_applicable,
-                        ~RequirementEvidenceMatch.metadata_json.has_key(
-                            "not_applicable_basis"
-                        ),
+                        RequirementEvidenceMatch.status != EvidenceMatchStatus.not_applicable,
+                        ~RequirementEvidenceMatch.metadata_json.has_key("not_applicable_basis"),
                     )
                 )
             return stmt
@@ -303,18 +283,14 @@ class RequirementMatchReviewService:
         count_base = _apply_filters(
             select(func.count())
             .select_from(RequirementEvidenceMatch)
-            .join(
-                Requirement, Requirement.id == RequirementEvidenceMatch.requirement_id
-            )
+            .join(Requirement, Requirement.id == RequirementEvidenceMatch.requirement_id)
         )
 
         total = int(self.db.scalar(count_base) or 0)
 
         sort_key = (sort or "created_at_desc").strip().lower()
         descending = sort_key.endswith("_desc") or sort_key.startswith("-")
-        col_name = (
-            sort_key.removeprefix("-").removesuffix("_desc").removesuffix("_asc")
-        )
+        col_name = sort_key.removeprefix("-").removesuffix("_desc").removesuffix("_asc")
         order_col = _SORT_COLUMNS.get(col_name, RequirementEvidenceMatch.created_at)
         order_by = order_col.desc() if descending else order_col.asc()
 
@@ -332,9 +308,7 @@ class RequirementMatchReviewService:
             RequirementEvidenceMatch.project_id == project_id,
         ]
         if not include_superseded:
-            aggregate_filters.append(
-                RequirementEvidenceMatch.lifecycle_status == "active"
-            )
+            aggregate_filters.append(RequirementEvidenceMatch.lifecycle_status == "active")
         status_rows = self.db.execute(
             select(
                 RequirementEvidenceMatch.review_status,
@@ -364,8 +338,7 @@ class RequirementMatchReviewService:
             .group_by(RequirementEvidenceMatch.status)
         ).all()
         counts.by_match_status = {
-            (st.value if hasattr(st, "value") else str(st)): int(n)
-            for st, n in match_status_rows
+            (st.value if hasattr(st, "value") else str(st)): int(n) for st, n in match_status_rows
         }
 
         risk_rows = self.db.execute(
@@ -377,8 +350,7 @@ class RequirementMatchReviewService:
             .group_by(RequirementEvidenceMatch.risk_level)
         ).all()
         counts.by_risk_level = {
-            (rl.value if hasattr(rl, "value") else str(rl)): int(n)
-            for rl, n in risk_rows
+            (rl.value if hasattr(rl, "value") else str(rl)): int(n) for rl, n in risk_rows
         }
 
         items: list[ReviewQueueItem] = []
@@ -425,9 +397,7 @@ class RequirementMatchReviewService:
             include_superseded=include_superseded,
         )
 
-    def list_reviews(
-        self, project_id: UUID, match_id: UUID
-    ) -> MatchReviewListResponse:
+    def list_reviews(self, project_id: UUID, match_id: UUID) -> MatchReviewListResponse:
         self._require_project(project_id)
         match = self.db.scalar(
             select(RequirementEvidenceMatch).where(
@@ -578,9 +548,7 @@ class RequirementMatchReviewService:
         if match.review_lock_version != review_lock_version:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "review_lock_version mismatch; refresh the match and retry"
-                ),
+                detail=("review_lock_version mismatch; refresh the match and retry"),
             )
 
         current = match.review_status
@@ -594,9 +562,7 @@ class RequirementMatchReviewService:
         if target is None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"invalid transition: {current.value} + {action.value}"
-                ),
+                detail=(f"invalid transition: {current.value} + {action.value}"),
             )
 
         now = datetime.now(UTC)

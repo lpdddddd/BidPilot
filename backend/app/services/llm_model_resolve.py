@@ -23,8 +23,6 @@ def resolve_llm_load_target(settings: Settings | None = None) -> str:
         path = Path(explicit)
         if (path / "config.json").is_file():
             return str(path.resolve())
-        raise FileNotFoundError(
-            f"LLM_MODEL_PATH={explicit!r} is set but config.json was not found"
-        )
+        raise FileNotFoundError(f"LLM_MODEL_PATH={explicit!r} is set but config.json was not found")
     env_source = os.getenv("LLM_MODEL_SOURCE", "").strip()
     return env_source or cfg.llm_model_source

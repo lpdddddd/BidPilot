@@ -76,8 +76,7 @@ def start_draft_compliance_run(
         ComplianceStartRequest(
             draft_id=draft_id,
             rule_ids=body.rule_ids,
-            categories=body.categories
-            or [ComplianceRuleCategory.draft_safety],
+            categories=body.categories or [ComplianceRuleCategory.draft_safety],
         ),
         idempotency_key=idempotency_key,
         draft_id=draft_id,

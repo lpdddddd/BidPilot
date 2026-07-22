@@ -161,9 +161,7 @@ def test_aggregate_one_failure_blocks_pass():
 
 def test_citation_requires_locator():
     payload = _ok_final(
-        citations=[
-            _ok_citation(section=None, clause_id=None, page_start=None, page_end=None)
-        ]
+        citations=[_ok_citation(section=None, clause_id=None, page_start=None, page_end=None)]
     )
     with pytest.raises(smoke.CaseFailure) as exc:
         smoke.validate_answerable_payload(payload, expected_model="bidpilot-qwen3-8b")
@@ -171,9 +169,7 @@ def test_citation_requires_locator():
 
 
 def test_model_mismatch_fails():
-    payload = _ok_final(
-        generation_trace={"model": "other-model", "latency_ms": 1.0}
-    )
+    payload = _ok_final(generation_trace={"model": "other-model", "latency_ms": 1.0})
     with pytest.raises(smoke.CaseFailure) as exc:
         smoke.validate_answerable_payload(payload, expected_model="bidpilot-qwen3-8b")
     assert "model mismatch" in exc.value.message

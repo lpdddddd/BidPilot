@@ -58,9 +58,7 @@ class FakeLlm:
     def chat(self, messages, **kwargs):
         self.chat_calls.append({"messages": messages, **kwargs})
         payload = self._responder(messages)
-        content = (
-            payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
-        )
+        content = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
         return ChatResult(
             content=content,
             model=self.model,
@@ -473,9 +471,7 @@ def test_force_keeps_protected_and_skips_from_llm(db):
     chunk = _chunk(db, project, company, index=0, content="本公司具备一级资质证书。")
     req_protected = _requirement(db, project, title="已确认资质")
     req_open = _requirement(db, project, title="待匹配资质", normalized="投标人须具备一级资质。")
-    protected = _auto_match(
-        db, project, req_protected, summary="人工确认保留"
-    )
+    protected = _auto_match(db, project, req_protected, summary="人工确认保留")
     protected.review_status = MatchReviewStatus.confirmed
     protected.is_review_protected = True
     protected.needs_review = False
@@ -487,11 +483,7 @@ def test_force_keeps_protected_and_skips_from_llm(db):
         req_ids = {r["requirement_id"] for r in payload["requirements"]}
         assert str(req_protected.id) not in req_ids
         assert str(req_open.id) in req_ids
-        return {
-            "items": [
-                _supported_item(req_open, chunk)
-            ]
-        }
+        return {"items": [_supported_item(req_open, chunk)]}
 
     llm = FakeLlm(responder)
     svc = RequirementMatchService(db, llm=llm)
@@ -567,11 +559,7 @@ def test_reopen_then_force_supersedes_with_history(db):
     assert reopened.review_status == MatchReviewStatus.pending
 
     def responder(messages):
-        return {
-            "items": [
-                _supported_item(req, chunk)
-            ]
-        }
+        return {"items": [_supported_item(req, chunk)]}
 
     llm = FakeLlm(responder)
     match_svc = RequirementMatchService(db, llm=llm)
@@ -589,11 +577,7 @@ def test_reopen_then_force_supersedes_with_history(db):
     assert old.summary == "旧匹配摘要"
     # Review history retained on old row.
     history = list(
-        db.scalars(
-            select(RequirementMatchReview).where(
-                RequirementMatchReview.match_id == old.id
-            )
-        )
+        db.scalars(select(RequirementMatchReview).where(RequirementMatchReview.match_id == old.id))
     )
     assert len(history) >= 2
 
@@ -614,11 +598,7 @@ def test_force_deletes_pending_auto_without_reviews(db):
     db.commit()
 
     def responder(messages):
-        return {
-            "items": [
-                _supported_item(req, chunk)
-            ]
-        }
+        return {"items": [_supported_item(req, chunk)]}
 
     llm = FakeLlm(responder)
     svc = RequirementMatchService(db, llm=llm)
@@ -677,9 +657,7 @@ def test_review_queue_filters(db, client: TestClient):
     req_a = _requirement(db, project, title="A")
     req_b = _requirement(db, project, title="B")
     m_pending = _auto_match(db, project, req_a)
-    m_conf = _auto_match(
-        db, project, req_b, status=EvidenceMatchStatus.insufficient_evidence
-    )
+    m_conf = _auto_match(db, project, req_b, status=EvidenceMatchStatus.insufficient_evidence)
     m_conf.review_status = MatchReviewStatus.confirmed
     m_conf.is_review_protected = True
     m_conf.needs_review = False
@@ -725,9 +703,7 @@ def test_integration_statuses_and_protection(db):
             reqs["conflict"],
             status=EvidenceMatchStatus.conflicting_evidence,
         ),
-        "na": _auto_match(
-            db, project, reqs["na"], status=EvidenceMatchStatus.not_applicable
-        ),
+        "na": _auto_match(db, project, reqs["na"], status=EvidenceMatchStatus.not_applicable),
     }
     db.commit()
 
@@ -874,11 +850,7 @@ def test_reopen_then_force_false_creates_successor(db):
     assert old.superseded_by_match_id is not None
     assert old.summary == "旧匹配摘要-force0"
     history = list(
-        db.scalars(
-            select(RequirementMatchReview).where(
-                RequirementMatchReview.match_id == old.id
-            )
-        )
+        db.scalars(select(RequirementMatchReview).where(RequirementMatchReview.match_id == old.id))
     )
     assert len(history) >= 2
 
@@ -974,12 +946,8 @@ def test_concurrent_reopened_match_successor_at_most_one(engine):
     setup = SessionLocal()
     try:
         project = _org_project(setup, "CR1")
-        company = _doc(
-            setup, project, document_type=DocumentType.qualification, file_name="q.pdf"
-        )
-        chunk = _chunk(
-            setup, project, company, index=0, content="本公司具备一级资质证书。"
-        )
+        company = _doc(setup, project, document_type=DocumentType.qualification, file_name="q.pdf")
+        chunk = _chunk(setup, project, company, index=0, content="本公司具备一级资质证书。")
         req = _requirement(setup, project)
         old = _auto_match(setup, project, req, summary="并发旧版")
         setup.commit()
@@ -1146,9 +1114,7 @@ def test_concurrent_confirm_one_wins(engine):
         assert row.primary_company_quote == original_quote
         reviews = list(
             verify.scalars(
-                select(RequirementMatchReview).where(
-                    RequirementMatchReview.match_id == match_id
-                )
+                select(RequirementMatchReview).where(RequirementMatchReview.match_id == match_id)
             )
         )
         assert len(reviews) == 1
@@ -1263,9 +1229,7 @@ def test_concurrent_confirm_vs_reopen(engine):
         assert row.review_lock_version == lock_version + 1
         reviews = list(
             verify.scalars(
-                select(RequirementMatchReview).where(
-                    RequirementMatchReview.match_id == match_id
-                )
+                select(RequirementMatchReview).where(RequirementMatchReview.match_id == match_id)
             )
         )
         # seed confirm + exactly one of racing actions
@@ -1283,18 +1247,14 @@ def test_review_queue_defaults_and_include_superseded(db, client: TestClient):
         "run_id": str(uuid4()),
         "not_applicable_basis": None,
     }
-    superseded = _auto_match(
-        db, project, req, status=EvidenceMatchStatus.insufficient_evidence
-    )
+    superseded = _auto_match(db, project, req, status=EvidenceMatchStatus.insufficient_evidence)
     superseded.lifecycle_status = "superseded"
     superseded.superseded_by_match_id = active.id
     active.supersedes_match_id = superseded.id
     db.commit()
 
     # Default: active + pending only
-    resp = client.get(
-        f"/api/v1/projects/{project.id}/requirement-matches/review-queue"
-    )
+    resp = client.get(f"/api/v1/projects/{project.id}/requirement-matches/review-queue")
     assert resp.status_code == 200
     body = resp.json()
     assert body["include_superseded"] is False
@@ -1336,9 +1296,7 @@ def test_review_queue_category_and_conflict_filters(db, client: TestClient):
     db.add(req_t)
     db.flush()
     m_q = _auto_match(db, project, req_q)
-    m_c = _auto_match(
-        db, project, req_t, status=EvidenceMatchStatus.conflicting_evidence
-    )
+    m_c = _auto_match(db, project, req_t, status=EvidenceMatchStatus.conflicting_evidence)
     db.commit()
 
     resp = client.get(

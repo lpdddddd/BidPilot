@@ -29,9 +29,7 @@ STATUS_TO_BLOCK: dict[EvidenceMatchStatus, str] = {
     EvidenceMatchStatus.not_applicable: "scope_item",
 }
 
-BLOCK_TO_STATUS: dict[str, EvidenceMatchStatus] = {
-    v: k for k, v in STATUS_TO_BLOCK.items()
-}
+BLOCK_TO_STATUS: dict[str, EvidenceMatchStatus] = {v: k for k, v in STATUS_TO_BLOCK.items()}
 
 
 @dataclass
@@ -192,13 +190,10 @@ def _validate_block(
     if not content:
         raise DraftValidationError("block content is required")
     if _FORBIDDEN_CLAIM_RE.search(content):
-        raise DraftValidationError(
-            "block content contains forbidden bid/commitment language"
-        )
+        raise DraftValidationError("block content contains forbidden bid/commitment language")
 
     req_ids = [
-        _parse_uuid(x, field_name="requirement_id")
-        for x in (block.get("requirement_ids") or [])
+        _parse_uuid(x, field_name="requirement_id") for x in (block.get("requirement_ids") or [])
     ]
     if not req_ids:
         raise DraftValidationError("block.requirement_ids required")
@@ -209,9 +204,7 @@ def _validate_block(
     citation_ids = [
         _parse_uuid(x, field_name="citation_id") for x in (block.get("citation_ids") or [])
     ]
-    quote_ids = [
-        normalize_text(str(x), max_len=64) for x in (block.get("source_quote_ids") or [])
-    ]
+    quote_ids = [normalize_text(str(x), max_len=64) for x in (block.get("source_quote_ids") or [])]
     human_action = normalize_text(block.get("human_action"), max_len=1000) or None
 
     for rid in req_ids:
@@ -230,9 +223,7 @@ def _validate_block(
 
     if kind in FACTUAL_BLOCK_KINDS:
         if not citation_ids or not quote_ids:
-            raise DraftValidationError(
-                f"{kind} requires citation_ids and source_quote_ids"
-            )
+            raise DraftValidationError(f"{kind} requires citation_ids and source_quote_ids")
         _assert_citations_and_quotes(citation_ids, quote_ids, req_ids, whitelist)
         gap_hint_missing = (
             kind == "partial_response"
@@ -313,23 +304,17 @@ def _assert_citations_and_quotes(
             raise DraftValidationError(f"unknown citation_id: {cid}")
         meta = whitelist.citations[cid]
         if meta.requirement_id not in req_ids:
-            raise DraftValidationError(
-                f"citation {cid} does not belong to block requirements"
-            )
+            raise DraftValidationError(f"citation {cid} does not belong to block requirements")
     if require_quotes:
         for qid in quote_ids:
             if qid not in whitelist.quote_ids:
                 raise DraftValidationError(f"unknown or invented source_quote_id: {qid}")
             qmeta = whitelist.quotes[qid]
             if qmeta.citation_id not in citation_ids:
-                raise DraftValidationError(
-                    f"quote {qid} does not match citation_ids"
-                )
+                raise DraftValidationError(f"quote {qid} does not match citation_ids")
 
 
-def _validate_matrix(
-    matrix: Any, whitelist: WhitelistContext
-) -> list[dict[str, Any]]:
+def _validate_matrix(matrix: Any, whitelist: WhitelistContext) -> list[dict[str, Any]]:
     if not isinstance(matrix, list):
         raise DraftValidationError("compliance_matrix must be a list")
     out: list[dict[str, Any]] = []
@@ -353,8 +338,7 @@ def _validate_matrix(
         status = whitelist.requirement_match_status.get(rid)
         _assert_disposition_matches(status, disposition, rid, whitelist)
         citation_ids = [
-            _parse_uuid(x, field_name="citation_id")
-            for x in (row.get("citation_ids") or [])
+            _parse_uuid(x, field_name="citation_id") for x in (row.get("citation_ids") or [])
         ]
         for cid in citation_ids:
             if cid not in whitelist.citation_ids:
@@ -381,9 +365,7 @@ def _assert_disposition_matches(
 ) -> None:
     if rid in whitelist.excluded_requirement_ids:
         if disposition != "excluded":
-            raise DraftValidationError(
-                f"excluded requirement {rid} must use disposition=excluded"
-            )
+            raise DraftValidationError(f"excluded requirement {rid} must use disposition=excluded")
         return
     expected = {
         EvidenceMatchStatus.supported: "responded",
@@ -398,9 +380,7 @@ def _assert_disposition_matches(
         )
 
 
-def _validate_warnings(
-    warnings: Any, whitelist: WhitelistContext
-) -> list[dict[str, Any]]:
+def _validate_warnings(warnings: Any, whitelist: WhitelistContext) -> list[dict[str, Any]]:
     if not isinstance(warnings, list):
         raise DraftValidationError("warnings must be a list")
     allowed = {
@@ -425,8 +405,7 @@ def _validate_warnings(
         if not content:
             raise DraftValidationError("warning content required")
         citation_ids = [
-            _parse_uuid(x, field_name="citation_id")
-            for x in (row.get("citation_ids") or [])
+            _parse_uuid(x, field_name="citation_id") for x in (row.get("citation_ids") or [])
         ]
         for cid in citation_ids:
             if cid not in whitelist.citation_ids:

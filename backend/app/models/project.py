@@ -74,19 +74,13 @@ class BidProject(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     requirements: Mapped[list[Requirement]] = relationship(back_populates="project")
     conversations: Mapped[list[Conversation]] = relationship(back_populates="project")
     agent_runs: Mapped[list[AgentRun]] = relationship(back_populates="project")
-    extraction_runs: Mapped[list[RequirementExtractionRun]] = relationship(
-        back_populates="project"
-    )
+    extraction_runs: Mapped[list[RequirementExtractionRun]] = relationship(back_populates="project")
     match_runs: Mapped[list[RequirementMatchRun]] = relationship(back_populates="project")
     evidence_matches: Mapped[list[RequirementEvidenceMatch]] = relationship(
         back_populates="project"
     )
-    match_reviews: Mapped[list[RequirementMatchReview]] = relationship(
-        back_populates="project"
-    )
-    proposal_drafts: Mapped[list[ProposalDraft]] = relationship(
-        back_populates="project"
-    )
+    match_reviews: Mapped[list[RequirementMatchReview]] = relationship(back_populates="project")
+    proposal_drafts: Mapped[list[ProposalDraft]] = relationship(back_populates="project")
     proposal_draft_versions: Mapped[list[ProposalDraftVersion]] = relationship(
         back_populates="project"
     )
@@ -99,15 +93,7 @@ class BidProject(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     proposal_draft_runs: Mapped[list[ProposalDraftGenerationRun]] = relationship(
         back_populates="project"
     )
-    compliance_runs: Mapped[list[ComplianceRun]] = relationship(
-        back_populates="project"
-    )
-    compliance_findings: Mapped[list[ComplianceFinding]] = relationship(
-        back_populates="project"
-    )
-    evaluation_suites: Mapped[list[EvaluationSuite]] = relationship(
-        back_populates="project"
-    )
-    evaluation_runs: Mapped[list[EvaluationRun]] = relationship(
-        back_populates="project"
-    )
+    compliance_runs: Mapped[list[ComplianceRun]] = relationship(back_populates="project")
+    compliance_findings: Mapped[list[ComplianceFinding]] = relationship(back_populates="project")
+    evaluation_suites: Mapped[list[EvaluationSuite]] = relationship(back_populates="project")
+    evaluation_runs: Mapped[list[EvaluationRun]] = relationship(back_populates="project")

@@ -129,8 +129,7 @@ def _location_from_chunk(
         )
     if document_id and chunk_id:
         loc["document_center_path"] = (
-            f"/projects/{project_id}?tab=documents&documentId={document_id}"
-            f"&chunkId={chunk_id}"
+            f"/projects/{project_id}?tab=documents&documentId={document_id}&chunkId={chunk_id}"
         )
     return loc
 
@@ -168,9 +167,7 @@ class ProposalDraftService:
     ) -> ProposalDraftEligibilityResponse:
         self._require_project(project_id)
         reqs = list(
-            self.db.scalars(
-                select(Requirement).where(Requirement.project_id == project_id)
-            )
+            self.db.scalars(select(Requirement).where(Requirement.project_id == project_id))
         )
         if requirement_ids:
             wanted = set(requirement_ids)
@@ -326,29 +323,24 @@ class ProposalDraftService:
 
     def get_draft(self, project_id: UUID, draft_id: UUID) -> ProposalDraftDetail:
         self._require_project(project_id)
-        draft = (
-            self.db.execute(
-                select(ProposalDraft)
-                .where(
-                    ProposalDraft.id == draft_id,
-                    ProposalDraft.project_id == project_id,
-                )
-                .options(
-                    selectinload(ProposalDraft.reviews),
-                    selectinload(ProposalDraft.generation_runs),
-                )
+        draft = self.db.execute(
+            select(ProposalDraft)
+            .where(
+                ProposalDraft.id == draft_id,
+                ProposalDraft.project_id == project_id,
             )
-            .scalar_one_or_none()
-        )
+            .options(
+                selectinload(ProposalDraft.reviews),
+                selectinload(ProposalDraft.generation_runs),
+            )
+        ).scalar_one_or_none()
         if draft is None:
             raise HTTPException(status_code=404, detail="草稿不存在")
         summary = self._to_summary(draft)
         current = None
         if draft.current_version_id:
             current = self._version_detail(project_id, draft.current_version_id)
-        reviews = [
-            ProposalDraftReviewRead.model_validate(r) for r in (draft.reviews or [])[:20]
-        ]
+        reviews = [ProposalDraftReviewRead.model_validate(r) for r in (draft.reviews or [])[:20]]
         latest_run = None
         runs = sorted(
             draft.generation_runs or [],
@@ -364,9 +356,7 @@ class ProposalDraftService:
             latest_run=latest_run,
         )
 
-    def list_versions(
-        self, project_id: UUID, draft_id: UUID
-    ) -> ProposalDraftVersionListResponse:
+    def list_versions(self, project_id: UUID, draft_id: UUID) -> ProposalDraftVersionListResponse:
         self._require_project(project_id)
         draft = self.db.get(ProposalDraft, draft_id)
         if draft is None or draft.project_id != project_id:
@@ -439,13 +429,14 @@ class ProposalDraftService:
                 return ProposalDraftRunResponse.model_validate(existing)
 
         eligibility = self.eligibility(project_id, req_ids)
-        eligible_count = len(eligibility.eligible) + len(eligibility.material_gaps) + len(
-            eligibility.risks
-        ) + len(eligibility.scope_items)
+        eligible_count = (
+            len(eligibility.eligible)
+            + len(eligibility.material_gaps)
+            + len(eligibility.risks)
+            + len(eligibility.scope_items)
+        )
         excluded_count = len(eligibility.excluded)
-        excluded_reasons = [
-            f"{x.requirement_id}:{x.reason}" for x in eligibility.excluded[:20]
-        ]
+        excluded_reasons = [f"{x.requirement_id}:{x.reason}" for x in eligibility.excluded[:20]]
 
         # At least one confirmed active match of any kind, or fail early
         confirmed_any = eligible_count > 0
@@ -785,15 +776,11 @@ class ProposalDraftService:
                 scope_ids.add(match.requirement_id)
 
             for el in tender_by_req.get(match.requirement_id, []):
-                quote = normalize_text(
-                    (el.chunk.content if el.chunk else None) or el.notes or ""
-                )
+                quote = normalize_text((el.chunk.content if el.chunk else None) or el.notes or "")
                 qid = f"q_tender_{el.id.hex[:12]}"
                 loc = _location_from_chunk(
                     document_file_name=el.document.file_name if el.document else None,
-                    document_type=(
-                        el.document.document_type.value if el.document else None
-                    ),
+                    document_type=(el.document.document_type.value if el.document else None),
                     chunk=el.chunk,
                     document_id=el.document_id,
                     chunk_id=el.chunk_id,
@@ -846,9 +833,7 @@ class ProposalDraftService:
                 qid = f"q_company_{clink.id.hex[:12]}"
                 loc = _location_from_chunk(
                     document_file_name=clink.document.file_name if clink.document else None,
-                    document_type=(
-                        clink.document.document_type.value if clink.document else None
-                    ),
+                    document_type=(clink.document.document_type.value if clink.document else None),
                     chunk=clink.chunk,
                     document_id=clink.document_id,
                     chunk_id=clink.chunk_id,
@@ -1186,9 +1171,7 @@ class ProposalDraftService:
 
     # ----------------------------------------------------------------- export
 
-    def export(
-        self, project_id: UUID, draft_id: UUID, *, fmt: str
-    ) -> tuple[bytes, str, str]:
+    def export(self, project_id: UUID, draft_id: UUID, *, fmt: str) -> tuple[bytes, str, str]:
         """Return (body, media_type, filename)."""
         draft = self.get_draft(project_id, draft_id)
         if draft.status != ProposalDraftStatus.reviewed:
@@ -1218,9 +1201,7 @@ class ProposalDraftService:
             )
         raise HTTPException(status_code=422, detail="format 仅支持 markdown|docx")
 
-    def _render_docx(
-        self, title: str, content: dict[str, Any], markdown: str
-    ) -> bytes:
+    def _render_docx(self, title: str, content: dict[str, Any], markdown: str) -> bytes:
         try:
             from docx import Document as DocxDocument
             from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -1306,9 +1287,7 @@ class ProposalDraftService:
             version = self.db.get(ProposalDraftVersion, draft.current_version_id)
             if version:
                 version_number = version.version_number
-                has_unevidenced = content_has_unevidenced_manual(
-                    version.content_json or {}
-                )
+                has_unevidenced = content_has_unevidenced_manual(version.content_json or {})
                 counts = self._count_from_content(version.content_json or {})
 
         last_reviewed = None
@@ -1317,8 +1296,7 @@ class ProposalDraftService:
                 select(ProposalDraftReview)
                 .where(
                     ProposalDraftReview.draft_id == draft.id,
-                    ProposalDraftReview.action
-                    == ProposalDraftReviewAction.mark_reviewed,
+                    ProposalDraftReview.action == ProposalDraftReviewAction.mark_reviewed,
                 )
                 .order_by(ProposalDraftReview.created_at.desc())
                 .limit(1)
@@ -1326,9 +1304,7 @@ class ProposalDraftService:
             if review:
                 last_reviewed = review.created_at
 
-        export_allowed = (
-            draft.status == ProposalDraftStatus.reviewed and not has_unevidenced
-        )
+        export_allowed = draft.status == ProposalDraftStatus.reviewed and not has_unevidenced
         return ProposalDraftSummary(
             id=draft.id,
             project_id=draft.project_id,
@@ -1404,9 +1380,7 @@ class ProposalDraftService:
             ),
         )
 
-    def _version_detail(
-        self, project_id: UUID, version_id: UUID
-    ) -> ProposalDraftVersionDetail:
+    def _version_detail(self, project_id: UUID, version_id: UUID) -> ProposalDraftVersionDetail:
         version = self.db.execute(
             select(ProposalDraftVersion)
             .where(
@@ -1423,9 +1397,7 @@ class ProposalDraftService:
         self, version: ProposalDraftVersion
     ) -> ProposalDraftVersionDetail:
         summary = self._version_summary(version)
-        sources = [
-            ProposalDraftSourceRead.model_validate(s) for s in (version.sources or [])
-        ]
+        sources = [ProposalDraftSourceRead.model_validate(s) for s in (version.sources or [])]
         return ProposalDraftVersionDetail(
             **summary.model_dump(),
             content_json=version.content_json,

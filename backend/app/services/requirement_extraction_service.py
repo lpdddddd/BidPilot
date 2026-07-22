@@ -151,10 +151,7 @@ def risk_for_category(
 
 
 def document_center_path(project_id: UUID, document_id: UUID, chunk_id: UUID) -> str:
-    return (
-        f"/projects/{project_id}?tab=documents"
-        f"&documentId={document_id}&chunkId={chunk_id}"
-    )
+    return f"/projects/{project_id}?tab=documents&documentId={document_id}&chunkId={chunk_id}"
 
 
 def _parse_llm_json(raw: str) -> dict[str, Any]:
@@ -294,8 +291,10 @@ class RequirementExtractionService:
             offset = (page - 1) * limit
 
         stmt = select(Requirement).where(Requirement.project_id == project_id)
-        count_stmt = select(func.count()).select_from(Requirement).where(
-            Requirement.project_id == project_id
+        count_stmt = (
+            select(func.count())
+            .select_from(Requirement)
+            .where(Requirement.project_id == project_id)
         )
 
         if category is not None:
@@ -371,9 +370,7 @@ class RequirementExtractionService:
                     created_at=link.created_at,
                     updated_at=link.updated_at,
                     document_file_name=link.document.file_name if link.document else None,
-                    document_type=(
-                        link.document.document_type.value if link.document else None
-                    ),
+                    document_type=(link.document.document_type.value if link.document else None),
                     chunk_index=link.chunk.chunk_index if link.chunk else None,
                     section=link.chunk.section if link.chunk else None,
                     clause_id=link.chunk.clause_id if link.chunk else None,
@@ -418,9 +415,7 @@ class RequirementExtractionService:
             if not contexts:
                 # Empty scope: force still atomically clears only this (empty) scope.
                 if force:
-                    self._delete_auto_requirements(
-                        run.project_id, document_ids=scoped_document_ids
-                    )
+                    self._delete_auto_requirements(run.project_id, document_ids=scoped_document_ids)
                 run.status = ExtractionRunStatus.succeeded
                 run.finished_at = datetime.now(UTC)
                 run.processed_chunks = 0
@@ -453,11 +448,7 @@ class RequirementExtractionService:
 
             # Classify outcome. Do NOT confuse legitimate empty extraction with
             # "model returned candidates that all failed evidence checks".
-            all_rejected = (
-                not batch_fatal
-                and acc.raw_item_count > 0
-                and acc.candidate_count == 0
-            )
+            all_rejected = not batch_fatal and acc.raw_item_count > 0 and acc.candidate_count == 0
             invalid_or_incomplete = batch_fatal or all_rejected
 
             if force and invalid_or_incomplete:
@@ -470,8 +461,7 @@ class RequirementExtractionService:
                 run.status = ExtractionRunStatus.failed
                 run.finished_at = datetime.now(UTC)
                 run.error_summary = (
-                    "force 重跑中止：结果无效或不完整，已保留旧自动抽取结果。 "
-                    + "; ".join(reasons)
+                    "force 重跑中止：结果无效或不完整，已保留旧自动抽取结果。 " + "; ".join(reasons)
                 )[:2000]
                 run.candidate_count = acc.candidate_count
                 run.failed_chunk_count = acc.failed_chunk_count
@@ -507,9 +497,7 @@ class RequirementExtractionService:
                 return
 
             result_kind = (
-                "validated_nonempty_result"
-                if acc.candidate_count > 0
-                else "valid_empty_result"
+                "validated_nonempty_result" if acc.candidate_count > 0 else "valid_empty_result"
             )
 
             created, merged, conflicts = self._persist_candidates(
@@ -674,8 +662,7 @@ class RequirementExtractionService:
             "source_chunk_id 必须是下列某个 chunk_id；category 只能是 "
             "project_info/qualification/commercial/technical/scoring/material/"
             "deadline/mandatory/invalid_bid/contract。\n"
-            "<<<CHUNKS>>>\n"
-            + json.dumps(payload, ensure_ascii=False)
+            "<<<CHUNKS>>>\n" + json.dumps(payload, ensure_ascii=False)
         )
         result = self.llm.chat(
             [
@@ -726,9 +713,7 @@ class RequirementExtractionService:
         if not _locator_ok(item, primary_ctx.chunk):
             return None
 
-        grounded = grounded_requirement_text(
-            item.normalized_requirement, primary_ctx.chunk.content
-        )
+        grounded = grounded_requirement_text(item.normalized_requirement, primary_ctx.chunk.content)
         if grounded is None:
             return None
 
@@ -792,9 +777,7 @@ class RequirementExtractionService:
         inside this same transaction (caller commits with run stats).
         """
         # Within-run dedupe: category + exact grounded normalized text.
-        groups: dict[tuple[RequirementCategory, str], list[_ValidatedCandidate]] = defaultdict(
-            list
-        )
+        groups: dict[tuple[RequirementCategory, str], list[_ValidatedCandidate]] = defaultdict(list)
         for cand in candidates:
             key = (cand.item.category, cand.grounded_requirement)
             groups[key].append(cand)
@@ -988,9 +971,7 @@ class RequirementExtractionService:
                     if not na or not nt or na == nt:
                         continue
                     # Heuristic: overlapping tokens but differing numbers, or LLM already marked.
-                    if _has_numeric_conflict(na, nt) or (
-                        len(set(na) & set(nt)) > 8 and na != nt
-                    ):
+                    if _has_numeric_conflict(na, nt) or (len(set(na) & set(nt)) > 8 and na != nt):
                         _flag(a, t, "补遗/澄清与招标文件要求存在差异")
 
         self.db.flush()

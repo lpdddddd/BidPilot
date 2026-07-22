@@ -165,9 +165,7 @@ def export_proposal_draft(
     format: str = Query(default="markdown", pattern="^(markdown|docx)$"),
     db: Session = Depends(get_db),
 ) -> Response:
-    body, media_type, filename = ProposalDraftService(db).export(
-        project_id, draft_id, fmt=format
-    )
+    body, media_type, filename = ProposalDraftService(db).export(project_id, draft_id, fmt=format)
     return Response(
         content=body,
         media_type=media_type,

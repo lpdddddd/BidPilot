@@ -214,9 +214,7 @@ def test_answer_reuses_retrieval_and_passes_chunks_to_llm():
 
 def test_empty_retrieval_never_calls_llm():
     pid = uuid4()
-    retrieval = FakeRetrieval(
-        SearchResponse(query="q", results=[], trace=_trace(returned_count=0))
-    )
+    retrieval = FakeRetrieval(SearchResponse(query="q", results=[], trace=_trace(returned_count=0)))
     llm = FakeLlm("should not run")
     service = RagAnswerService(db=SimpleNamespace(), retrieval=retrieval, llm=llm)  # type: ignore[arg-type]
     resp = service.answer(pid, AskRequest(question="随便问"))

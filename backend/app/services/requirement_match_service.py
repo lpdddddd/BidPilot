@@ -133,6 +133,7 @@ class MatchValidationError(Exception):
         self.reasons = list(reasons or [])
         self.reason_counts = dict(reason_counts or {})
 
+
 _STATUS_REQUIRING_PRIMARY = frozenset(
     {
         EvidenceMatchStatus.supported,
@@ -289,9 +290,7 @@ def requirement_constraints_supported(requirement_text: str, evidence_text: str)
     Obligation/modality words (须/应/…) are ignored — they belong to the tender
     clause, not company materials.
     """
-    tokens = [
-        t for t in extract_critical_tokens(requirement_text) if t not in _MODALITY_TOKENS
-    ]
+    tokens = [t for t in extract_critical_tokens(requirement_text) if t not in _MODALITY_TOKENS]
     if not tokens:
         return True
     hay = soft_normalize_for_grounding(evidence_text)
@@ -533,9 +532,7 @@ class RequirementMatchService:
 
         if requirement_id is not None:
             stmt = stmt.where(RequirementEvidenceMatch.requirement_id == requirement_id)
-            count_stmt = count_stmt.where(
-                RequirementEvidenceMatch.requirement_id == requirement_id
-            )
+            count_stmt = count_stmt.where(RequirementEvidenceMatch.requirement_id == requirement_id)
         if match_status is not None:
             stmt = stmt.where(RequirementEvidenceMatch.status == match_status)
             count_stmt = count_stmt.where(RequirementEvidenceMatch.status == match_status)
@@ -550,19 +547,13 @@ class RequirementMatchService:
             count_stmt = count_stmt.where(Requirement.mandatory == mandatory)
         if needs_review is not None:
             stmt = stmt.where(RequirementEvidenceMatch.needs_review == needs_review)
-            count_stmt = count_stmt.where(
-                RequirementEvidenceMatch.needs_review == needs_review
-            )
+            count_stmt = count_stmt.where(RequirementEvidenceMatch.needs_review == needs_review)
         if review_status is not None:
             stmt = stmt.where(RequirementEvidenceMatch.review_status == review_status)
-            count_stmt = count_stmt.where(
-                RequirementEvidenceMatch.review_status == review_status
-            )
+            count_stmt = count_stmt.where(RequirementEvidenceMatch.review_status == review_status)
         if source_document_id is not None:
             stmt = stmt.where(Requirement.source_document_id == source_document_id)
-            count_stmt = count_stmt.where(
-                Requirement.source_document_id == source_document_id
-            )
+            count_stmt = count_stmt.where(Requirement.source_document_id == source_document_id)
 
         total = int(self.db.scalar(count_stmt) or 0)
         rows = list(
@@ -641,9 +632,7 @@ class RequirementMatchService:
                     created_at=elink.created_at,
                     updated_at=elink.updated_at,
                     document_file_name=elink.document.file_name if elink.document else None,
-                    document_type=(
-                        elink.document.document_type.value if elink.document else None
-                    ),
+                    document_type=(elink.document.document_type.value if elink.document else None),
                     chunk_index=elink.chunk.chunk_index if elink.chunk else None,
                     section=elink.chunk.section if elink.chunk else None,
                     clause_id=elink.chunk.clause_id if elink.chunk else None,
@@ -670,9 +659,7 @@ class RequirementMatchService:
                     created_at=clink.created_at,
                     updated_at=clink.updated_at,
                     document_file_name=clink.document.file_name if clink.document else None,
-                    document_type=(
-                        clink.document.document_type.value if clink.document else None
-                    ),
+                    document_type=(clink.document.document_type.value if clink.document else None),
                     chunk_index=clink.chunk.chunk_index if clink.chunk else None,
                     section=clink.chunk.section if clink.chunk else None,
                     clause_id=clink.chunk.clause_id if clink.chunk else None,
@@ -716,14 +703,10 @@ class RequirementMatchService:
 
             force = bool((run.config_json or {}).get("force"))
             all_requirements = self._load_requirements(run)
-            skip_req_ids, protected_req_ids, skipped_reviewed_count = (
-                self._skip_requirement_ids(
-                    run.project_id, all_requirements, force=force
-                )
+            skip_req_ids, protected_req_ids, skipped_reviewed_count = self._skip_requirement_ids(
+                run.project_id, all_requirements, force=force
             )
-            requirements = [
-                r for r in all_requirements if r.id not in skip_req_ids
-            ]
+            requirements = [r for r in all_requirements if r.id not in skip_req_ids]
             company_chunks = self._load_company_chunks(run)
             scoped_requirement_ids = {r.id for r in requirements}
 
@@ -732,15 +715,9 @@ class RequirementMatchService:
             run.skipped_reviewed_requirement_count = skipped_reviewed_count
             run.config_json = {
                 **(run.config_json or {}),
-                "scoped_requirement_ids": [
-                    str(i) for i in sorted(scoped_requirement_ids, key=str)
-                ],
-                "protected_requirement_ids": [
-                    str(i) for i in sorted(protected_req_ids, key=str)
-                ],
-                "skipped_requirement_ids": [
-                    str(i) for i in sorted(skip_req_ids, key=str)
-                ],
+                "scoped_requirement_ids": [str(i) for i in sorted(scoped_requirement_ids, key=str)],
+                "protected_requirement_ids": [str(i) for i in sorted(protected_req_ids, key=str)],
+                "skipped_requirement_ids": [str(i) for i in sorted(skip_req_ids, key=str)],
                 "protected_requirement_count": len(protected_req_ids),
                 "skipped_reviewed_requirement_count": skipped_reviewed_count,
                 "company_chunk_count": len(company_chunks),
@@ -767,7 +744,6 @@ class RequirementMatchService:
                 }
                 self.db.commit()
                 return
-
 
             if not company_chunks:
                 # Empty company materials: do NOT call LLM; fail run; keep old matches.
@@ -867,9 +843,7 @@ class RequirementMatchService:
                 acc.validated.clear()
 
             all_rejected = (
-                not batch_fatal
-                and acc.raw_item_count > 0
-                and acc.llm_validated_count == 0
+                not batch_fatal and acc.raw_item_count > 0 and acc.llm_validated_count == 0
             )
             # ANY batch fatal OR all candidates rejected → invalid for both force modes.
             invalid_or_incomplete = batch_fatal or all_rejected
@@ -991,12 +965,8 @@ class RequirementMatchService:
         rows = list(
             self.db.scalars(
                 stmt.options(
-                    selectinload(Requirement.evidence_links).selectinload(
-                        EvidenceLink.chunk
-                    ),
-                    selectinload(Requirement.evidence_links).selectinload(
-                        EvidenceLink.document
-                    ),
+                    selectinload(Requirement.evidence_links).selectinload(EvidenceLink.chunk),
+                    selectinload(Requirement.evidence_links).selectinload(EvidenceLink.document),
                 ).order_by(Requirement.created_at.asc())
             )
         )
@@ -1117,8 +1087,7 @@ class RequirementMatchService:
             )
         )
         scored = [
-            (ctx, _lexical_overlap_score(query, ctx.chunk.content or ""))
-            for ctx in company_chunks
+            (ctx, _lexical_overlap_score(query, ctx.chunk.content or "")) for ctx in company_chunks
         ]
         scored.sort(key=lambda x: (-x[1], x[0].chunk.chunk_index))
         # Prefer positive overlap; if all zero, still pass a small sample so LLM
@@ -1128,9 +1097,7 @@ class RequirementMatchService:
             return positive[:top_k]
         return [ctx for ctx, _ in scored[: min(3, len(scored))]]
 
-    def _tender_primary_contexts(
-        self, requirement: Requirement
-    ) -> list[_ChunkContext]:
+    def _tender_primary_contexts(self, requirement: Requirement) -> list[_ChunkContext]:
         """Load locatable tender primary evidence chunks for a Requirement."""
         out: list[_ChunkContext] = []
         seen: set[UUID] = set()
@@ -1178,9 +1145,7 @@ class RequirementMatchService:
                 tender_by_id[ctx.chunk.id] = ctx
 
         by_chunk_id = {
-            ctx.chunk.id: ctx
-            for ctx in company_chunks
-            if ctx.chunk.id in allowed_chunk_ids
+            ctx.chunk.id: ctx for ctx in company_chunks if ctx.chunk.id in allowed_chunk_ids
         }
 
         payload = {
@@ -1192,9 +1157,7 @@ class RequirementMatchService:
                     "normalized_requirement": req.normalized_requirement,
                     "mandatory": req.mandatory,
                     "risk_level": req.risk_level.value if req.risk_level else None,
-                    "potential_conflict": bool(
-                        (req.metadata_json or {}).get("potential_conflict")
-                    ),
+                    "potential_conflict": bool((req.metadata_json or {}).get("potential_conflict")),
                     "candidate_chunk_ids": [
                         str(c.chunk.id) for c in per_req_chunks.get(req.id, [])
                     ],
@@ -1253,8 +1216,7 @@ class RequirementMatchService:
             '"current_scope_quote":"当前对象范围引文或 null",'
             '"not_applicable_note":"不适用说明或 null",'
             '"needs_review":true}]}\n'
-            "<<<MATCH_INPUT>>>\n"
-            + json.dumps(payload, ensure_ascii=False)
+            "<<<MATCH_INPUT>>>\n" + json.dumps(payload, ensure_ascii=False)
         )
         result = self.llm.chat(
             [
@@ -1328,9 +1290,7 @@ class RequirementMatchService:
             )
         return validated, len(batch_result.items), rejected, reason_counts
 
-    def _location_meta_from_ctx(
-        self, ctx: _ChunkContext, project_id: UUID
-    ) -> dict[str, Any]:
+    def _location_meta_from_ctx(self, ctx: _ChunkContext, project_id: UUID) -> dict[str, Any]:
         return {
             "document_id": str(ctx.document.id),
             "chunk_id": str(ctx.chunk.id),
@@ -1341,9 +1301,7 @@ class RequirementMatchService:
             "page_start": ctx.chunk.page_start,
             "page_end": ctx.chunk.page_end,
             "chunk_index": ctx.chunk.chunk_index,
-            "document_center_path": document_center_path(
-                project_id, ctx.document.id, ctx.chunk.id
-            ),
+            "document_center_path": document_center_path(project_id, ctx.document.id, ctx.chunk.id),
         }
 
     def _validate_candidate(
@@ -1391,9 +1349,7 @@ class RequirementMatchService:
                 return None, "out_of_scope_chunk"
             if primary_ctx.document.project_id != project_id:
                 return None, "cross_project_chunk"
-            if not quote_in_content(
-                item.company_evidence_quote, primary_ctx.chunk.content or ""
-            ):
+            if not quote_in_content(item.company_evidence_quote, primary_ctx.chunk.content or ""):
                 return None, "quote_not_found"
             quote = normalize_whitespace(item.company_evidence_quote)
         else:
@@ -1440,9 +1396,7 @@ class RequirementMatchService:
         req_text = requirement.normalized_requirement or requirement.title or ""
 
         meta_extra: dict[str, Any] = {}
-        if status_val == EvidenceMatchStatus.supported and grade_mismatch(
-            req_text, evidence_text
-        ):
+        if status_val == EvidenceMatchStatus.supported and grade_mismatch(req_text, evidence_text):
             status_val = EvidenceMatchStatus.partially_supported
             meta_extra["grade_downgrade"] = True
             meta_extra["downgrade_reason"] = "requirement_grade_exceeds_evidence"
@@ -1505,9 +1459,7 @@ class RequirementMatchService:
             ctx = by_chunk_id[cid]
             if quote and not quote_in_content(quote, ctx.chunk.content or ""):
                 continue
-            company_links.append(
-                (ctx.document, ctx.chunk, quote or "", "company_support")
-            )
+            company_links.append((ctx.document, ctx.chunk, quote or "", "company_support"))
 
         needs_review = True
         req_meta = requirement.metadata_json or {}
@@ -1547,10 +1499,7 @@ class RequirementMatchService:
     ) -> tuple[tuple[_ChunkContext, str] | None, str | None]:
         if primary_ctx is None or not primary_quote:
             return None, "missing_required_evidence"
-        if (
-            item.conflicting_company_chunk_id is None
-            or not item.conflicting_company_evidence_quote
-        ):
+        if item.conflicting_company_chunk_id is None or not item.conflicting_company_evidence_quote:
             return None, "invalid_conflict"
         cid = item.conflicting_company_chunk_id
         if cid not in by_chunk_id:
@@ -1609,12 +1558,8 @@ class RequirementMatchService:
         """Dual-scope not_applicable; legacy single-evidence fields alone → reject."""
         # Legacy single-evidence path is no longer accepted.
         if (
-            item.not_applicable_evidence_chunk_id is not None
-            or item.not_applicable_evidence_quote
-        ) and (
-            item.requirement_scope_chunk_id is None
-            or item.current_scope_chunk_id is None
-        ):
+            item.not_applicable_evidence_chunk_id is not None or item.not_applicable_evidence_quote
+        ) and (item.requirement_scope_chunk_id is None or item.current_scope_chunk_id is None):
             return None, "invalid_not_applicable"
 
         basis = item.not_applicable_basis
@@ -1686,9 +1631,7 @@ class RequirementMatchService:
             "current_scope_location": self._location_meta_from_ctx(cur_ctx, project_id),
         }
         if item.not_applicable_note:
-            meta_extra["not_applicable_note"] = normalize_whitespace(
-                item.not_applicable_note
-            )
+            meta_extra["not_applicable_note"] = normalize_whitespace(item.not_applicable_note)
 
         req_meta = requirement.metadata_json or {}
         needs_review = True
@@ -1713,9 +1656,7 @@ class RequirementMatchService:
                 requirement=requirement,
                 status=EvidenceMatchStatus.not_applicable,
                 summary=summary,
-                risk_level=risk_for_match(
-                    requirement, EvidenceMatchStatus.not_applicable
-                ),
+                risk_level=risk_for_match(requirement, EvidenceMatchStatus.not_applicable),
                 primary_chunk=None,
                 primary_document=None,
                 primary_quote=None,
@@ -1815,9 +1756,7 @@ class RequirementMatchService:
             # Two int4 keys from UUID bits — transaction-scoped advisory lock.
             key1 = int(req_id.int & ((1 << 31) - 1))
             key2 = int((req_id.int >> 31) & ((1 << 31) - 1))
-            self.db.execute(
-                select(func.pg_advisory_xact_lock(key1, key2))
-            )
+            self.db.execute(select(func.pg_advisory_xact_lock(key1, key2)))
 
     def _active_auto_match(
         self, matches: list[RequirementEvidenceMatch]
@@ -1854,9 +1793,7 @@ class RequirementMatchService:
         On success → delete/supersede/write matches and mark run succeeded.
         """
         run = self.db.execute(
-            select(RequirementMatchRun)
-            .where(RequirementMatchRun.id == run_id)
-            .with_for_update()
+            select(RequirementMatchRun).where(RequirementMatchRun.id == run_id).with_for_update()
         ).scalar_one_or_none()
         if run is None:
             return {
@@ -1892,9 +1829,7 @@ class RequirementMatchService:
         # Drop identity-map snapshots from pre-LLM filtering so concurrent
         # supersede results are visible under READ COMMITTED.
         self.db.expire_all()
-        existing_by_req = self._lock_scoped_matches(
-            project_id, scoped_requirement_ids
-        )
+        existing_by_req = self._lock_scoped_matches(project_id, scoped_requirement_ids)
         if force:
             # Only deletes pending unprotected autos with no review history.
             existing_by_req = self._delete_auto_matches(
@@ -1902,9 +1837,7 @@ class RequirementMatchService:
             )
             self.db.expire_all()
             # Re-lock/refresh after deletes so concurrent runners see current state.
-            existing_by_req = self._lock_scoped_matches(
-                project_id, scoped_requirement_ids
-            )
+            existing_by_req = self._lock_scoped_matches(project_id, scoped_requirement_ids)
 
         created = 0
         skipped = 0
@@ -1951,9 +1884,7 @@ class RequirementMatchService:
                 primary_company_document_id=(
                     item.primary_document.id if item.primary_document else None
                 ),
-                primary_company_chunk_id=(
-                    item.primary_chunk.id if item.primary_chunk else None
-                ),
+                primary_company_chunk_id=(item.primary_chunk.id if item.primary_chunk else None),
                 primary_company_quote=item.primary_quote,
                 metadata_json=meta,
                 review_status=MatchReviewStatus.pending,
@@ -1967,11 +1898,7 @@ class RequirementMatchService:
             # Supersede prior active match (never delete review history).
             # Mark old as superseded ONLY after new Match row flushed; links follow
             # in this same transaction so a rollback leaves the old Match active.
-            if (
-                active is not None
-                and active.id != row.id
-                and active.lifecycle_status == "active"
-            ):
+            if active is not None and active.id != row.id and active.lifecycle_status == "active":
                 active.lifecycle_status = "superseded"
                 active.superseded_by_match_id = row.id
                 row.supersedes_match_id = active.id
@@ -2013,9 +1940,7 @@ class RequirementMatchService:
         run.config_json = {
             **(run.config_json or {}),
             "result_kind": (
-                "valid_result"
-                if has_supported_or_partial
-                else "valid_empty_or_insufficient_result"
+                "valid_result" if has_supported_or_partial else "valid_empty_or_insufficient_result"
             ),
             "raw_item_count": raw_item_count,
             "rejected_count": rejected_count,
@@ -2101,9 +2026,7 @@ class RequirementMatchService:
             updated_at=match.updated_at,
             requirement=req_summary,
             primary_company_document_file_name=(
-                match.primary_company_document.file_name
-                if match.primary_company_document
-                else None
+                match.primary_company_document.file_name if match.primary_company_document else None
             ),
             primary_company_document_type=(
                 match.primary_company_document.document_type.value

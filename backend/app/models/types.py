@@ -44,9 +44,7 @@ review_status_enum = EnumType(ReviewStatus, name="review_status")
 evidence_match_status_enum = EnumType(EvidenceMatchStatus, name="evidence_match_status")
 match_review_status_enum = EnumType(MatchReviewStatus, name="match_review_status")
 match_review_action_enum = EnumType(MatchReviewAction, name="match_review_action")
-match_review_reason_code_enum = EnumType(
-    MatchReviewReasonCode, name="match_review_reason_code"
-)
+match_review_reason_code_enum = EnumType(MatchReviewReasonCode, name="match_review_reason_code")
 actor_authn_enum = EnumType(ActorAuthn, name="actor_authn")
 proposal_draft_status_enum = EnumType(ProposalDraftStatus, name="proposal_draft_status")
 proposal_draft_version_kind_enum = EnumType(
@@ -62,12 +60,8 @@ proposal_draft_generation_mode_enum = EnumType(
     ProposalDraftGenerationMode, name="proposal_draft_generation_mode"
 )
 compliance_severity_enum = EnumType(ComplianceSeverity, name="compliance_severity")
-compliance_finding_status_enum = EnumType(
-    ComplianceFindingStatus, name="compliance_finding_status"
-)
-compliance_rule_category_enum = EnumType(
-    ComplianceRuleCategory, name="compliance_rule_category"
-)
+compliance_finding_status_enum = EnumType(ComplianceFindingStatus, name="compliance_finding_status")
+compliance_rule_category_enum = EnumType(ComplianceRuleCategory, name="compliance_rule_category")
 
 
 def empty_json() -> dict[str, Any]:

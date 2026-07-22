@@ -126,9 +126,7 @@ def engine(monkeypatch):
         poolclass=NullPool,
     )
     _reset_schema(eng)
-    TestSession = sessionmaker(
-        bind=eng, autoflush=False, autocommit=False, expire_on_commit=False
-    )
+    TestSession = sessionmaker(bind=eng, autoflush=False, autocommit=False, expire_on_commit=False)
     # SSE / background agent tasks must use the same test DB.
     monkeypatch.setattr("app.services.agent_run.sse.SESSION_FACTORY", TestSession)
     monkeypatch.setattr("app.services.agent_run.tasks.SESSION_FACTORY", TestSession)

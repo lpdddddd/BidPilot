@@ -113,6 +113,7 @@ def _seed_project(db: Session):
     db.commit()
     return project, req, match, org
 
+
 def _make_draft(
     db: Session,
     project: BidProject,

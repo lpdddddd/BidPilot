@@ -50,9 +50,7 @@ def _project(db: Session) -> BidProject:
 
 def test_check_requirement_coverage_tool(db: Session):
     project = _project(db)
-    result = check_requirement_coverage(
-        db, RequirementCoverageInput(project_id=project.id)
-    )
+    result = check_requirement_coverage(db, RequirementCoverageInput(project_id=project.id))
     assert result.ok is True
     assert result.report is not None
     assert result.report.run.status.value == "succeeded"

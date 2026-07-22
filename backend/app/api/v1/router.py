@@ -20,13 +20,8 @@ api_router.include_router(search.router, prefix="/projects", tags=["search"])
 api_router.include_router(ask.router, prefix="/projects", tags=["ask"])
 api_router.include_router(requirements.router, prefix="/projects", tags=["requirements"])
 api_router.include_router(matches.router, prefix="/projects", tags=["matches"])
-api_router.include_router(
-    proposal_drafts.router, prefix="/projects", tags=["proposal-drafts"]
-)
+api_router.include_router(proposal_drafts.router, prefix="/projects", tags=["proposal-drafts"])
 api_router.include_router(compliance.router, prefix="/projects", tags=["compliance"])
 api_router.include_router(evaluation.router, prefix="/projects", tags=["evaluation"])
-api_router.include_router(
-    agent_runs.project_router, prefix="/projects", tags=["agent-runs"]
-)
+api_router.include_router(agent_runs.project_router, prefix="/projects", tags=["agent-runs"])
 api_router.include_router(agent_runs.run_router, prefix="/agent-runs", tags=["agent-runs"])
-

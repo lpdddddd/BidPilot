@@ -48,9 +48,7 @@ class FakeLlm:
         if self.raise_error:
             raise self.raise_error
         payload = self._responder(messages)
-        content = (
-            payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
-        )
+        content = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
         return ChatResult(
             content=content,
             model=self.model,
@@ -928,9 +926,7 @@ def test_force_keeps_old_on_llm_failure(db):
     doc = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
     chunk = _chunk(db, project, doc, index=0, content="投标人须具备一级资质。")
     db.commit()
-    svc = RequirementExtractionService(
-        db, llm=FakeLlm(lambda _m: {"items": [_valid_item(chunk)]})
-    )
+    svc = RequirementExtractionService(db, llm=FakeLlm(lambda _m: {"items": [_valid_item(chunk)]}))
     run = svc.start_extraction(project.id, ExtractionStartRequest())
     svc.execute_run(run.id)
     before = list(db.scalars(select_reqs(db, project.id)))
@@ -955,17 +951,13 @@ def test_force_keeps_old_when_all_candidates_fail_validation(db):
     doc = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
     chunk = _chunk(db, project, doc, index=0, content="投标人须具备一级资质。")
     db.commit()
-    svc = RequirementExtractionService(
-        db, llm=FakeLlm(lambda _m: {"items": [_valid_item(chunk)]})
-    )
+    svc = RequirementExtractionService(db, llm=FakeLlm(lambda _m: {"items": [_valid_item(chunk)]}))
     run = svc.start_extraction(project.id, ExtractionStartRequest())
     svc.execute_run(run.id)
     before = list(db.scalars(select_reqs(db, project.id)))
     assert len(before) == 1
     old_id = before[0].id
-    old_links = list(
-        db.scalars(select(EvidenceLink).where(EvidenceLink.requirement_id == old_id))
-    )
+    old_links = list(db.scalars(select(EvidenceLink).where(EvidenceLink.requirement_id == old_id)))
     assert len(old_links) == 1
 
     bad = _valid_item(
@@ -984,9 +976,7 @@ def test_force_keeps_old_when_all_candidates_fail_validation(db):
     after = list(db.scalars(select_reqs(db, project.id)))
     assert len(after) == 1
     assert after[0].id == old_id
-    assert list(
-        db.scalars(select(EvidenceLink).where(EvidenceLink.requirement_id == old_id))
-    )
+    assert list(db.scalars(select(EvidenceLink).where(EvidenceLink.requirement_id == old_id)))
 
 
 def test_force_valid_empty_items_replaces_scoped_autos(db):
@@ -1033,9 +1023,7 @@ def test_force_keeps_old_on_bad_quote_all_rejected(db):
     doc = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
     chunk = _chunk(db, project, doc, index=0, content="投标人须具备一级资质。")
     db.commit()
-    svc = RequirementExtractionService(
-        db, llm=FakeLlm(lambda _m: {"items": [_valid_item(chunk)]})
-    )
+    svc = RequirementExtractionService(db, llm=FakeLlm(lambda _m: {"items": [_valid_item(chunk)]}))
     run = svc.start_extraction(project.id, ExtractionStartRequest())
     svc.execute_run(run.id)
     old_id = list(db.scalars(select_reqs(db, project.id)))[0].id

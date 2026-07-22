@@ -140,9 +140,7 @@ def get_requirement_match_review_queue(
                 status_code=422, detail=f"invalid review_status: {review_status}"
             ) from exc
     resolved_match_status = match_status if match_status is not None else status
-    resolved_category = (
-        requirement_category if requirement_category is not None else category
-    )
+    resolved_category = requirement_category if requirement_category is not None else category
     resolved_limit = page_size if page_size is not None else limit
     return RequirementMatchReviewService(db).review_queue(
         project_id,

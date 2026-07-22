@@ -55,9 +55,7 @@ class FakeLlm:
         if self.raise_error:
             raise self.raise_error
         payload = self._responder(messages)
-        content = (
-            payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
-        )
+        content = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
         return ChatResult(
             content=content,
             model=self.model,
@@ -310,9 +308,7 @@ def test_supported_creates_match_and_link(db):
     assert refreshed.matched_count == 1
 
     match = db.scalar(
-        select(RequirementEvidenceMatch).where(
-            RequirementEvidenceMatch.project_id == project.id
-        )
+        select(RequirementEvidenceMatch).where(RequirementEvidenceMatch.project_id == project.id)
     )
     assert match is not None
     assert match.status == EvidenceMatchStatus.supported
@@ -674,14 +670,10 @@ def test_force_replaces_only_scoped_autos(db):
     svc.execute_run(run.id)
 
     match_a = db.scalar(
-        select(RequirementEvidenceMatch).where(
-            RequirementEvidenceMatch.requirement_id == req_a.id
-        )
+        select(RequirementEvidenceMatch).where(RequirementEvidenceMatch.requirement_id == req_a.id)
     )
     match_b = db.scalar(
-        select(RequirementEvidenceMatch).where(
-            RequirementEvidenceMatch.requirement_id == req_b.id
-        )
+        select(RequirementEvidenceMatch).where(RequirementEvidenceMatch.requirement_id == req_b.id)
     )
     assert match_a is not None
     assert match_a.status == EvidenceMatchStatus.supported
@@ -909,6 +901,7 @@ def test_banned_absolute_summary_rejected(db):
     assert refreshed.status == ExtractionRunStatus.failed
     assert list(db.scalars(select(RequirementEvidenceMatch))) == []
 
+
 def test_start_filters_excluded_document_types(db):
     project = _org_project(db, "M18")
     company = _doc(db, project, document_type=DocumentType.personnel, file_name="p.pdf")
@@ -1092,9 +1085,7 @@ def test_legal_not_applicable_with_tender_scope_evidence(db):
                     "needs_review": True,
                     "not_applicable_basis": "requirement_scope_exclusion",
                     "requirement_scope_chunk_id": str(t_chunk.id),
-                    "requirement_scope_quote": (
-                        "本包件仅适用于海淀区范围内的项目，其他区域不适用"
-                    ),
+                    "requirement_scope_quote": ("本包件仅适用于海淀区范围内的项目，其他区域不适用"),
                     "current_scope_chunk_id": str(c_chunk.id),
                     "current_scope_quote": "本项目服务范围为朝阳区",
                     "not_applicable_note": "海淀区与朝阳区范围互斥",
@@ -1134,9 +1125,7 @@ def test_not_applicable_rejects_cross_project_and_tender_as_company_basis(db):
     project_a = _org_project(db, "NA4a")
     project_b = _org_project(db, "NA4b")
     tender_a = _doc(db, project_a, document_type=DocumentType.tender, file_name="ta.pdf")
-    company_a = _doc(
-        db, project_a, document_type=DocumentType.qualification, file_name="qa.pdf"
-    )
+    company_a = _doc(db, project_a, document_type=DocumentType.qualification, file_name="qa.pdf")
     _chunk(db, project_a, company_a, index=0, content="A公司简介文字。")
     tender_b = _doc(db, project_b, document_type=DocumentType.tender, file_name="tb.pdf")
     t_chunk_b = _chunk(
@@ -1172,9 +1161,7 @@ def test_not_applicable_rejects_cross_project_and_tender_as_company_basis(db):
                     "requirement_scope_quote": "本包件仅适用于B市项目",
                     "current_scope_chunk_id": str(
                         db.scalar(
-                            select(DocumentChunk).where(
-                                DocumentChunk.document_id == company_a.id
-                            )
+                            select(DocumentChunk).where(DocumentChunk.document_id == company_a.id)
                         ).id
                     ),
                     "current_scope_quote": "A公司简介文字",
@@ -1299,12 +1286,8 @@ def test_conflicting_unrelated_quotes_rejected(db):
     """Two locatable but unrelated company quotes must not become conflicting_evidence."""
     project = _org_project(db, "CF2b")
     company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
-    chunk_a = _chunk(
-        db, project, company, index=0, content="本公司具备一级建筑业企业资质。"
-    )
-    chunk_b = _chunk(
-        db, project, company, index=1, content="本公司办公地址位于朝阳区望京街道。"
-    )
+    chunk_a = _chunk(db, project, company, index=0, content="本公司具备一级建筑业企业资质。")
+    chunk_b = _chunk(db, project, company, index=1, content="本公司办公地址位于朝阳区望京街道。")
     req = _requirement(db, project, normalized="投标人须具备一级建筑业企业资质。")
     db.commit()
 
@@ -1339,12 +1322,8 @@ def test_conflicting_unrelated_quotes_rejected(db):
 def test_conflicting_two_chunks_persists_dual_links(db):
     project = _org_project(db, "CF3")
     company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
-    chunk_a = _chunk(
-        db, project, company, index=0, content="本公司具备一级建筑业企业资质。"
-    )
-    chunk_b = _chunk(
-        db, project, company, index=1, content="本公司仅具备二级建筑业企业资质。"
-    )
+    chunk_a = _chunk(db, project, company, index=0, content="本公司具备一级建筑业企业资质。")
+    chunk_b = _chunk(db, project, company, index=1, content="本公司仅具备二级建筑业企业资质。")
     req = _requirement(db, project, normalized="投标人须具备一级建筑业企业资质。")
     db.commit()
 
@@ -1430,12 +1409,8 @@ def test_conflicting_unlocatable_quote_not_persisted_as_conflict(db):
 def test_conflicting_cross_project_evidence_rejected(db):
     project_a = _org_project(db, "CF5a")
     project_b = _org_project(db, "CF5b")
-    company_a = _doc(
-        db, project_a, document_type=DocumentType.qualification, file_name="a.pdf"
-    )
-    company_b = _doc(
-        db, project_b, document_type=DocumentType.qualification, file_name="b.pdf"
-    )
+    company_a = _doc(db, project_a, document_type=DocumentType.qualification, file_name="a.pdf")
+    company_b = _doc(db, project_b, document_type=DocumentType.qualification, file_name="b.pdf")
     chunk_a = _chunk(db, project_a, company_a, index=0, content="A公司具备一级资质。")
     chunk_b = _chunk(db, project_b, company_b, index=0, content="B公司具备二级资质。")
     req = _requirement(db, project_a, normalized="投标人须具备一级资质。")
@@ -1502,9 +1477,7 @@ def test_cancel_queued_run(db, client):
 
     # API path
     run2 = svc.start_matching(project.id, MatchStartRequest())
-    resp = client.post(
-        f"/api/v1/projects/{project.id}/requirement-matches/runs/{run2.id}/cancel"
-    )
+    resp = client.post(f"/api/v1/projects/{project.id}/requirement-matches/runs/{run2.id}/cancel")
     assert resp.status_code == 200
     assert resp.json()["status"] == ExtractionRunStatus.cancelled.value
 
@@ -1667,9 +1640,7 @@ def test_terminal_cancel_returns_error(db, client):
         svc.cancel_run(project.id, run.id)
     assert getattr(excinfo.value, "status_code", None) == 409
 
-    resp = client.post(
-        f"/api/v1/projects/{project.id}/requirement-matches/runs/{run.id}/cancel"
-    )
+    resp = client.post(f"/api/v1/projects/{project.id}/requirement-matches/runs/{run.id}/cancel")
     assert resp.status_code == 409
     assert "无法取消" in resp.json()["detail"]
 
@@ -1770,11 +1741,14 @@ def test_atomic_force_false_failure_keeps_existing(db, monkeypatch):
     still = db.get(RequirementEvidenceMatch, old.id)
     assert still is not None
     assert still.summary == "旧自动匹配"
-    assert db.scalar(
-        select(RequirementEvidenceMatch).where(
-            RequirementEvidenceMatch.requirement_id == req_b.id
+    assert (
+        db.scalar(
+            select(RequirementEvidenceMatch).where(
+                RequirementEvidenceMatch.requirement_id == req_b.id
+            )
         )
-    ) is None
+        is None
+    )
 
 
 def test_atomic_force_true_failure_keeps_scoped_old_and_links(db, monkeypatch):
@@ -1951,9 +1925,7 @@ def test_all_rejected_now_fails_both_force_modes(db):
         svc.execute_run(run.id)
         refreshed = svc.get_run(project.id, run.id)
         assert refreshed.status == ExtractionRunStatus.failed
-        assert (refreshed.config_json or {}).get("result_kind") == (
-            "invalid_or_incomplete_result"
-        )
+        assert (refreshed.config_json or {}).get("result_kind") == ("invalid_or_incomplete_result")
 
 
 # ---------------------------------------------------------------------------
@@ -2124,15 +2096,9 @@ def test_mock_llm_integration_matrix(db):
     project = _org_project(db, "INT1")
     tender = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
     company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
-    chunk_a = _chunk(
-        db, project, company, index=0, content="本公司具备一级建筑业企业资质。"
-    )
-    chunk_b = _chunk(
-        db, project, company, index=1, content="本公司仅具备二级建筑业企业资质。"
-    )
-    chunk_scope = _chunk(
-        db, project, company, index=2, content="本项目服务范围为朝阳区。"
-    )
+    chunk_a = _chunk(db, project, company, index=0, content="本公司具备一级建筑业企业资质。")
+    chunk_b = _chunk(db, project, company, index=1, content="本公司仅具备二级建筑业企业资质。")
+    chunk_scope = _chunk(db, project, company, index=2, content="本项目服务范围为朝阳区。")
 
     req_supported = _requirement(
         db, project, normalized="投标人须具备一级建筑业企业资质。", title="SUP"
@@ -2259,9 +2225,7 @@ def test_mock_llm_integration_matrix(db):
                     "needs_review": True,
                     "not_applicable_basis": "requirement_scope_exclusion",
                     "requirement_scope_chunk_id": str(t_chunk.id),
-                    "requirement_scope_quote": (
-                        "本包件仅适用于海淀区范围内的项目，其他区域不适用"
-                    ),
+                    "requirement_scope_quote": ("本包件仅适用于海淀区范围内的项目，其他区域不适用"),
                     "current_scope_chunk_id": str(chunk_scope.id),
                     "current_scope_quote": "本项目服务范围为朝阳区",
                 }
@@ -2269,15 +2233,11 @@ def test_mock_llm_integration_matrix(db):
         }
     )
     svc = RequirementMatchService(db, llm=llm)
-    run = svc.start_matching(
-        project.id, MatchStartRequest(requirement_ids=[req_na.id], force=True)
-    )
+    run = svc.start_matching(project.id, MatchStartRequest(requirement_ids=[req_na.id], force=True))
     svc.execute_run(run.id)
     assert svc.get_run(project.id, run.id).status == ExtractionRunStatus.succeeded
     m = db.scalar(
-        select(RequirementEvidenceMatch).where(
-            RequirementEvidenceMatch.requirement_id == req_na.id
-        )
+        select(RequirementEvidenceMatch).where(RequirementEvidenceMatch.requirement_id == req_na.id)
     )
     assert m is not None and m.status == EvidenceMatchStatus.not_applicable
 
@@ -2302,10 +2262,7 @@ def test_mock_llm_integration_matrix(db):
     )
     svc.execute_run(run.id)
     assert svc.get_run(project.id, run.id).status == ExtractionRunStatus.failed
-    after_ids = {
-        row.id
-        for row in db.scalars(select(RequirementEvidenceMatch))
-    }
+    after_ids = {row.id for row in db.scalars(select(RequirementEvidenceMatch))}
     assert after_ids == before_ids
 
     # --- mixed legal+illegal fail ---
@@ -2330,9 +2287,7 @@ def test_mock_llm_integration_matrix(db):
     svc = RequirementMatchService(db, llm=llm)
     run = svc.start_matching(
         project.id,
-        MatchStartRequest(
-            requirement_ids=[req_supported.id, req_partial.id], force=True
-        ),
+        MatchStartRequest(requirement_ids=[req_supported.id, req_partial.id], force=True),
     )
     svc.execute_run(run.id)
     assert svc.get_run(project.id, run.id).status == ExtractionRunStatus.failed

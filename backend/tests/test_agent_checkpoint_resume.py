@@ -213,9 +213,7 @@ def test_resume_skips_completed_nodes(db: Session, engine, monkeypatch):
     monkeypatch.setattr(load_mod, "get_project_context", count_ctx)
     monkeypatch.setattr(retrieve_mod, "search_evidence", count_search)
     monkeypatch.setattr(match_mod, "match_company_evidence", count_match)
-    monkeypatch.setattr(
-        compliance_mod, "run_project_compliance_check", count_compliance
-    )
+    monkeypatch.setattr(compliance_mod, "run_project_compliance_check", count_compliance)
 
     svc = AgentRunService(db, llm=FakeLlm(), retrieval_fn=_fake_retrieval)
     run = svc.start_run(
@@ -251,9 +249,9 @@ def test_resume_skips_completed_nodes(db: Session, engine, monkeypatch):
     run_id = run.id
 
     before_runs = db.scalar(
-        select(func.count()).select_from(ComplianceRun).where(
-            ComplianceRun.project_id == project_id
-        )
+        select(func.count())
+        .select_from(ComplianceRun)
+        .where(ComplianceRun.project_id == project_id)
     )
 
     # Simulate process restart: NEW Session + NEW AgentRunService.
@@ -276,9 +274,7 @@ def test_resume_skips_completed_nodes(db: Session, engine, monkeypatch):
         assert counters["run_project_compliance_check"] == 1
 
         skipped = [
-            e
-            for e in (resumed.state.tool_events or [])
-            if e.get("summary") == "skipped_completed"
+            e for e in (resumed.state.tool_events or []) if e.get("summary") == "skipped_completed"
         ]
         # True LG continue may omit early-node skip events; START+completed_nodes
         # fallback emits them. Counters above are the hard guarantee either way.
@@ -299,9 +295,9 @@ def test_resume_skips_completed_nodes(db: Session, engine, monkeypatch):
         assert len(resumed.state.requirements or []) == req_count
 
         after_runs = db2.scalar(
-            select(func.count()).select_from(ComplianceRun).where(
-                ComplianceRun.project_id == project_id
-            )
+            select(func.count())
+            .select_from(ComplianceRun)
+            .where(ComplianceRun.project_id == project_id)
         )
         # Exactly one compliance run created after resume (not on interrupt).
         assert after_runs == (before_runs or 0) + 1

@@ -208,9 +208,12 @@ class LlmClient:
         url = f"{self.base_url}/chat/completions"
         started = time.perf_counter()
         try:
-            with httpx.Client(timeout=self.timeout_seconds) as client, client.stream(
-                "POST", url, json=payload, headers=_auth_headers(self.api_key)
-            ) as response:
+            with (
+                httpx.Client(timeout=self.timeout_seconds) as client,
+                client.stream(
+                    "POST", url, json=payload, headers=_auth_headers(self.api_key)
+                ) as response,
+            ):
                 if response.status_code >= 400:
                     body = response.read().decode("utf-8", errors="replace")[:500]
                     raise LlmUnavailableError(
@@ -291,9 +294,7 @@ class LlmClient:
                 result["detail"] = f"models={ids[:5]}"
             else:
                 result["status"] = "error"
-                result["detail"] = (
-                    f"已连通但未找到 served model {self.model!r}；当前: {ids[:8]}"
-                )
+                result["detail"] = f"已连通但未找到 served model {self.model!r}；当前: {ids[:8]}"
         except Exception as exc:  # noqa: BLE001 - report real connectivity
             result["status"] = "error"
             result["detail"] = f"{type(exc).__name__}: {exc}"

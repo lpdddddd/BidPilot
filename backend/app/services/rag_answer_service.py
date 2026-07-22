@@ -344,9 +344,7 @@ class RagAnswerService:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=exc.detail
             ) from exc
         except LlmError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.detail
-            ) from exc
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.detail) from exc
 
         try:
             cited_ids = validate_answer(result.content, {s.source_id for s in sources})
@@ -432,8 +430,7 @@ class RagAnswerService:
                 "data": {
                     "message": "大模型问答未启用",
                     "detail": (
-                        "请设置 LLM_ENABLED=true 并启动 vLLM"
-                        "（见 scripts/serve_qwen3_vllm.sh）"
+                        "请设置 LLM_ENABLED=true 并启动 vLLM（见 scripts/serve_qwen3_vllm.sh）"
                     ),
                 },
             }

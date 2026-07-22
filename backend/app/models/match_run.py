@@ -64,9 +64,7 @@ class RequirementMatchRun(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     missing_evidence_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     conflict_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failed_requirement_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    protected_requirement_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
+    protected_requirement_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     skipped_reviewed_requirement_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0
     )
@@ -136,12 +134,8 @@ class RequirementEvidenceMatch(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reviewed_by: Mapped[str | None] = mapped_column(String(128))
     review_lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    is_review_protected: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
-    lifecycle_status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="active"
-    )
+    is_review_protected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    lifecycle_status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     superseded_by_match_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("requirement_evidence_matches.id", ondelete="SET NULL"),
@@ -174,9 +168,7 @@ class RequirementEvidenceMatchLink(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """Company-side evidence for a RequirementEvidenceMatch (not tender EvidenceLink)."""
 
     __tablename__ = "requirement_evidence_match_links"
-    __table_args__ = (
-        Index("ix_requirement_evidence_match_links_match_id", "match_id"),
-    )
+    __table_args__ = (Index("ix_requirement_evidence_match_links_match_id", "match_id"),)
 
     match_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),

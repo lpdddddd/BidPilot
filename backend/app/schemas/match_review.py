@@ -27,9 +27,7 @@ class MatchReviewRequest(BaseModel):
 
     @field_validator("action")
     @classmethod
-    def _reject_reopen_on_review_endpoint(
-        cls, value: MatchReviewAction
-    ) -> MatchReviewAction:
+    def _reject_reopen_on_review_endpoint(cls, value: MatchReviewAction) -> MatchReviewAction:
         if value == MatchReviewAction.reopen:
             raise ValueError("reopen must use the /reopen endpoint")
         return value

@@ -80,6 +80,7 @@ class LlmHealthResponse(BaseModel):
 
 # Streaming event payloads (documented for OpenAPI / clients)
 
+
 class AskRetrievalEvent(BaseModel):
     event: Literal["retrieval"] = "retrieval"
     sources: list[CitationItem]
