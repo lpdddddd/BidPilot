@@ -8,7 +8,7 @@ from app.agent.nodes._helpers import (
     get_runtime,
     mark_fatal_error,
     mark_retryable_error,
-    record_tool_event,
+    run_tool,
 )
 from app.agent.state import NODE_MATCH, AgentState, append_warning, touch
 from app.services.llm_client import LlmError
@@ -23,8 +23,8 @@ def match_company_evidence_node(state: AgentState) -> AgentState:
     project_id = UUID(state["project_id"])  # type: ignore[arg-type]
     req_ids = [UUID(r["id"]) for r in (state.get("requirements") or []) if r.get("id")]
 
-    try:
-        result = match_company_evidence(
+    def _call():
+        return match_company_evidence(
             runtime.db,
             MatchCompanyEvidenceInput(
                 project_id=project_id,
@@ -33,21 +33,21 @@ def match_company_evidence_node(state: AgentState) -> AgentState:
             ),
             llm=runtime.llm,
         )
+
+    try:
+        result = run_tool(
+            state,
+            "match_company_evidence",
+            _call,
+            summary_on_ok=lambda r: r.summary or r.detail,
+        )
     except LlmError as exc:
         mark_fatal_error(state, f"LLM schema/error: {exc}", "llm_schema_error")
-        record_tool_event(state, name="match_company_evidence", status="error", summary=str(exc))
         return touch(state)
     except Exception as exc:  # noqa: BLE001
         mark_retryable_error(state, f"{type(exc).__name__}: {exc}", "match_error")
-        record_tool_event(state, name="match_company_evidence", status="error", summary=str(exc))
         return touch(state)
 
-    record_tool_event(
-        state,
-        name="match_company_evidence",
-        status="ok" if result.ok else "error",
-        summary=result.summary or result.detail,
-    )
     if not result.ok:
         mark_fatal_error(state, result.detail or "match failed", "match_error")
         return touch(state)

@@ -52,26 +52,6 @@ class AgentStateRead(BaseModel):
     model_config = {"extra": "allow"}
 
 
-class AgentRunRead(BaseModel):
-    id: UUID
-    organization_id: UUID
-    project_id: UUID | None
-    status: AgentRunStatus
-    intent: str | None = None
-    current_node: str | None = None
-    graph_version: str | None = None
-    idempotency_key: str | None = None
-    input_json: dict[str, Any] | None = None
-    output_summary_json: dict[str, Any] | None = None
-    error_code: str | None = None
-    error_summary: str | None = None
-    started_at: datetime | None = None
-    finished_at: datetime | None = None
-    created_at: datetime
-    updated_at: datetime
-    state: AgentStateRead | None = None
-
-
 class AgentRunListResponse(BaseModel):
     items: list[AgentRunRead]
     total: int
@@ -92,7 +72,30 @@ class AgentEventItem(BaseModel):
     duration_ms: int | None = None
     agent_step_id: UUID | None = None
     tool_call_id: UUID | None = None
+    attempt: int | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentRunRead(BaseModel):
+    id: UUID
+    organization_id: UUID
+    project_id: UUID | None
+    status: AgentRunStatus
+    intent: str | None = None
+    current_node: str | None = None
+    graph_version: str | None = None
+    idempotency_key: str | None = None
+    input_json: dict[str, Any] | None = None
+    output_summary_json: dict[str, Any] | None = None
+    error_code: str | None = None
+    error_summary: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+    state: AgentStateRead | None = None
+    thread_id: str | None = None
+    events_stream_path: str | None = None
 
 
 class AgentEventsResponse(BaseModel):

@@ -7,7 +7,7 @@ from app.agent.nodes._helpers import (
     finish_node,
     get_runtime,
     mark_fatal_error,
-    record_tool_event,
+    run_tool,
 )
 from app.agent.state import NODE_LOAD_CONTEXT, AgentState, append_warning, touch
 from app.tools.agent_tools import GetProjectContextInput, get_project_context
@@ -24,19 +24,27 @@ def load_project_context(state: AgentState) -> AgentState:
         return touch(state)
 
     selected = [UUID(x) for x in (state.get("selected_document_ids") or [])]
-    result = get_project_context(
-        runtime.db,
-        GetProjectContextInput(
-            project_id=UUID(project_id),
-            selected_document_ids=selected,
-        ),
-    )
-    record_tool_event(
-        state,
-        name="get_project_context",
-        status="ok" if result.ok else "error",
-        summary=result.summary or result.detail,
-    )
+
+    def _call():
+        return get_project_context(
+            runtime.db,
+            GetProjectContextInput(
+                project_id=UUID(project_id),
+                selected_document_ids=selected,
+            ),
+        )
+
+    try:
+        result = run_tool(
+            state,
+            "get_project_context",
+            _call,
+            summary_on_ok=lambda r: r.summary or r.detail,
+        )
+    except Exception as exc:  # noqa: BLE001
+        mark_fatal_error(state, f"{type(exc).__name__}: {exc}", "context_error")
+        return touch(state)
+
     if not result.ok:
         mark_fatal_error(state, result.detail or "context load failed", "context_error")
         return touch(state)

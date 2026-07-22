@@ -124,7 +124,7 @@ def test_agent_api_happy_and_idempotency(client: TestClient, db: Session, monkey
     project = _seed(db)
     key = f"k-{uuid4().hex}"
     created = client.post(
-        f"/api/v1/projects/{project.id}/agent-runs",
+        f"/api/v1/projects/{project.id}/agent-runs?sync=true",
         json={
             "user_request": "分析",
             "metadata": {
@@ -139,7 +139,7 @@ def test_agent_api_happy_and_idempotency(client: TestClient, db: Session, monkey
     run_id = created.json()["id"]
 
     again = client.post(
-        f"/api/v1/projects/{project.id}/agent-runs",
+        f"/api/v1/projects/{project.id}/agent-runs?sync=true",
         json={"user_request": "分析"},
         headers={"Idempotency-Key": key},
     )
@@ -156,7 +156,7 @@ def test_agent_api_happy_and_idempotency(client: TestClient, db: Session, monkey
     latest = client.get(f"/api/v1/projects/{project.id}/agent-runs/latest")
     assert latest.status_code == 200
     assert latest.json()["id"] == run_id
-    hist = client.get(f"/api/v1/projects/{project.id}/agent-runs")
+    hist = client.get(f"/api/v1/projects/{project.id}/agent-runs?sync=true")
     assert hist.status_code == 200
     assert hist.json()["total"] >= 1
     # SSE stub
@@ -165,14 +165,14 @@ def test_agent_api_happy_and_idempotency(client: TestClient, db: Session, monkey
 
 
 def test_agent_api_invalid_project(client: TestClient):
-    resp = client.post(f"/api/v1/projects/{uuid4()}/agent-runs", json={})
+    resp = client.post(f"/api/v1/projects/{uuid4()}/agent-runs?sync=true", json={})
     assert resp.status_code == 404
 
 
 def test_agent_api_no_docs_blocked(client: TestClient, db: Session, monkeypatch):
     _patch_service(monkeypatch)
     project = _seed(db, with_doc=False, with_req=False)
-    resp = client.post(f"/api/v1/projects/{project.id}/agent-runs", json={})
+    resp = client.post(f"/api/v1/projects/{project.id}/agent-runs?sync=true", json={})
     assert resp.status_code == 201
     assert resp.json()["status"] == "blocked"
 
@@ -182,7 +182,7 @@ def test_agent_api_cross_project(client: TestClient, db: Session, monkeypatch):
     p1 = _seed(db)
     p2 = _seed(db)
     created = client.post(
-        f"/api/v1/projects/{p1.id}/agent-runs",
+        f"/api/v1/projects/{p1.id}/agent-runs?sync=true",
         json={
             "metadata": {
                 "allow_empty_draft": True,

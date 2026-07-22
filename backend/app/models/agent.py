@@ -132,6 +132,7 @@ class ToolCall(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     tool_name: Mapped[str] = mapped_column(String(255), nullable=False)
     call_id: Mapped[str | None] = mapped_column(String(64))
     node_name: Mapped[str | None] = mapped_column(String(255))
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     arguments_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     result_json: Mapped[dict[str, Any] | Any | None] = mapped_column(JSONB)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="pending")
@@ -160,6 +161,13 @@ class AgentEvent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         ),
         Index("ix_agent_events_agent_run_id_sequence", "agent_run_id", "sequence"),
         Index("ix_agent_events_event_type", "event_type"),
+        Index(
+            "uq_agent_events_agent_run_id_idempotency_key",
+            "agent_run_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+        ),
     )
 
     agent_run_id: Mapped[UUID] = mapped_column(
@@ -186,6 +194,8 @@ class AgentEvent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     call_id: Mapped[str | None] = mapped_column(String(64))
+    attempt: Mapped[int | None] = mapped_column(Integer)
+    idempotency_key: Mapped[str | None] = mapped_column(String(255))
     payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

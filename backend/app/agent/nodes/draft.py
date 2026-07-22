@@ -8,7 +8,7 @@ from app.agent.nodes._helpers import (
     get_runtime,
     mark_fatal_error,
     mark_retryable_error,
-    record_tool_event,
+    run_tool,
 )
 from app.agent.state import NODE_DRAFT, AgentState, append_warning, block_on_critical, touch
 from app.services.llm_client import LlmError
@@ -22,13 +22,12 @@ def generate_response_draft(state: AgentState) -> AgentState:
     runtime = get_runtime()
     project_id = UUID(state["project_id"])  # type: ignore[arg-type]
 
-    # On resume, keep existing draft_ids (no duplicates).
     if state.get("draft_ids") and not state.get("metadata", {}).get("force_redraft"):
-        record_tool_event(
+        run_tool(
             state,
-            name="generate_proposal_draft",
-            status="ok",
-            summary=f"reused drafts={state['draft_ids']}",
+            "generate_proposal_draft",
+            lambda: state["draft_ids"],
+            summary_on_ok=lambda ids: f"reused drafts={ids}",
         )
         return finish_node(state, NODE_DRAFT)
 
@@ -44,16 +43,16 @@ def generate_response_draft(state: AgentState) -> AgentState:
     meta = state.get("metadata") or {}
     if meta.get("synthetic_draft_id"):
         state["draft_ids"] = [str(meta["synthetic_draft_id"])]
-        record_tool_event(
+        run_tool(
             state,
-            name="generate_proposal_draft",
-            status="ok",
-            summary="synthetic_draft",
+            "generate_proposal_draft",
+            lambda: "synthetic_draft",
+            summary_on_ok=lambda _: "synthetic_draft",
         )
         return finish_node(state, NODE_DRAFT)
 
-    try:
-        result = generate_proposal_draft(
+    def _call():
+        return generate_proposal_draft(
             runtime.db,
             GenerateProposalDraftInput(
                 project_id=project_id,
@@ -64,21 +63,21 @@ def generate_response_draft(state: AgentState) -> AgentState:
             ),
             llm=runtime.llm,
         )
+
+    try:
+        result = run_tool(
+            state,
+            "generate_proposal_draft",
+            _call,
+            summary_on_ok=lambda r: r.summary or r.detail,
+        )
     except LlmError as exc:
         mark_fatal_error(state, f"LLM schema/error: {exc}", "llm_schema_error")
-        record_tool_event(state, name="generate_proposal_draft", status="error", summary=str(exc))
         return touch(state)
     except Exception as exc:  # noqa: BLE001
         mark_retryable_error(state, f"{type(exc).__name__}: {exc}", "draft_error")
-        record_tool_event(state, name="generate_proposal_draft", status="error", summary=str(exc))
         return touch(state)
 
-    record_tool_event(
-        state,
-        name="generate_proposal_draft",
-        status="ok" if result.ok else "error",
-        summary=result.summary or result.detail,
-    )
     if not result.ok:
         mark_fatal_error(state, result.detail or "draft failed", "draft_error")
         return touch(state)

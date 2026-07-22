@@ -1,8 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ProjectDetailPage from "./ProjectDetailPage";
 import { parseProjectSearchParams } from "./projectDetailParams";
 
@@ -119,22 +119,18 @@ describe("ProjectDetailPage citation deep-link", () => {
     listDocumentChunks.mockResolvedValue({ items: [CHUNK], total: 1 });
   });
 
+  afterEach(() => {
+    cleanup();
+  });
+
   it("opens documents tab, document drawer, page and chunk from URL", async () => {
     renderAt(
       "/projects/proj-1?tab=documents&document_id=doc-1&page=3&chunk_id=chunk-abc",
     );
-    await waitFor(() => {
-      expect(screen.getByTestId("project-detail-page")).toBeTruthy();
-    });
-    await waitFor(() => {
-      expect(screen.getByTestId("documents-tab-panel")).toBeTruthy();
-    });
-    await waitFor(() => {
-      expect(screen.getByTestId("chunk-viewer-drawer")).toBeTruthy();
-    });
-    await waitFor(() => {
-      expect(screen.getByTestId("chunk-focus-page").textContent).toContain("3");
-    });
+    expect(await screen.findByTestId("project-detail-page")).toBeTruthy();
+    expect(await screen.findByTestId("documents-tab-panel")).toBeTruthy();
+    expect(await screen.findByTestId("chunk-viewer-drawer")).toBeTruthy();
+    expect((await screen.findByTestId("chunk-focus-page")).textContent).toContain("3");
     await waitFor(() => {
       const card = screen.getByTestId("chunk-card-chunk-abc");
       expect(card.getAttribute("data-highlighted")).toBe("true");
@@ -143,34 +139,28 @@ describe("ProjectDetailPage citation deep-link", () => {
 
   it("shows safe alert for invalid document_id", async () => {
     renderAt("/projects/proj-1?tab=documents&document_id=missing-doc");
-    await waitFor(() => {
-      expect(screen.getByTestId("source-link-alert")).toBeTruthy();
-    });
-    expect(screen.getByTestId("source-link-alert").textContent).toMatch(/不存在|不属于/);
+    const alert = await screen.findByTestId("source-link-alert");
+    expect(alert.textContent).toMatch(/不存在|不属于/);
     expect(screen.queryByTestId("chunk-viewer-drawer")).toBeNull();
   });
 
   it("rejects cross-project document_id not in list", async () => {
     listDocuments.mockResolvedValue({ items: [], total: 0 });
     renderAt("/projects/proj-1?tab=documents&document_id=other-project-doc");
-    await waitFor(() => {
-      expect(screen.getByTestId("source-link-alert")).toBeTruthy();
-    });
+    expect(await screen.findByTestId("source-link-alert")).toBeTruthy();
   });
 
   it("restores focus after remount (refresh simulation)", async () => {
     const { unmount } = renderAt(
       "/projects/proj-1?tab=documents&document_id=doc-1&page=3&chunk_id=chunk-abc",
     );
-    await waitFor(() => expect(screen.getByTestId("chunk-viewer-drawer")).toBeTruthy());
+    expect(await screen.findByTestId("chunk-viewer-drawer")).toBeTruthy();
     unmount();
     renderAt(
       "/projects/proj-1?tab=documents&document_id=doc-1&page=3&chunk_id=chunk-abc",
     );
-    await waitFor(() => {
-      expect(screen.getByTestId("chunk-viewer-drawer")).toBeTruthy();
-      expect(screen.getByTestId("chunk-focus-page").textContent).toContain("3");
-    });
+    expect(await screen.findByTestId("chunk-viewer-drawer")).toBeTruthy();
+    expect((await screen.findByTestId("chunk-focus-page")).textContent).toContain("3");
   });
 
   it("supports browser back/forward via MemoryRouter history", async () => {
@@ -193,17 +183,17 @@ describe("ProjectDetailPage citation deep-link", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    await waitFor(() => expect(screen.getByTestId("chunk-viewer-drawer")).toBeTruthy());
-    const overviewTab = screen.getByRole("tab", { name: "项目概览" });
+    expect(await screen.findByTestId("chunk-viewer-drawer")).toBeTruthy();
+    const overviewTab = await screen.findByRole("tab", { name: "项目概览" });
     await user.click(overviewTab);
     await waitFor(() => {
       expect(overviewTab.getAttribute("aria-selected")).toBe("true");
     });
-    const docsTab = screen.getByRole("tab", { name: "文档中心" });
+    const docsTab = await screen.findByRole("tab", { name: "文档中心" });
     await user.click(docsTab);
     await waitFor(() => {
       expect(docsTab.getAttribute("aria-selected")).toBe("true");
-      expect(screen.getByTestId("documents-tab-panel")).toBeTruthy();
     });
+    expect(await screen.findByTestId("documents-tab-panel")).toBeTruthy();
   });
 });

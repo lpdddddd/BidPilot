@@ -259,7 +259,11 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 - API：`POST/GET .../compliance/runs`、`.../latest`、`.../findings`、`.../rules`；失败 run 仍可查询（含 `error_code`）
 - Tools：`check_requirement_coverage` 等 5 个 Pydantic I/O 包装
 - 前端：「智能审查」`/review`（`ComplianceReviewPage`，含 info StatCard）；Dashboard 能力标记 ready
-- 离线：`python -m app.services.compliance.offline_eval`（正式 A–E 引擎，无 REF_*）
+- 离线报告（确定性；正式 A–E 引擎，无 REF_*）：
+  ```bash
+  cd backend && python -m app.services.compliance.offline_eval
+  ```
+  产出含 `coverage_matrix`（含 `focus_sample_count`）；当前正式规则 **29 条已执行**，其中通常 **3 条**有直接 reference 可对照（如 A001 / C003 / E003）。**自动 reference 不是人工 Gold**；无 focus 样本的规则不得宣称 100% 一致率。
 - **Step 9 修复**：双边证据严格定义、C005/E003/E005 语义、失败 run 持久化、离线一致性评估
 - **限制**：非法律意见 / 非人工 gold；不足则 unknown，不编造
 - **尚未实现**：LoRA 审查、自动投标结论
@@ -272,13 +276,24 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 - 图版本 `bidpilot-agent-1.0.0`；节点只编排、调用既有 Services/Tools（合规无 LLM）
 - **草稿校验**：`validate_draft` 正式调用 `check_draft_compliance`（默认 `draft_safety` + `consistency`）；`draft_findings` 入状态；`force_draft_validation` 仅兼容旧单测
 - **Checkpoint**：`thread_id=str(run.id)`；`completed_nodes` 跳过已完成节点；可选还原 `lg_memory` 后 `stream(None)` 续跑，否则 START + skip
-- **事件**：`AgentStep.step_index` 从 0 递增（已修 `0 or -1` 假值 bug）
-- 表：扩展 `agent_runs` + `agent_checkpoints`；事件复用 `AgentStep` / `ToolCall`
+- **事件**：统一 `AgentEvent.sequence`（`AgentRun.event_sequence` 行锁分配）；`AgentStep` / `ToolCall` 关联
+- 表：扩展 `agent_runs` + `agent_checkpoints` + `agent_events`
 - 关键资格 finding：默认 `block_on_critical_qualification=true` → `blocked`；否则 risk-only 草稿 + `completed_with_warnings`
 - API：`POST/GET .../agent-runs`、`.../latest`、`.../events`、`.../result`、`.../resume`、`.../retry`
-- 前端：项目详情「Agent 闭环」面板（非完整时间线）
-- **尚未实现**：Step 11 实时可视化、Step 12 评测中心、LoRA
 - **限制**：非法律意见 / 非人工 gold；证据不足则 warning / blocked；不编造资质
+
+## Agent 实时执行时间线（第 11 步）
+
+异步跑图 + 真实 tool 生命周期 + SSE/轮询时间线 UI。详见 [`docs/agent_workflow.md`](docs/agent_workflow.md)（Step 11 节）。
+
+- **异步启动**：`POST` 持久化 `AgentRun` 后立即返回 `run_id` / `thread_id` / `events_stream_path`；图在 FastAPI `BackgroundTasks` 执行；测试可用 `?sync=true`；同 run 重复启动去重
+- **真实 tool 生命周期**：`run_tool()` 在调用前发 `tool_started`（短 commit），调用后发 `tool_completed`/`tool_failed`；真实 `started_at`/`finished_at`/`duration_ms`、`attempt`、`idempotency_key`；`ToolCall` ↔ `AgentStep`
+- **中途可见**：节点/工具事件短提交后，另一 Session 可读到 mid-run 事件
+- **SSE**：`GET .../agent-runs/{run_id}/events/stream`（`sequence` 作 event id；`Last-Event-ID` / `after_sequence`；catch-up → 等待；heartbeat 不占序号；终态关流；仅安全字段）；轮询回退同一事件模型
+- **前端**：`AgentLoopPanel` — 状态栏、执行时间线、结果、引用深链、恢复/重试
+- **进程重启**：checkpoint 持久化，但 BackgroundTasks **不会**自动续跑，需显式 resume
+- **尚未实现**：WebSocket、CoT 流式展示、Step 12 评测中心、LoRA
+
 ## 可追溯响应准备草稿
 
 基于已确认 Match 与可定位证据，生成待人工复核的响应准备草稿（非投标提交文件）。
@@ -319,7 +334,14 @@ cd backend && alembic upgrade head && pytest
 
 ### Agent 引用定位
 
-前端引用链接：`/projects/{id}?tab=documents&document_id=&page=&chunk_id=`。项目详情页会切换文档 Tab、打开本项目文档并高亮 chunk；无效/跨项目来源显示安全提示。Agent 时间线见 `docs/agent_workflow.md`（统一 `AgentEvent.sequence`）。**Step 11 实时执行页尚未实现。**
+前端引用链接：`/projects/{id}?tab=documents&document_id=&page=&chunk_id=`。项目详情页会切换文档 Tab、打开本项目文档并高亮 chunk；无效/跨项目来源显示安全提示。Agent 实时时间线（SSE / 轮询、`AgentLoopPanel`）见 [`docs/agent_workflow.md`](docs/agent_workflow.md)（统一 `AgentEvent.sequence`）。
+
+### CI（GitHub Actions）
+
+`.github/workflows/ci.yml`：
+
+- **frontend**：Node 20 — `npm ci` / lint / test / build
+- **backend-postgres**：Postgres **16**（`postgres:16-alpine` service）— ruff、alembic upgrade/downgrade、Agent/合规/可见性等 pytest 后再跑全量 backend suite
 
 ## 数据流水线：从原始文件到 LLaMAFactory
 
@@ -411,16 +433,17 @@ llamafactory-cli train /absolute/path/to/bidpilot/training/llamafactory/configs/
 12. 混合检索：Qdrant Dense + OpenSearch BM25 + RRF 融合 + Cross-Encoder 重排
 13. 带来源引用的文档问答（RAG：检索证据约束 + Qwen3-8B + 引用校验 + SSE）
 14. 确定性规则合规检查引擎（coverage/evidence/资格风险/草稿安全/一致性）
+15. LangGraph Agent 业务闭环（可恢复 checkpoint / resume / retry）
+16. Agent 实时执行时间线（异步跑图、SSE、`AgentLoopPanel`）
 
 ## 后续开发顺序建议
 
 1. 人工审核沉淀 gold 需求 / Match / RAG / SFT
-2. Step 11 Agent 实时时间线可视化
-3. Step 12 评测中心
-4. 合规公开源采集规模化 + OCR
-5. 认证授权与组织权限
-6. 多 GPU QLoRA 正式训练
-7. LoRA 审查 / 自动投标结论 / 投标提交（远期，明确不在当前范围）
+2. Step 12 评测中心
+3. 合规公开源采集规模化 + OCR
+4. 认证授权与组织权限
+5. 多 GPU QLoRA 正式训练
+6. LoRA 审查 / 自动投标结论 / 投标提交（远期，明确不在当前范围）
 
 ## Makefile 命令
 

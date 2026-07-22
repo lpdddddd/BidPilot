@@ -1056,6 +1056,8 @@ export type AgentRun = {
   created_at: string;
   updated_at: string;
   state?: AgentState | null;
+  thread_id?: string | null;
+  events_stream_path?: string | null;
 };
 
 export type AgentRunListResponse = {
@@ -1064,12 +1066,21 @@ export type AgentRunListResponse = {
 };
 
 export type AgentEventItem = {
+  id?: string | null;
   event_type: string;
   sequence: number;
   name: string;
+  node_name?: string | null;
+  tool_name?: string | null;
   status: string;
   summary?: string | null;
+  safe_summary?: string | null;
   created_at?: string | null;
+  timestamp?: string | null;
+  duration_ms?: number | null;
+  agent_step_id?: string | null;
+  tool_call_id?: string | null;
+  attempt?: number | null;
   payload?: Record<string, unknown>;
 };
 

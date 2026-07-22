@@ -103,7 +103,7 @@ def _no_auto_indexing(monkeypatch):
 
 
 @pytest.fixture()
-def engine():
+def engine(monkeypatch):
     if not POSTGRES_OK:
         pytest.fail(
             "PostgreSQL is required for integration tests but is unreachable.\n"
@@ -122,6 +122,12 @@ def engine():
         poolclass=NullPool,
     )
     _reset_schema(eng)
+    TestSession = sessionmaker(
+        bind=eng, autoflush=False, autocommit=False, expire_on_commit=False
+    )
+    # SSE / background agent tasks must use the same test DB.
+    monkeypatch.setattr("app.services.agent_run.sse.SESSION_FACTORY", TestSession)
+    monkeypatch.setattr("app.services.agent_run.tasks.SESSION_FACTORY", TestSession)
     yield eng
     eng.pool.dispose()
     with eng.begin() as conn:

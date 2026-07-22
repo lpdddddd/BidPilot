@@ -500,6 +500,8 @@ def test_offline_eval_fixture_honest_coverage(tmp_path):
         assert a["coverage_status"] == b["coverage_status"]
         assert a["agreement"] == b["agreement"]
         assert a["focus_sample_count"] == b["focus_sample_count"]
+    # Fixed inputs → byte-identical report (stable UUIDs + sort_keys).
+    assert out.read_text(encoding="utf-8") == out2.read_text(encoding="utf-8")
 
 
 def test_coverage_a004_a005(db: Session):

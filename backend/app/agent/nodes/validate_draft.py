@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import time
 from typing import Any
 from uuid import UUID
 
@@ -9,7 +8,7 @@ from app.agent.nodes._helpers import (
     begin_node,
     finish_node,
     get_runtime,
-    record_tool_event,
+    run_tool,
 )
 from app.agent.state import NODE_VALIDATE, AgentState, append_warning
 from app.services.compliance.config import STRONG_SATISFACTION_PATTERNS
@@ -104,11 +103,11 @@ def validate_draft(state: AgentState) -> AgentState:
         state["draft_findings"] = []
         if not ok:
             append_warning(state, "draft validation forced fail")
-        record_tool_event(
+        run_tool(
             state,
-            name="validate_draft",
-            status="ok" if ok else "error",
-            summary=f"forced={ok}",
+            "validate_draft",
+            lambda: ok,
+            summary_on_ok=lambda v: f"forced={v}",
         )
         return finish_node(state, NODE_VALIDATE)
 
@@ -124,40 +123,31 @@ def validate_draft(state: AgentState) -> AgentState:
 
     if project_id and draft_ids:
         for draft_id in draft_ids:
-            started = time.perf_counter()
             try:
-                result = check_draft_compliance(
-                    runtime.db,
-                    DraftComplianceInput(
-                        project_id=UUID(project_id),
-                        draft_id=UUID(draft_id),
-                        idempotency_key=f"agent-{state['run_id']}-draft-check-{draft_id}",
+
+                def _check(_did=draft_id):
+                    return check_draft_compliance(
+                        runtime.db,
+                        DraftComplianceInput(
+                            project_id=UUID(project_id),
+                            draft_id=UUID(_did),
+                            idempotency_key=f"agent-{state['run_id']}-draft-check-{_did}",
+                        ),
+                    )
+
+                result = run_tool(
+                    state,
+                    "check_draft_compliance",
+                    _check,
+                    summary_on_ok=lambda r: (
+                        f"status={'ok' if r.ok else 'error'};"
+                        f"finding_count={len((r.report.findings if r.report else []) or [])}"
                     ),
                 )
-                duration_ms = int((time.perf_counter() - started) * 1000)
                 findings_raw = list((result.report.findings if result.report else []) or [])
                 structured = [_finding_dict(f, draft_id=draft_id) for f in findings_raw]
                 all_findings.extend(structured)
-                record_tool_event(
-                    state,
-                    name="check_draft_compliance",
-                    status="ok" if result.ok else "error",
-                    duration_ms=duration_ms,
-                    summary=(
-                        f"status={'ok' if result.ok else 'error'};"
-                        f"finding_count={len(structured)};"
-                        f"rules={_rule_summary(structured)}"
-                    ),
-                )
             except Exception as exc:  # noqa: BLE001
-                duration_ms = int((time.perf_counter() - started) * 1000)
-                record_tool_event(
-                    state,
-                    name="check_draft_compliance",
-                    status="error",
-                    duration_ms=duration_ms,
-                    summary=f"status=error;finding_count=0;error={type(exc).__name__}",
-                )
                 append_warning(state, f"draft compliance failed for {draft_id}: {exc}")
                 all_findings.append(
                     {
@@ -244,13 +234,13 @@ def validate_draft(state: AgentState) -> AgentState:
                     state,
                     f"draft finding {f.get('rule_id')}: {f.get('message')}",
                 )
-    record_tool_event(
+    run_tool(
         state,
-        name="validate_draft",
-        status="ok" if not failed else "error",
-        summary=(
+        "validate_draft",
+        lambda: not failed,
+        summary_on_ok=lambda ok: (
             f"pass findings={len(all_findings)}"
-            if not failed
+            if ok
             else f"fail findings={len(all_findings)} rules={_rule_summary(all_findings)}"
         ),
     )

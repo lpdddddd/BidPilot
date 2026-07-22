@@ -7,7 +7,7 @@ from app.agent.nodes._helpers import (
     finish_node,
     get_runtime,
     mark_fatal_error,
-    record_tool_event,
+    run_tool,
 )
 from app.agent.state import NODE_REVISE, NODE_VALIDATE, AgentState, append_warning, touch
 from app.tools.agent_tools import GenerateProposalDraftInput, generate_proposal_draft
@@ -72,28 +72,29 @@ def revise_draft(state: AgentState) -> AgentState:
         meta["prior_draft_ids"] = prev
         state["draft_ids"] = [str(new_id)]
         state["metadata"] = meta
-        record_tool_event(
+        run_tool(
             state,
-            name="generate_proposal_draft",
-            status="ok",
-            summary=f"revise_synthetic count={count}",
+            "generate_proposal_draft",
+            lambda: f"revise_synthetic count={count}",
+            summary_on_ok=lambda s: s,
         )
         return finish_node(state, NODE_REVISE)
 
     project_id = state.get("project_id")
     req_ids = [UUID(r["id"]) for r in (state.get("requirements") or []) if r.get("id")]
     if not project_id or not req_ids:
-        record_tool_event(
+        run_tool(
             state,
-            name="generate_proposal_draft",
-            status="ok",
-            summary=f"revise_noop count={count}",
+            "generate_proposal_draft",
+            lambda: f"revise_noop count={count}",
+            summary_on_ok=lambda s: s,
         )
         return finish_node(state, NODE_REVISE)
 
     idem = f"agent-{state['run_id']}-draft-rev-{count}"
-    try:
-        result = generate_proposal_draft(
+
+    def _call():
+        return generate_proposal_draft(
             runtime.db,
             GenerateProposalDraftInput(
                 project_id=UUID(project_id),
@@ -106,17 +107,17 @@ def revise_draft(state: AgentState) -> AgentState:
             ),
             llm=runtime.llm,
         )
+
+    try:
+        result = run_tool(
+            state,
+            "generate_proposal_draft",
+            _call,
+            summary_on_ok=lambda r: r.summary or r.detail,
+        )
     except Exception as exc:  # noqa: BLE001
         mark_fatal_error(state, f"revise failed: {exc}", "revise_error")
-        record_tool_event(state, name="generate_proposal_draft", status="error", summary=str(exc))
         return touch(state)
-
-    record_tool_event(
-        state,
-        name="generate_proposal_draft",
-        status="ok" if result.ok else "error",
-        summary=result.summary or result.detail,
-    )
     new_ids = list(result.data.get("draft_ids") or [])
     if new_ids:
         # Keep prior ids in metadata; current draft_ids are the revised set so

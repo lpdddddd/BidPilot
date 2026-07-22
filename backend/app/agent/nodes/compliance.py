@@ -8,7 +8,7 @@ from app.agent.nodes._helpers import (
     get_runtime,
     mark_fatal_error,
     mark_retryable_error,
-    record_tool_event,
+    run_tool,
 )
 from app.agent.state import NODE_COMPLIANCE, AgentState, append_warning, touch
 from app.tools.compliance_tools import (
@@ -24,41 +24,37 @@ def run_compliance_check(state: AgentState) -> AgentState:
     runtime = get_runtime()
     project_id = UUID(state["project_id"])  # type: ignore[arg-type]
 
-    # Reuse existing compliance_run_id on resume (no duplicate business objects).
     if state.get("compliance_run_id"):
-        record_tool_event(
+        run_tool(
             state,
-            name="run_project_compliance_check",
-            status="ok",
-            summary=f"reused compliance_run_id={state['compliance_run_id']}",
+            "run_project_compliance_check",
+            lambda: state["compliance_run_id"],
+            summary_on_ok=lambda rid: f"reused compliance_run_id={rid}",
         )
         return finish_node(state, NODE_COMPLIANCE)
 
     idem = f"agent-{state['run_id']}-compliance"
-    try:
-        result = run_project_compliance_check(
+
+    def _call():
+        return run_project_compliance_check(
             runtime.db,
             ProjectComplianceInput(
                 project_id=project_id,
                 idempotency_key=idem,
             ),
         )
+
+    try:
+        result = run_tool(
+            state,
+            "run_project_compliance_check",
+            _call,
+            summary_on_ok=lambda r: r.detail or (r.report.run.status if r.report else None),
+        )
     except Exception as exc:  # noqa: BLE001
         mark_retryable_error(state, f"{type(exc).__name__}: {exc}", "compliance_error")
-        record_tool_event(
-            state,
-            name="run_project_compliance_check",
-            status="error",
-            summary=str(exc),
-        )
         return touch(state)
 
-    record_tool_event(
-        state,
-        name="run_project_compliance_check",
-        status="ok" if result.ok else "error",
-        summary=result.detail or (result.report.run.status if result.report else None),
-    )
     if not result.ok or result.report is None:
         mark_fatal_error(state, result.detail or "compliance failed", "compliance_error")
         return touch(state)

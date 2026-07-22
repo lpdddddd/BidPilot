@@ -5,7 +5,10 @@ import type {
   AgentRunListResponse,
   AgentRunStartPayload,
 } from "../types/api";
-import { http } from "./http";
+import { API_BASE_URL, http } from "./http";
+
+/** Start returns run_id immediately (async). Keep timeout short — do not block for full graph. */
+const START_TIMEOUT_MS = 30_000;
 
 export async function startAgentRun(
   projectId: string,
@@ -17,7 +20,8 @@ export async function startAgentRun(
     payload,
     {
       headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
-      timeout: 180000,
+      timeout: START_TIMEOUT_MS,
+      // async by default — do not pass sync=true
     },
   );
   return data;
@@ -61,11 +65,40 @@ export async function listAgentRuns(
 export async function getAgentEvents(
   projectId: string,
   runId: string,
+  afterSequence?: number,
 ): Promise<AgentEventsResponse> {
   const { data } = await http.get<AgentEventsResponse>(
     `/api/v1/projects/${projectId}/agent-runs/${runId}/events`,
+    {
+      params:
+        afterSequence != null ? { after_sequence: afterSequence } : undefined,
+    },
   );
   return data;
+}
+
+/** Build EventSource URL (API base + relative stream path). */
+export function buildAgentEventsStreamUrl(
+  projectId: string,
+  runId: string,
+  options?: {
+    afterSequence?: number;
+    streamPath?: string | null;
+  },
+): string {
+  const path =
+    options?.streamPath ||
+    `/api/v1/projects/${projectId}/agent-runs/${runId}/events/stream`;
+  const base = (API_BASE_URL || "").replace(/\/$/, "");
+  const url = new URL(path.startsWith("http") ? path : `${base}${path}`, window.location.origin);
+  if (options?.afterSequence != null) {
+    url.searchParams.set("after_sequence", String(options.afterSequence));
+  }
+  // Prefer same-origin relative when no API base (Vite proxy).
+  if (!API_BASE_URL) {
+    return `${url.pathname}${url.search}`;
+  }
+  return url.toString();
 }
 
 export async function getAgentResult(

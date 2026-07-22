@@ -7,7 +7,7 @@ from app.agent.nodes._helpers import (
     finish_node,
     get_runtime,
     mark_retryable_error,
-    record_tool_event,
+    run_tool,
 )
 from app.agent.state import NODE_RETRIEVE, AgentState, append_warning, touch
 from app.tools.agent_tools import SearchEvidenceInput, search_evidence
@@ -21,8 +21,9 @@ def retrieve_evidence(state: AgentState) -> AgentState:
     project_id = state.get("project_id")
     assert project_id
     query = (state.get("user_request") or "").strip() or "招标要求 资格 条款"
-    try:
-        result = search_evidence(
+
+    def _call():
+        return search_evidence(
             runtime.db,
             SearchEvidenceInput(
                 project_id=UUID(project_id),
@@ -31,16 +32,18 @@ def retrieve_evidence(state: AgentState) -> AgentState:
             ),
             retrieval_fn=runtime.retrieval_fn,
         )
+
+    try:
+        result = run_tool(
+            state,
+            "search_evidence",
+            _call,
+            summary_on_ok=lambda r: r.summary or r.detail,
+        )
     except Exception as exc:  # noqa: BLE001
         mark_retryable_error(state, f"{type(exc).__name__}: {exc}", "retrieve_error")
-        record_tool_event(state, name="search_evidence", status="error", summary=str(exc))
         return touch(state)
-    record_tool_event(
-        state,
-        name="search_evidence",
-        status="ok" if result.ok else "error",
-        summary=result.summary or result.detail,
-    )
+
     if not result.ok:
         mark_retryable_error(state, result.detail or "retrieve failed", "retrieve_error")
         return touch(state)

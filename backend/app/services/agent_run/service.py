@@ -37,10 +37,12 @@ from app.services.agent_run.events import (
     EVENT_RUN_COMPLETED,
     EVENT_RUN_FAILED,
     EVENT_RUN_RESUMED,
+    commit_visible,
     record_event,
     record_node_finished,
     record_node_started,
-    record_tool_call,
+    record_tool_finished,
+    record_tool_started,
     status_from_str,
 )
 from app.tools.agent_tools import RetrievalFn
@@ -294,6 +296,7 @@ class AgentRunService:
             db=self.db,
             llm=self.llm,
             retrieval_fn=self.retrieval_fn,
+            commit_fn=lambda: commit_visible(self.db),
             persist_node_start=lambda **kw: record_node_started(
                 self.db,
                 agent_run_id=run.id,
@@ -304,10 +307,15 @@ class AgentRunService:
                 agent_run_id=run.id,
                 **kw,
             ),
-            persist_tool=lambda **kw: record_tool_call(
+            persist_tool_start=lambda **kw: record_tool_started(
                 self.db,
                 agent_run_id=run.id,
-                **{k: v for k, v in kw.items() if k != "run_id"},
+                **kw,
+            ),
+            persist_tool_finish=lambda **kw: record_tool_finished(
+                self.db,
+                agent_run_id=run.id,
+                **kw,
             ),
             save_checkpoint=lambda st, node: self.checkpoints.save(
                 agent_run_id=run.id,
@@ -456,6 +464,8 @@ class AgentRunService:
         run.state_json = json.loads(json.dumps(state, default=str))
         run.status = status_from_str(str(state.get("status") or "running"))
         self.db.flush()
+        # Mid-run visibility: independent sessions must see node_completed now.
+        commit_visible(self.db)
 
     def _persist_run(self, run: AgentRun, state: AgentState) -> None:
         run.state_json = json.loads(json.dumps(state, default=str))
@@ -503,13 +513,20 @@ class AgentRunService:
             raise HTTPException(status_code=404, detail="agent run not found")
         return self._to_read(run)
 
-    def get_events(self, run_id: UUID, *, project_id: UUID | None = None) -> AgentEventsResponse:
+    def get_events(
+        self,
+        run_id: UUID,
+        *,
+        project_id: UUID | None = None,
+        after_sequence: int | None = None,
+    ) -> AgentEventsResponse:
         run = self.get_run(run_id, project_id=project_id)
+        stmt = select(AgentEvent).where(AgentEvent.agent_run_id == run_id)
+        if after_sequence is not None:
+            stmt = stmt.where(AgentEvent.sequence > after_sequence)
         rows = list(
             self.db.scalars(
-                select(AgentEvent)
-                .where(AgentEvent.agent_run_id == run_id)
-                .order_by(
+                stmt.order_by(
                     AgentEvent.sequence.asc(),
                     AgentEvent.occurred_at.asc(),
                     AgentEvent.id.asc(),
@@ -519,6 +536,9 @@ class AgentRunService:
         events: list[AgentEventItem] = []
         for row in rows:
             name = row.tool_name or row.node_name or row.event_type
+            attempt = row.attempt
+            if attempt is None and isinstance(row.payload_json, dict):
+                attempt = row.payload_json.get("attempt")
             events.append(
                 AgentEventItem(
                     id=row.id,
@@ -535,6 +555,7 @@ class AgentRunService:
                     duration_ms=row.duration_ms,
                     agent_step_id=row.agent_step_id,
                     tool_call_id=row.tool_call_id,
+                    attempt=attempt,
                     payload={
                         "call_id": row.call_id,
                         **(row.payload_json or {}),
@@ -593,6 +614,11 @@ class AgentRunService:
         return self._to_read(row) if row else None
 
     def _to_read(self, run: AgentRun) -> AgentRunRead:
+        stream_path = None
+        if run.project_id is not None:
+            stream_path = f"/api/v1/projects/{run.project_id}/agent-runs/{run.id}/events/stream"
+        else:
+            stream_path = f"/api/v1/agent-runs/{run.id}/events/stream"
         return AgentRunRead(
             id=run.id,
             organization_id=run.organization_id,
@@ -611,4 +637,6 @@ class AgentRunService:
             created_at=run.created_at,
             updated_at=run.updated_at,
             state=AgentStateRead.model_validate(run.state_json) if run.state_json else None,
+            thread_id=str(run.id),
+            events_stream_path=stream_path,
         )

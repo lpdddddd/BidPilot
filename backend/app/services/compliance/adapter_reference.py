@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID, uuid5
 
 from app.models.enums import (
     ComplianceRuleCategory,
@@ -25,6 +25,9 @@ from app.models.enums import (
 from app.schemas.compliance import ComplianceContext, ComplianceFinding
 from app.services.compliance.engine import ComplianceEngine, run_compliance_rules
 from app.services.evidence_validate import quote_in_content
+
+# Stable namespace so offline reports are byte-identical across regenerations.
+_OFFLINE_NS = UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
 
 # rule_type / check_id → formal engine rule ids used for verdict agreement
 RULE_TYPE_RULE_IDS: dict[str, tuple[str, ...]] = {
@@ -46,13 +49,17 @@ RULE_TYPE_CATEGORY: dict[str, ComplianceRuleCategory] = {
 }
 
 
-def _as_uuid(value: Any) -> UUID:
+def _stable_uuid(seed: str) -> UUID:
+    return uuid5(_OFFLINE_NS, seed)
+
+
+def _as_uuid(value: Any, *, fallback_seed: str) -> UUID:
     if isinstance(value, UUID):
         return value
     try:
         return UUID(str(value))
     except (TypeError, ValueError, AttributeError):
-        return uuid4()
+        return _stable_uuid(fallback_seed)
 
 
 def _req_category(rule_type: str) -> RequirementCategory:
@@ -86,12 +93,16 @@ def adapt_compliance_reference_sample(sample: dict[str, Any]) -> ComplianceConte
     text = str(input_obj.get("text") or "")
     check_id = str(input_obj.get("check_id") or "")
 
-    project_id = _as_uuid(sample.get("project_id"))
-    document_id = _as_uuid(sample.get("document_id") or uuid4())
-    req_id = uuid4()
+    sample_id = str(sample.get("sample_id") or "unknown-sample")
+    project_id = _as_uuid(sample.get("project_id"), fallback_seed=f"{sample_id}:project")
+    document_id = _as_uuid(
+        sample.get("document_id"),
+        fallback_seed=f"{sample_id}:document",
+    )
+    req_id = _stable_uuid(f"{sample_id}:requirement")
 
     first_ev = next((e for e in evidence if isinstance(e, dict)), {}) or {}
-    chunk_id = _as_uuid(first_ev.get("chunk_id") or uuid4())
+    chunk_id = _as_uuid(first_ev.get("chunk_id"), fallback_seed=f"{sample_id}:chunk")
     quote = str(first_ev.get("quote") or "")
     page = first_ev.get("page_number")
 
@@ -138,7 +149,7 @@ def adapt_compliance_reference_sample(sample: dict[str, Any]) -> ComplianceConte
         source_document_id=document_id,
     )
     tender_link = SimpleNamespace(
-        id=uuid4(),
+        id=_stable_uuid(f"{sample_id}:tender_link"),
         requirement_id=req_id,
         evidence_type="tender_clause",
         document_id=document_id,

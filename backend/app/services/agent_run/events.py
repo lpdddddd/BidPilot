@@ -1,4 +1,4 @@
-"""Unified Agent timeline events (strictly monotonic sequence per run)."""
+"""Agent run event helpers — unified timeline with real tool start/finish."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -15,7 +15,6 @@ from app.models.enums import AgentRunStatus
 
 _MAX_SEQUENCE_RETRIES = 8
 
-# Canonical event types for the unified timeline.
 EVENT_NODE_STARTED = "node_started"
 EVENT_NODE_COMPLETED = "node_completed"
 EVENT_NODE_FAILED = "node_failed"
@@ -37,20 +36,20 @@ def _safe_text(value: str | None, *, limit: int = 500) -> str | None:
     text = str(value).strip()
     if not text:
         return None
-    # Never persist secrets / connection strings / huge bodies.
-    lowered = text.lower()
     secret_markers = ("password=", "secret=", "api_key", "postgresql://", "private_key")
+    lowered = text.lower()
     if any(k in lowered for k in secret_markers):
         return "[redacted]"
     return text[:limit]
 
 
-def next_event_sequence(db: Session, agent_run_id: UUID) -> int:
-    """Allocate the next sequence under a row lock on the agent run.
+def commit_visible(db: Session) -> None:
+    """Commit so independent sessions can read mid-run events immediately."""
+    db.commit()
 
-    Uses ``AgentRun.event_sequence`` as an atomic counter so concurrent writers
-    cannot collide. Returns the assigned sequence (0-based).
-    """
+
+def next_event_sequence(db: Session, agent_run_id: UUID) -> int:
+    """Allocate next sequence under a row lock on the agent run (0-based)."""
     run = db.execute(
         select(AgentRun).where(AgentRun.id == agent_run_id).with_for_update()
     ).scalar_one()
@@ -73,22 +72,34 @@ def record_event(
     agent_step_id: UUID | None = None,
     tool_call_id: UUID | None = None,
     call_id: str | None = None,
+    attempt: int | None = None,
+    idempotency_key: str | None = None,
     payload_json: dict[str, Any] | None = None,
     occurred_at: datetime | None = None,
     sequence: int | None = None,
 ) -> AgentEvent:
-    """Persist one timeline event with unique ``(run_id, sequence)``.
+    """Persist one timeline event. Retries on unique-constraint collisions."""
+    if idempotency_key:
+        existing = db.scalar(
+            select(AgentEvent).where(
+                AgentEvent.agent_run_id == agent_run_id,
+                AgentEvent.idempotency_key == idempotency_key,
+            )
+        )
+        if existing is not None:
+            return existing
 
-    Retries allocation on unique-constraint collisions (limited).
-    """
     last_err: Exception | None = None
-    for attempt in range(_MAX_SEQUENCE_RETRIES):
-        if sequence is not None and attempt == 0:
+    for attempt_n in range(_MAX_SEQUENCE_RETRIES):
+        if sequence is not None and attempt_n == 0:
             seq = sequence
         else:
             seq = next_event_sequence(db, agent_run_id)
         try:
             with db.begin_nested():
+                payload = dict(payload_json or {})
+                if attempt is not None:
+                    payload.setdefault("attempt", attempt)
                 row = AgentEvent(
                     agent_run_id=agent_run_id,
                     sequence=seq,
@@ -101,7 +112,9 @@ def record_event(
                     agent_step_id=agent_step_id,
                     tool_call_id=tool_call_id,
                     call_id=call_id,
-                    payload_json=payload_json,
+                    attempt=attempt,
+                    idempotency_key=idempotency_key,
+                    payload_json=payload or None,
                     occurred_at=occurred_at or _now(),
                 )
                 db.add(row)
@@ -109,17 +122,25 @@ def record_event(
             return row
         except IntegrityError as exc:
             last_err = exc
-            if sequence is not None:
-                raise
+            if sequence is not None or idempotency_key:
+                # Explicit collision — for idempotency re-read; else raise.
+                if idempotency_key:
+                    existing = db.scalar(
+                        select(AgentEvent).where(
+                            AgentEvent.agent_run_id == agent_run_id,
+                            AgentEvent.idempotency_key == idempotency_key,
+                        )
+                    )
+                    if existing is not None:
+                        return existing
+                if sequence is not None:
+                    raise
             continue
     assert last_err is not None
     raise last_err
 
 
 def next_step_index(db: Session, agent_run_id: UUID) -> int:
-    """Allocate the next AgentStep.step_index under the same run row lock."""
-    from sqlalchemy import func
-
     db.execute(select(AgentRun.id).where(AgentRun.id == agent_run_id).with_for_update())
     current = db.scalar(
         select(func.coalesce(func.max(AgentStep.step_index), -1)).where(
@@ -134,8 +155,22 @@ def record_node_started(
     *,
     agent_run_id: UUID,
     node_name: str,
+    idempotency_key: str | None = None,
 ) -> AgentStep:
     """Create AgentStep (running) + ``node_started`` event."""
+    key = idempotency_key or f"node_started:{agent_run_id}:{node_name}:{uuid4().hex[:8]}"
+    # If a running step already exists for this exact idempotency, reuse.
+    existing_ev = db.scalar(
+        select(AgentEvent).where(
+            AgentEvent.agent_run_id == agent_run_id,
+            AgentEvent.idempotency_key == key,
+        )
+    )
+    if existing_ev and existing_ev.agent_step_id:
+        step = db.get(AgentStep, existing_ev.agent_step_id)
+        if step is not None:
+            return step
+
     last_err: Exception | None = None
     for _ in range(_MAX_SEQUENCE_RETRIES):
         idx = next_step_index(db, agent_run_id)
@@ -158,6 +193,7 @@ def record_node_started(
                 status="running",
                 agent_step_id=step.id,
                 safe_summary=f"node {node_name} started",
+                idempotency_key=key,
             )
             return step
         except IntegrityError as exc:
@@ -176,13 +212,13 @@ def record_node_finished(
     agent_step_id: UUID | None = None,
     output_json: dict[str, Any] | None = None,
     error_message: str | None = None,
+    idempotency_key: str | None = None,
 ) -> AgentEvent:
     """Update AgentStep and emit ``node_completed`` / ``node_failed``."""
     step: AgentStep | None = None
     if agent_step_id is not None:
         step = db.get(AgentStep, agent_step_id)
     if step is None:
-        # Fallback: latest running step for this node on the run.
         step = db.scalar(
             select(AgentStep)
             .where(
@@ -207,16 +243,147 @@ def record_node_finished(
         step.finished_at = _now()
         db.flush()
     event_type = EVENT_NODE_FAILED if final_status == "failed" else EVENT_NODE_COMPLETED
+    step_id = step.id if step else agent_step_id
+    key = idempotency_key or (f"{event_type}:{agent_run_id}:{step_id}" if step_id else None)
     return record_event(
         db,
         agent_run_id=agent_run_id,
         event_type=event_type,
         node_name=node_name,
         status=final_status,
-        agent_step_id=step.id if step else agent_step_id,
+        agent_step_id=step_id,
         safe_summary=_safe_text(error_message) or f"node {node_name} {final_status}",
         payload_json={"output_status": (output_json or {}).get("status")} if output_json else None,
+        idempotency_key=key,
     )
+
+
+def record_tool_started(
+    db: Session,
+    *,
+    agent_run_id: UUID,
+    tool_name: str,
+    agent_step_id: UUID | None = None,
+    node_name: str | None = None,
+    call_id: str | None = None,
+    attempt: int = 1,
+    arguments_json: dict[str, Any] | None = None,
+    idempotency_key: str | None = None,
+) -> ToolCall:
+    """Create ToolCall + ``tool_started`` BEFORE the real tool invocation."""
+    cid = call_id or uuid4().hex
+    key = idempotency_key or f"tool_started:{agent_run_id}:{cid}"
+    existing = db.scalar(
+        select(AgentEvent).where(
+            AgentEvent.agent_run_id == agent_run_id,
+            AgentEvent.idempotency_key == key,
+        )
+    )
+    if existing and existing.tool_call_id:
+        row = db.get(ToolCall, existing.tool_call_id)
+        if row is not None:
+            return row
+
+    if node_name is None and agent_step_id is not None:
+        step = db.get(AgentStep, agent_step_id)
+        if step is not None:
+            node_name = step.node_name
+
+    now = _now()
+    row = ToolCall(
+        agent_run_id=agent_run_id,
+        agent_step_id=agent_step_id,
+        tool_name=tool_name,
+        call_id=cid,
+        node_name=node_name,
+        status="running",
+        attempt=attempt,
+        arguments_json=None,  # never persist raw sensitive args
+        started_at=now,
+        finished_at=None,
+    )
+    del arguments_json  # intentionally unused — do not store
+    db.add(row)
+    db.flush()
+    record_event(
+        db,
+        agent_run_id=agent_run_id,
+        event_type=EVENT_TOOL_STARTED,
+        node_name=node_name,
+        tool_name=tool_name,
+        status="running",
+        agent_step_id=agent_step_id,
+        tool_call_id=row.id,
+        call_id=cid,
+        attempt=attempt,
+        safe_summary=f"tool {tool_name} started",
+        occurred_at=now,
+        idempotency_key=key,
+    )
+    return row
+
+
+def record_tool_finished(
+    db: Session,
+    *,
+    agent_run_id: UUID,
+    tool_call_id: UUID,
+    status: str,
+    summary: str | None = None,
+    error_type: str | None = None,
+    idempotency_key: str | None = None,
+) -> ToolCall:
+    """Update ToolCall + write ``tool_completed`` / ``tool_failed`` AFTER the call."""
+    row = db.get(ToolCall, tool_call_id)
+    if row is None:
+        raise ValueError(f"tool_call not found: {tool_call_id}")
+
+    failed = status in {"error", "failed"}
+    if failed:
+        tool_status = "error"
+    elif status in {"ok", "succeeded", "completed"}:
+        tool_status = "ok"
+    else:
+        tool_status = status
+
+    now = _now()
+    started = row.started_at or now
+    # Ensure finished_at is strictly after started_at when clocks tie.
+    if now <= started:
+        from datetime import timedelta
+
+        now = started + timedelta(milliseconds=1)
+    duration_ms = max(0, int((now - started).total_seconds() * 1000))
+    safe = _safe_text(summary)
+    if error_type and failed:
+        safe = _safe_text(f"{error_type}: {safe or ''}".strip(": "))
+
+    row.status = tool_status
+    row.finished_at = now
+    row.duration_ms = duration_ms
+    row.result_json = {"summary": safe} if safe else None
+    row.error_message = safe if failed else None
+    db.flush()
+
+    end_type = EVENT_TOOL_FAILED if failed else EVENT_TOOL_COMPLETED
+    key = idempotency_key or f"{end_type}:{agent_run_id}:{row.id}"
+    record_event(
+        db,
+        agent_run_id=agent_run_id,
+        event_type=end_type,
+        node_name=row.node_name,
+        tool_name=row.tool_name,
+        status=tool_status,
+        duration_ms=duration_ms,
+        agent_step_id=row.agent_step_id,
+        tool_call_id=row.id,
+        call_id=row.call_id,
+        attempt=row.attempt,
+        safe_summary=safe or f"tool {row.tool_name} {tool_status}",
+        occurred_at=now,
+        idempotency_key=key,
+    )
+    return row
 
 
 def record_tool_lifecycle(
@@ -231,78 +398,57 @@ def record_tool_lifecycle(
     node_name: str | None = None,
     arguments_json: dict[str, Any] | None = None,
     call_id: str | None = None,
+    attempt: int = 1,
 ) -> ToolCall:
-    """Create ToolCall + ``tool_started`` then ``tool_completed`` / ``tool_failed``.
-
-    Call sites historically persist once at completion; we still emit both
-    start and end events with consecutive sequences so the timeline is real.
-    """
-    cid = call_id or uuid4().hex
-    now = _now()
-    failed = status in {"error", "failed"}
-    if failed:
-        tool_status = "error"
-    elif status in {"ok", "succeeded", "completed"}:
-        tool_status = "ok"
-    else:
-        tool_status = status
-    safe = _safe_text(summary)
-
-    # Resolve node_name from step when omitted.
-    if node_name is None and agent_step_id is not None:
-        step = db.get(AgentStep, agent_step_id)
-        if step is not None:
-            node_name = step.node_name
-
-    row = ToolCall(
+    """Legacy one-shot helper (tests). Prefer start/finish around real calls."""
+    del duration_ms, arguments_json
+    row = record_tool_started(
+        db,
         agent_run_id=agent_run_id,
-        agent_step_id=agent_step_id,
         tool_name=tool_name,
-        call_id=cid,
+        agent_step_id=agent_step_id,
         node_name=node_name,
-        status=tool_status,
+        call_id=call_id,
+        attempt=attempt,
+    )
+    return record_tool_finished(
+        db,
+        agent_run_id=agent_run_id,
+        tool_call_id=row.id,
+        status=status,
+        summary=summary,
+    )
+
+
+def record_tool_call(
+    db: Session,
+    *,
+    agent_run_id: UUID,
+    tool_name: str,
+    status: str,
+    summary: str | None = None,
+    duration_ms: int | None = None,
+    agent_step_id: UUID | None = None,
+    arguments_json: dict[str, Any] | None = None,
+    node_name: str | None = None,
+    call_id: str | None = None,
+    attempt: int = 1,
+) -> ToolCall:
+    return record_tool_lifecycle(
+        db,
+        agent_run_id=agent_run_id,
+        tool_name=tool_name,
+        status=status,
+        summary=summary,
         duration_ms=duration_ms,
+        agent_step_id=agent_step_id,
         arguments_json=arguments_json,
-        result_json={"summary": safe} if safe else None,
-        error_message=safe if failed else None,
-        started_at=now,
-        finished_at=now,
-    )
-    db.add(row)
-    db.flush()
-
-    record_event(
-        db,
-        agent_run_id=agent_run_id,
-        event_type=EVENT_TOOL_STARTED,
         node_name=node_name,
-        tool_name=tool_name,
-        status="running",
-        agent_step_id=agent_step_id,
-        tool_call_id=row.id,
-        call_id=cid,
-        safe_summary=f"tool {tool_name} started",
-        occurred_at=now,
+        call_id=call_id,
+        attempt=attempt,
     )
-    end_type = EVENT_TOOL_FAILED if failed else EVENT_TOOL_COMPLETED
-    record_event(
-        db,
-        agent_run_id=agent_run_id,
-        event_type=end_type,
-        node_name=node_name,
-        tool_name=tool_name,
-        status=tool_status,
-        duration_ms=duration_ms,
-        agent_step_id=agent_step_id,
-        tool_call_id=row.id,
-        call_id=cid,
-        safe_summary=safe or f"tool {tool_name} {tool_status}",
-        occurred_at=now,
-    )
-    return row
 
 
-# Back-compat aliases used by older call sites / tests.
 def record_step(
     db: Session,
     *,
@@ -315,7 +461,7 @@ def record_step(
     step_index: int | None = None,
 ) -> AgentStep:
     """Legacy helper: one completed step + node_started/node_completed pair."""
-    del input_json  # unused; kept for signature compatibility
+    del input_json
     if step_index is not None:
         step = AgentStep(
             agent_run_id=agent_run_id,
@@ -358,33 +504,6 @@ def record_step(
         error_message=error_message,
     )
     return step
-
-
-def record_tool_call(
-    db: Session,
-    *,
-    agent_run_id: UUID,
-    tool_name: str,
-    status: str,
-    summary: str | None = None,
-    duration_ms: int | None = None,
-    agent_step_id: UUID | None = None,
-    arguments_json: dict[str, Any] | None = None,
-    node_name: str | None = None,
-    call_id: str | None = None,
-) -> ToolCall:
-    return record_tool_lifecycle(
-        db,
-        agent_run_id=agent_run_id,
-        tool_name=tool_name,
-        status=status,
-        summary=summary,
-        duration_ms=duration_ms,
-        agent_step_id=agent_step_id,
-        arguments_json=arguments_json,
-        node_name=node_name,
-        call_id=call_id,
-    )
 
 
 def status_from_str(value: str) -> AgentRunStatus:
