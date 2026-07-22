@@ -154,11 +154,20 @@ def after_validate(state: AgentState) -> str:
         state["route_decision"] = "finalize"
         return NODE_FINALIZE
     revise_count = int(state.get("draft_revise_count") or 0)
-    if revise_count < MAX_DRAFT_REVISE:
+    meta = state.get("metadata") or {}
+    max_revise = int(meta.get("max_draft_revise", MAX_DRAFT_REVISE))
+    if revise_count < max_revise:
+        # Clear loop nodes so revise → validate can re-execute.
+        done = [
+            n
+            for n in (state.get("completed_nodes") or [])
+            if n not in {NODE_VALIDATE, NODE_REVISE}
+        ]
+        state["completed_nodes"] = done
         state["route_decision"] = "revise_draft"
         return NODE_REVISE
     warnings = list(state.get("warnings") or [])
-    msg = f"draft validation failed after {MAX_DRAFT_REVISE} revisions"
+    msg = f"draft validation failed after {max_revise} revisions"
     if msg not in warnings:
         warnings.append(msg)
     state["warnings"] = warnings
@@ -171,6 +180,9 @@ def after_validate(state: AgentState) -> str:
 def after_revise(state: AgentState) -> str:
     if _should_fail(state):
         return NODE_FINALIZE
+    # Ensure validate re-runs after revise.
+    done = [n for n in (state.get("completed_nodes") or []) if n != NODE_VALIDATE]
+    state["completed_nodes"] = done
     return NODE_VALIDATE
 
 

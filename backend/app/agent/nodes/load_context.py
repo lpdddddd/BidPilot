@@ -3,10 +3,10 @@ from __future__ import annotations
 from uuid import UUID
 
 from app.agent.nodes._helpers import (
+    begin_node,
+    finish_node,
     get_runtime,
     mark_fatal_error,
-    mark_node_start,
-    maybe_interrupt,
     record_tool_event,
 )
 from app.agent.state import NODE_LOAD_CONTEXT, AgentState, append_warning, touch
@@ -14,7 +14,9 @@ from app.tools.agent_tools import GetProjectContextInput, get_project_context
 
 
 def load_project_context(state: AgentState) -> AgentState:
-    state = mark_node_start(state, NODE_LOAD_CONTEXT)
+    state, skipped = begin_node(state, NODE_LOAD_CONTEXT)
+    if skipped:
+        return state
     runtime = get_runtime()
     project_id = state.get("project_id")
     if not project_id:
@@ -51,5 +53,4 @@ def load_project_context(state: AgentState) -> AgentState:
         state["error_code"] = "no_documents"
         state["error_summary"] = "project has no documents"
         state["route_decision"] = "blocked"
-    maybe_interrupt(state, NODE_LOAD_CONTEXT)
-    return touch(state)
+    return finish_node(state, NODE_LOAD_CONTEXT)

@@ -35,6 +35,7 @@ class DraftComplianceInput(BaseModel):
     project_id: UUID
     draft_id: UUID
     idempotency_key: str | None = None
+    categories: list[ComplianceRuleCategory] | None = None
 
 
 class ProjectComplianceInput(BaseModel):
@@ -43,6 +44,12 @@ class ProjectComplianceInput(BaseModel):
     rule_ids: list[str] | None = None
     categories: list[ComplianceRuleCategory] | None = None
     idempotency_key: str | None = None
+
+
+DEFAULT_DRAFT_COMPLIANCE_CATEGORIES: list[ComplianceRuleCategory] = [
+    ComplianceRuleCategory.draft_safety,
+    ComplianceRuleCategory.consistency,
+]
 
 
 class GetReportInput(BaseModel):
@@ -88,11 +95,17 @@ def check_evidence_integrity(
 def check_draft_compliance(
     db: Session, payload: DraftComplianceInput
 ) -> ComplianceToolResult:
+    """Run draft-scoped compliance (D* draft_safety + E* consistency by default).
+
+    Passes ``draft_id`` through ComplianceStartRequest so ownership checks
+    (e.g. E005) apply when cross-project citations exist.
+    """
+    categories = list(payload.categories or DEFAULT_DRAFT_COMPLIANCE_CATEGORIES)
     report = ComplianceService(db).start_run(
         payload.project_id,
         ComplianceStartRequest(
             draft_id=payload.draft_id,
-            categories=[ComplianceRuleCategory.draft_safety],
+            categories=categories,
         ),
         idempotency_key=payload.idempotency_key,
         draft_id=payload.draft_id,
@@ -101,7 +114,7 @@ def check_draft_compliance(
         report=report,
         metadata={
             "tool": "check_draft_compliance",
-            "categories": ["draft_safety"],
+            "categories": [c.value for c in categories],
             "draft_id": str(payload.draft_id),
         },
     )
@@ -152,6 +165,7 @@ def get_compliance_report(
 __all__ = [
     "ComplianceFindingFilters",
     "ComplianceToolResult",
+    "DEFAULT_DRAFT_COMPLIANCE_CATEGORIES",
     "DraftComplianceInput",
     "EvidenceIntegrityInput",
     "GetReportInput",

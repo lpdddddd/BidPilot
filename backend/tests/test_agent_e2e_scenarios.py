@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from uuid import uuid4
 
 from app.models import BidProject, Document, Organization, Requirement
@@ -17,7 +18,7 @@ from app.models.enums import (
     ReviewStatus,
     RiskLevel,
 )
-from app.models.match_run import RequirementEvidenceMatch
+from app.models.match_run import RequirementEvidenceMatch, RequirementEvidenceMatchLink
 from app.schemas.agent_run import AgentRunStartRequest
 from app.schemas.search import (
     RetrievalTrace,
@@ -144,15 +145,14 @@ def _seed(
             content_hash="c1",
         )
     )
-    db.add(
-        DocumentChunk(
-            document_id=company.id,
-            project_id=project.id,
-            chunk_index=0,
-            content="本公司持有建筑施工总承包一级资质证书",
-            content_hash="c2",
-        )
+    company_chunk = DocumentChunk(
+        document_id=company.id,
+        project_id=project.id,
+        chunk_index=0,
+        content="本公司持有建筑施工总承包一级资质证书",
+        content_hash="c2",
     )
+    db.add(company_chunk)
     req = Requirement(
         project_id=project.id,
         category=RequirementCategory.qualification,
@@ -173,6 +173,20 @@ def _seed(
         summary="seeded match",
     )
     db.add(match)
+    db.flush()
+    if match_status in {
+        EvidenceMatchStatus.supported,
+        EvidenceMatchStatus.partially_supported,
+    }:
+        db.add(
+            RequirementEvidenceMatchLink(
+                match_id=match.id,
+                document_id=company.id,
+                chunk_id=company_chunk.id,
+                quote="一级资质证书",
+                role="company_support",
+            )
+        )
     db.commit()
     return project, req, match
 
@@ -268,8 +282,92 @@ def test_e2e_3_qualification_fail_no_full_satisfaction(db: Session):
     assert preview
 
 
-def test_e2e_4_draft_validate_revise_then_pass(db: Session):
+def test_e2e_4_draft_validate_revise_then_pass(db: Session, monkeypatch):
+    """Formal validate → revise → validate path (real ProposalDraft + compliance)."""
+    from app.models.enums import ProposalDraftStatus, ProposalDraftVersionKind
+    from app.models.proposal_draft import ProposalDraft, ProposalDraftVersion
+    from app.schemas.proposal_draft import UNEVIDENCED_MARKER
+    from app.tools.agent_tools import ToolResult
+
     project, req, _ = _seed(db)
+    bad_md = (
+        f"{UNEVIDENCED_MARKER} 保证中标并完全满足要求。"
+        "补充说明文字以使草稿超过最短长度。"
+    )
+    good_md = (
+        "根据现有材料，本公司可按招标文件要求提供相关资质证明与响应说明，"
+        "供评审参考，本稿不含满足性承诺。"
+    )
+
+    def _draft(markdown: str, title: str) -> ProposalDraft:
+        draft = ProposalDraft(
+            project_id=project.id,
+            title=title,
+            status=ProposalDraftStatus.draft_pending_review,
+        )
+        db.add(draft)
+        db.flush()
+        version = ProposalDraftVersion(
+            project_id=project.id,
+            draft_id=draft.id,
+            version_number=1,
+            version_kind=ProposalDraftVersionKind.manual_revision,
+            content_json={
+                "sections": [
+                    {
+                        "title": "响应",
+                        "blocks": [
+                            {
+                                "block_kind": "partial_response",
+                                "content": markdown,
+                                "citation_ids": [],
+                            }
+                        ],
+                    }
+                ]
+            },
+            content_markdown=markdown,
+            is_current=True,
+        )
+        db.add(version)
+        db.flush()
+        draft.current_version_id = version.id
+        db.commit()
+        db.refresh(draft)
+        return draft
+
+    bad = _draft(bad_md, "bad-v1")
+    good = _draft(good_md, "good-v2")
+
+    # First draft generation returns bad draft; revise returns clean draft.
+    gen_calls = {"n": 0}
+
+    def fake_generate(db_sess, payload, llm=None):
+        gen_calls["n"] += 1
+        if gen_calls["n"] == 1:
+            return ToolResult(
+                ok=True,
+                summary="bad_draft",
+                data={"draft_ids": [str(bad.id)]},
+            )
+        return ToolResult(
+            ok=True,
+            summary="good_draft",
+            data={
+                "draft_ids": [str(good.id)],
+                "risk_only": True,
+                "content_preview": good_md,
+            },
+        )
+
+    monkeypatch.setattr(
+        "app.agent.nodes.draft.generate_proposal_draft", fake_generate
+    )
+    import sys
+
+    revise_mod = sys.modules["app.agent.nodes.revise_draft"]
+    monkeypatch.setattr(revise_mod, "generate_proposal_draft", fake_generate)
+
     run = _svc(db).start_run(
         project.id,
         AgentRunStartRequest(
@@ -277,26 +375,21 @@ def test_e2e_4_draft_validate_revise_then_pass(db: Session):
             requested_requirement_ids=[req.id],
             metadata={
                 "force_critical_qualification": False,
-                "synthetic_draft_id": "draft-v1",
-                "force_draft_validation": False,
-                "revise_should_pass": True,
-                "revise_pass_after": 1,
-                "synthetic_revise": True,
-                "synthetic_draft_id_v2": "draft-v2",
-                "allow_empty_draft": True,
             },
         ),
         idempotency_key=f"e2e4-{uuid4().hex}",
     )
     assert run.status.value in {"completed", "completed_with_warnings"}
     assert run.state is not None
-    assert run.state.draft_revise_count == 1
-    assert len(run.state.draft_ids or []) >= 2
-    # Two draft-related tool events / versions
-    draft_events = [
-        e for e in (run.state.tool_events or []) if e.get("name") == "generate_proposal_draft"
+    assert run.state.draft_revise_count >= 1
+    assert str(good.id) in (run.state.draft_ids or [])
+    assert run.state.draft_validation_ok is True
+    check_events = [
+        e
+        for e in (run.state.tool_events or [])
+        if e.get("name") == "check_draft_compliance"
     ]
-    assert len(draft_events) >= 2
+    assert check_events, "formal compliance path must run"
 
 
 def test_e2e_5_interrupt_resume_no_duplicate_business(db: Session):

@@ -3,11 +3,11 @@ from __future__ import annotations
 from uuid import UUID
 
 from app.agent.nodes._helpers import (
+    begin_node,
+    finish_node,
     get_runtime,
     mark_fatal_error,
-    mark_node_start,
     mark_retryable_error,
-    maybe_interrupt,
     record_tool_event,
 )
 from app.agent.state import NODE_DRAFT, AgentState, append_warning, block_on_critical, touch
@@ -16,7 +16,9 @@ from app.tools.agent_tools import GenerateProposalDraftInput, generate_proposal_
 
 
 def generate_response_draft(state: AgentState) -> AgentState:
-    state = mark_node_start(state, NODE_DRAFT)
+    state, skipped = begin_node(state, NODE_DRAFT)
+    if skipped:
+        return state
     runtime = get_runtime()
     project_id = UUID(state["project_id"])  # type: ignore[arg-type]
 
@@ -28,21 +30,17 @@ def generate_response_draft(state: AgentState) -> AgentState:
             status="ok",
             summary=f"reused drafts={state['draft_ids']}",
         )
-        maybe_interrupt(state, NODE_DRAFT)
-        return touch(state)
+        return finish_node(state, NODE_DRAFT)
 
     risk_only = bool(state.get("critical_qualification")) and not block_on_critical(state)
     if state.get("critical_qualification") and block_on_critical(state):
-        # Routing normally finalizes before draft when blocked; defensive.
         state["status"] = "blocked"
         append_warning(state, "skipped draft due to critical qualification block")
-        maybe_interrupt(state, NODE_DRAFT)
-        return touch(state)
+        return finish_node(state, NODE_DRAFT)
 
     req_ids = [UUID(r["id"]) for r in (state.get("requirements") or []) if r.get("id")]
     idem = f"agent-{state['run_id']}-draft-{int(state.get('draft_revise_count') or 0)}"
 
-    # Allow tests to inject a prebuilt risk/synthetic draft via metadata.
     meta = state.get("metadata") or {}
     if meta.get("synthetic_draft_id"):
         state["draft_ids"] = [str(meta["synthetic_draft_id"])]
@@ -52,8 +50,7 @@ def generate_response_draft(state: AgentState) -> AgentState:
             status="ok",
             summary="synthetic_draft",
         )
-        maybe_interrupt(state, NODE_DRAFT)
-        return touch(state)
+        return finish_node(state, NODE_DRAFT)
 
     try:
         result = generate_proposal_draft(
@@ -74,7 +71,6 @@ def generate_response_draft(state: AgentState) -> AgentState:
         )
         return touch(state)
     except Exception as exc:  # noqa: BLE001
-        # Tool exceptions may be retryable.
         mark_retryable_error(state, f"{type(exc).__name__}: {exc}", "draft_error")
         record_tool_event(
             state, name="generate_proposal_draft", status="error", summary=str(exc)
@@ -102,5 +98,4 @@ def generate_response_draft(state: AgentState) -> AgentState:
         state["metadata"] = meta2
         if state.get("status") not in {"blocked", "failed"}:
             state["status"] = "completed_with_warnings"
-    maybe_interrupt(state, NODE_DRAFT)
-    return touch(state)
+    return finish_node(state, NODE_DRAFT)

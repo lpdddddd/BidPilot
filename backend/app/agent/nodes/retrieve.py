@@ -3,10 +3,10 @@ from __future__ import annotations
 from uuid import UUID
 
 from app.agent.nodes._helpers import (
+    begin_node,
+    finish_node,
     get_runtime,
-    mark_node_start,
     mark_retryable_error,
-    maybe_interrupt,
     record_tool_event,
 )
 from app.agent.state import NODE_RETRIEVE, AgentState, append_warning, touch
@@ -14,7 +14,9 @@ from app.tools.agent_tools import SearchEvidenceInput, search_evidence
 
 
 def retrieve_evidence(state: AgentState) -> AgentState:
-    state = mark_node_start(state, NODE_RETRIEVE)
+    state, skipped = begin_node(state, NODE_RETRIEVE)
+    if skipped:
+        return state
     runtime = get_runtime()
     project_id = state.get("project_id")
     assert project_id
@@ -42,7 +44,6 @@ def retrieve_evidence(state: AgentState) -> AgentState:
         summary=result.summary or result.detail,
     )
     if not result.ok:
-        # Retrieval failures are retryable (infra blips).
         mark_retryable_error(state, result.detail or "retrieve failed", "retrieve_error")
         return touch(state)
 
@@ -50,7 +51,6 @@ def retrieve_evidence(state: AgentState) -> AgentState:
     state["retrieved_chunks"] = chunks
     if not chunks:
         append_warning(state, "no evidence chunks retrieved")
-    # Citations from chunk ids only (no full bodies).
     state["citations"] = [
         {
             "chunk_id": c.get("chunk_id"),
@@ -61,5 +61,4 @@ def retrieve_evidence(state: AgentState) -> AgentState:
         }
         for c in chunks
     ]
-    maybe_interrupt(state, NODE_RETRIEVE)
-    return touch(state)
+    return finish_node(state, NODE_RETRIEVE)

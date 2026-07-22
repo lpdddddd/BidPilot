@@ -112,6 +112,47 @@ def mark_node_start(state: AgentState, node: str) -> AgentState:
     return touch(state)
 
 
+def should_skip_completed(state: AgentState, node: str) -> bool:
+    """Return True when ``node`` already finished and metadata does not force re-run."""
+    meta = state.get("metadata") or {}
+    force = meta.get("force_rerun_nodes", meta.get("force_rerun_node"))
+    if force is True:
+        return False
+    if isinstance(force, str) and force == node:
+        return False
+    if isinstance(force, (list, tuple, set)) and node in force:
+        return False
+    return node in (state.get("completed_nodes") or [])
+
+
+def mark_node_completed(state: AgentState, node: str) -> None:
+    done = list(state.get("completed_nodes") or [])
+    if node not in done:
+        done.append(node)
+    state["completed_nodes"] = done
+
+
+def begin_node(state: AgentState, node: str) -> tuple[AgentState, bool]:
+    """Start a node; return ``(state, skipped)`` when already completed."""
+    state = mark_node_start(state, node)
+    if should_skip_completed(state, node):
+        record_tool_event(
+            state,
+            name=node,
+            status="ok",
+            summary="skipped_completed",
+        )
+        return touch(state), True
+    return state, False
+
+
+def finish_node(state: AgentState, node: str) -> AgentState:
+    """Mark node completed, then apply interrupt-after-node if configured."""
+    mark_node_completed(state, node)
+    maybe_interrupt(state, node)
+    return touch(state)
+
+
 def mark_retryable_error(state: AgentState, message: str, code: str = "retryable") -> None:
     append_error(state, message)
     state["last_error_retryable"] = True

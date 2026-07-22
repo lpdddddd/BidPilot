@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from app.agent.nodes._helpers import mark_node_start, now_iso
+from app.agent.nodes._helpers import begin_node, finish_node, now_iso
 from app.agent.state import NODE_FINALIZE, TERMINAL_STATUSES, AgentState, touch
 
 
 def finalize_run(state: AgentState) -> AgentState:
-    state = mark_node_start(state, NODE_FINALIZE)
+    state, skipped = begin_node(state, NODE_FINALIZE)
+    if skipped:
+        return state
     status = state.get("status") or "running"
 
     if status in {"blocked"}:
@@ -13,10 +15,8 @@ def finalize_run(state: AgentState) -> AgentState:
     elif status == "failed":
         pass
     elif status == "waiting_for_user":
-        # Interrupted — leave as waiting.
-        return touch(state)
+        return finish_node(state, NODE_FINALIZE)
     elif state.get("critical_qualification") and status not in TERMINAL_STATUSES:
-        # Defensive: should already be blocked by routing when flag true.
         from app.agent.state import block_on_critical
 
         if block_on_critical(state):
@@ -34,4 +34,4 @@ def finalize_run(state: AgentState) -> AgentState:
     if state.get("status") in TERMINAL_STATUSES and state.get("status") != "waiting_for_user":
         state["completed_at"] = now_iso()
     state["current_node"] = NODE_FINALIZE
-    return touch(state)
+    return finish_node(state, NODE_FINALIZE)

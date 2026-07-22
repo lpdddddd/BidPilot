@@ -87,6 +87,7 @@ class AgentStateModel(BaseModel):
     compliance_run_id: str | None = None
     compliance_summary: dict[str, Any] = Field(default_factory=dict)
     draft_ids: list[str] = Field(default_factory=list)
+    draft_findings: list[dict[str, Any]] = Field(default_factory=list)
     citations: list[dict[str, Any]] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
@@ -96,6 +97,7 @@ class AgentStateModel(BaseModel):
     completed_at: str | None = None
     graph_version: str = GRAPH_VERSION
     retry_counts: dict[str, int] = Field(default_factory=dict)
+    completed_nodes: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     # Routing / loop helpers
@@ -129,6 +131,7 @@ class AgentState(TypedDict):
     compliance_run_id: str | None
     compliance_summary: dict[str, Any]
     draft_ids: list[str]
+    draft_findings: NotRequired[list[dict[str, Any]]]
     citations: list[dict[str, Any]]
     warnings: list[str]
     errors: list[str]
@@ -138,6 +141,7 @@ class AgentState(TypedDict):
     completed_at: str | None
     graph_version: str
     retry_counts: dict[str, int]
+    completed_nodes: NotRequired[list[str]]
     metadata: dict[str, Any]
     route_decision: NotRequired[str | None]
     has_documents: NotRequired[bool]
@@ -178,6 +182,7 @@ def empty_state(
         "compliance_run_id": None,
         "compliance_summary": {},
         "draft_ids": [],
+        "draft_findings": [],
         "citations": [],
         "warnings": [],
         "errors": [],
@@ -187,6 +192,7 @@ def empty_state(
         "completed_at": None,
         "graph_version": GRAPH_VERSION,
         "retry_counts": {},
+        "completed_nodes": [],
         "metadata": dict(metadata or {}),
         "route_decision": None,
         "has_documents": False,

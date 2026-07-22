@@ -3,11 +3,11 @@ from __future__ import annotations
 from uuid import UUID
 
 from app.agent.nodes._helpers import (
+    begin_node,
+    finish_node,
     get_runtime,
     mark_fatal_error,
-    mark_node_start,
     mark_retryable_error,
-    maybe_interrupt,
     record_tool_event,
 )
 from app.agent.state import NODE_MATCH, AgentState, append_warning, touch
@@ -16,7 +16,9 @@ from app.tools.agent_tools import MatchCompanyEvidenceInput, match_company_evide
 
 
 def match_company_evidence_node(state: AgentState) -> AgentState:
-    state = mark_node_start(state, NODE_MATCH)
+    state, skipped = begin_node(state, NODE_MATCH)
+    if skipped:
+        return state
     runtime = get_runtime()
     project_id = UUID(state["project_id"])  # type: ignore[arg-type]
     req_ids = [UUID(r["id"]) for r in (state.get("requirements") or []) if r.get("id")]
@@ -64,5 +66,4 @@ def match_company_evidence_node(state: AgentState) -> AgentState:
             f"company evidence insufficient for {insufficient} match(es); "
             "continuing without inventing qualifications",
         )
-    maybe_interrupt(state, NODE_MATCH)
-    return touch(state)
+    return finish_node(state, NODE_MATCH)

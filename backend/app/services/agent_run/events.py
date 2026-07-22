@@ -23,7 +23,9 @@ def next_step_index(db: Session, agent_run_id: UUID) -> int:
             AgentStep.agent_run_id == agent_run_id
         )
     )
-    return int(current or -1) + 1
+    # coalesce(..., -1) already handles empty rows; do not use `or -1`
+    # because step_index 0 is falsy and would incorrectly reset to 0.
+    return int(current) + 1
 
 
 def record_step(

@@ -5,14 +5,17 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import HTTPException
 from langgraph.checkpoint.memory import MemorySaver
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.agent.checkpoint import DbCheckpointStore
+from app.agent.checkpoint import (
+    DbCheckpointStore,
+    serialize_memory_saver,
+)
 from app.agent.graph import build_graph
 from app.agent.nodes._helpers import AgentInterrupt, AgentRuntime, reset_runtime, set_runtime
 from app.agent.state import GRAPH_VERSION, AgentState, empty_state
@@ -40,9 +43,11 @@ def _safe_summary(state: AgentState) -> dict[str, Any]:
     return {
         "status": state.get("status"),
         "current_node": state.get("current_node"),
+        "completed_nodes": list(state.get("completed_nodes") or []),
         "compliance_run_id": state.get("compliance_run_id"),
         "compliance_summary": state.get("compliance_summary") or {},
         "draft_ids": state.get("draft_ids") or [],
+        "draft_finding_count": len(state.get("draft_findings") or []),
         "warnings": state.get("warnings") or [],
         "errors": state.get("errors") or [],
         "requirement_count": len(state.get("requirements") or []),
@@ -143,23 +148,136 @@ class AgentRunService:
                 project_id=run.project_id,
                 organization_id=run.organization_id,
             )
+        return self._continue_from_state(run.id, state, memory=MemorySaver())
 
-        memory = MemorySaver()
+    def resume_run(self, run_id: UUID) -> AgentRunRead:
+        run = self.db.get(AgentRun, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="agent run not found")
+        # Idempotent: completed / blocked / cancelled runs return as-is.
+        if run.status in {
+            AgentRunStatus.completed,
+            AgentRunStatus.completed_with_warnings,
+            AgentRunStatus.blocked,
+            AgentRunStatus.cancelled,
+        }:
+            return self._to_read(run)
+
+        if run.status not in {
+            AgentRunStatus.waiting_for_user,
+            AgentRunStatus.running,
+            AgentRunStatus.failed,
+        }:
+            return self._to_read(run)
+
+        cp_state = self.checkpoints.load_state(str(run.id))
+        # Prefer the richer of DB checkpoint vs run.state_json (seq-ordered
+        # checkpoint should win; fall back to state_json when checkpoint missing).
+        state: AgentState = dict(cp_state or run.state_json or {})  # type: ignore[assignment]
+        if cp_state and run.state_json:
+            cp_done = list(cp_state.get("completed_nodes") or [])
+            run_done = list((run.state_json or {}).get("completed_nodes") or [])
+            if len(run_done) > len(cp_done):
+                state = dict(run.state_json)  # type: ignore[assignment]
+        state.pop("lg_memory", None)  # type: ignore[arg-type]
+        meta = dict(state.get("metadata") or {})
+        # Clear interrupt flag so graph can continue; keep _interrupted so we don't
+        # re-trigger the same interrupt_after_node.
+        meta.pop("interrupt_after_node", None)
+        state["metadata"] = meta
+        state["interrupt_requested"] = False
+        if state.get("status") == "waiting_for_user":
+            state["status"] = "running"
+        run.state_json = json.loads(json.dumps(state, default=str))
+        run.status = AgentRunStatus.running
+        self.db.commit()
+
+        # Re-stream from START with completed_nodes skip. Use a fresh
+        # MemorySaver so restored LG blobs cannot stall the graph; still
+        # persist lg_memory on subsequent saves for observability.
+        return self._continue_from_state(run.id, state, memory=MemorySaver())
+
+    def retry_run(self, run_id: UUID) -> AgentRunRead:
+        """Controlled retry on the same run_id.
+
+        Semantics:
+        - Increment ``metadata.retry_attempt`` and record ``metadata.retry_of_status``.
+        - Clear error fields.
+        - Remove ``current_node`` (failure point) from ``completed_nodes`` so it
+          re-runs; keep earlier completed nodes so services are not duplicated.
+        - Preserve compliance_run_id / draft_ids / business object IDs.
+        """
+        run = self.db.get(AgentRun, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="agent run not found")
+        state: AgentState = dict(run.state_json or {})  # type: ignore[assignment]
+        state.pop("lg_memory", None)  # type: ignore[arg-type]
+        meta = dict(state.get("metadata") or {})
+        meta["retry_attempt"] = int(meta.get("retry_attempt") or 0) + 1
+        meta["retry_of_status"] = (
+            run.status.value if hasattr(run.status, "value") else str(run.status)
+        )
+        state["metadata"] = meta
+        state["errors"] = []
+        state["error_code"] = None
+        state["error_summary"] = None
+        state["last_error_retryable"] = False
+        state["status"] = "running"
+        state["interrupt_requested"] = False
+
+        failed_node = state.get("current_node") or run.current_node
+        if failed_node:
+            state["completed_nodes"] = [
+                n for n in (state.get("completed_nodes") or []) if n != failed_node
+            ]
+
+        run.state_json = json.loads(json.dumps(state, default=str))
+        run.status = AgentRunStatus.running
+        run.error_code = None
+        run.error_summary = None
+        run.error_message = None
+        self.db.commit()
+
+        # Re-stream from START with completed_nodes skip. Use a fresh
+        # MemorySaver so restored LG blobs cannot stall the graph; still
+        # persist lg_memory on subsequent saves for observability.
+        return self._continue_from_state(run.id, state, memory=MemorySaver())
+
+    def _continue_from_state(
+        self,
+        run_id: UUID,
+        state: AgentState,
+        *,
+        memory: MemorySaver | None = None,
+    ) -> AgentRunRead:
+        """Stream the graph with stable ``thread_id=str(run.id)``.
+
+        Completed nodes short-circuit via ``completed_nodes`` so services are not
+        re-invoked on resume / controlled retry.
+        """
+        run = self.db.get(AgentRun, run_id)
+        assert run is not None
+        memory = memory or MemorySaver()
         graph = build_graph(checkpointer=memory)
-        config = {"configurable": {"thread_id": str(run.id)}}
+        # Stable thread id for start, resume, and retry — never random.
+        thread_id = str(run.id)
+        config = {"configurable": {"thread_id": thread_id}}
 
         runtime = AgentRuntime(
             db=self.db,
             llm=self.llm,
             retrieval_fn=self.retrieval_fn,
-            persist_tool=lambda **kw: record_tool_call(self.db, agent_run_id=run.id, **{
-                k: v for k, v in kw.items() if k != "run_id"
-            }),
+            persist_tool=lambda **kw: record_tool_call(
+                self.db,
+                agent_run_id=run.id,
+                **{k: v for k, v in kw.items() if k != "run_id"},
+            ),
             save_checkpoint=lambda st, node: self.checkpoints.save(
                 agent_run_id=run.id,
-                thread_id=str(run.id),
+                thread_id=thread_id,
                 node_name=node,
                 state=st,
+                lg_memory=serialize_memory_saver(memory),
             ),
         )
         token = set_runtime(runtime)
@@ -168,15 +286,13 @@ class AgentRunService:
             run.started_at = run.started_at or _now()
             self.db.flush()
 
-            # Stream node-by-node so we can checkpoint after each update.
             final_state = state
             try:
                 for event in graph.stream(state, config=config, stream_mode="updates"):
-                    # event: {node_name: partial_state}
                     for node_name, partial in event.items():
                         if isinstance(partial, dict):
                             final_state = {**final_state, **partial}  # type: ignore[misc]
-                        self._after_node(run, node_name, final_state)
+                        self._after_node(run, node_name, final_state, memory=memory)
                         if final_state.get("interrupt_requested"):
                             raise AgentInterrupt(node_name)
             except AgentInterrupt as exc:
@@ -185,7 +301,7 @@ class AgentRunService:
                 final_state["status"] = "waiting_for_user"
                 final_state["current_node"] = exc.node
                 final_state["interrupt_requested"] = True
-                self._after_node(run, exc.node, final_state)
+                self._after_node(run, exc.node, final_state, memory=memory)
                 self._persist_run(run, final_state)
                 self.db.commit()
                 self.db.refresh(run)
@@ -208,109 +324,14 @@ class AgentRunService:
         finally:
             reset_runtime(token)
 
-    def resume_run(self, run_id: UUID) -> AgentRunRead:
-        run = self.db.get(AgentRun, run_id)
-        if run is None:
-            raise HTTPException(status_code=404, detail="agent run not found")
-        if run.status not in {
-            AgentRunStatus.waiting_for_user,
-            AgentRunStatus.running,
-            AgentRunStatus.failed,
-        }:
-            # Allow resume only from interrupt / failed / mid-run.
-            if run.status in {
-                AgentRunStatus.completed,
-                AgentRunStatus.completed_with_warnings,
-                AgentRunStatus.blocked,
-                AgentRunStatus.cancelled,
-            }:
-                return self._to_read(run)
-
-        cp_state = self.checkpoints.load_state(str(run.id))
-        state: AgentState = dict(cp_state or run.state_json or {})  # type: ignore[assignment]
-        meta = dict(state.get("metadata") or {})
-        # Clear interrupt flag so graph can continue; keep _interrupted so we don't
-        # re-trigger the same interrupt_after_node.
-        meta.pop("interrupt_after_node", None)
-        state["metadata"] = meta
-        state["interrupt_requested"] = False
-        if state.get("status") == "waiting_for_user":
-            state["status"] = "running"
-        run.state_json = json.loads(json.dumps(state, default=str))
-        run.status = AgentRunStatus.running
-        self.db.commit()
-
-        # Continue by invoking remaining nodes manually from last current_node.
-        return self._continue_from_state(run.id, state)
-
-    def retry_run(self, run_id: UUID) -> AgentRunRead:
-        run = self.db.get(AgentRun, run_id)
-        if run is None:
-            raise HTTPException(status_code=404, detail="agent run not found")
-        state: AgentState = dict(run.state_json or {})  # type: ignore[assignment]
-        state["errors"] = []
-        state["error_code"] = None
-        state["error_summary"] = None
-        state["last_error_retryable"] = False
-        state["status"] = "running"
-        state["interrupt_requested"] = False
-        # Keep compliance_run_id / draft_ids to avoid duplicates.
-        run.state_json = json.loads(json.dumps(state, default=str))
-        run.status = AgentRunStatus.running
-        run.error_code = None
-        run.error_summary = None
-        run.error_message = None
-        self.db.commit()
-        return self._continue_from_state(run.id, state)
-
-    def _continue_from_state(self, run_id: UUID, state: AgentState) -> AgentRunRead:
-        """Re-invoke graph with checkpointed state (LangGraph + DB)."""
-        run = self.db.get(AgentRun, run_id)
-        assert run is not None
-        memory = MemorySaver()
-        graph = build_graph(checkpointer=memory)
-        config = {"configurable": {"thread_id": f"{run.id}-resume-{uuid4().hex[:8]}"}}
-
-        runtime = AgentRuntime(
-            db=self.db,
-            llm=self.llm,
-            retrieval_fn=self.retrieval_fn,
-            persist_tool=lambda **kw: record_tool_call(
-                self.db,
-                agent_run_id=run.id,
-                **{k: v for k, v in kw.items() if k != "run_id"},
-            ),
-        )
-        token = set_runtime(runtime)
-        try:
-            final_state = state
-            try:
-                for event in graph.stream(state, config=config, stream_mode="updates"):
-                    for node_name, partial in event.items():
-                        if isinstance(partial, dict):
-                            final_state = {**final_state, **partial}  # type: ignore[misc]
-                        self._after_node(run, node_name, final_state)
-                        if final_state.get("interrupt_requested"):
-                            raise AgentInterrupt(node_name)
-            except AgentInterrupt as exc:
-                if runtime.last_state:
-                    final_state = {**final_state, **runtime.last_state}  # type: ignore[misc]
-                final_state["status"] = "waiting_for_user"
-                final_state["current_node"] = exc.node
-                self._after_node(run, exc.node, final_state)
-                self._persist_run(run, final_state)
-                self.db.commit()
-                self.db.refresh(run)
-                return self._to_read(run)
-
-            self._persist_run(run, final_state)
-            self.db.commit()
-            self.db.refresh(run)
-            return self._to_read(run)
-        finally:
-            reset_runtime(token)
-
-    def _after_node(self, run: AgentRun, node_name: str, state: AgentState) -> None:
+    def _after_node(
+        self,
+        run: AgentRun,
+        node_name: str,
+        state: AgentState,
+        *,
+        memory: MemorySaver | None = None,
+    ) -> None:
         record_step(
             self.db,
             agent_run_id=run.id,
@@ -320,14 +341,18 @@ class AgentRunService:
                 "status": state.get("status"),
                 "warnings": state.get("warnings"),
                 "route_decision": state.get("route_decision"),
+                "completed_nodes": state.get("completed_nodes"),
             },
             error_message=state.get("error_summary"),
         )
+        lg_memory = serialize_memory_saver(memory) if memory is not None else None
         self.checkpoints.save(
             agent_run_id=run.id,
             thread_id=str(run.id),
             node_name=node_name,
             state=dict(state),
+            next_node=None,
+            lg_memory=lg_memory,
         )
         run.current_node = node_name
         run.state_json = json.loads(json.dumps(state, default=str))

@@ -5,11 +5,11 @@ from uuid import UUID
 from sqlalchemy import select
 
 from app.agent.nodes._helpers import (
+    begin_node,
+    finish_node,
     get_runtime,
     mark_fatal_error,
-    mark_node_start,
     mark_retryable_error,
-    maybe_interrupt,
     record_tool_event,
 )
 from app.agent.state import NODE_EXTRACT, AgentState, append_warning, touch
@@ -19,11 +19,12 @@ from app.tools.agent_tools import ExtractRequirementsInput, extract_requirements
 
 
 def extract_requirements_node(state: AgentState) -> AgentState:
-    state = mark_node_start(state, NODE_EXTRACT)
+    state, skipped = begin_node(state, NODE_EXTRACT)
+    if skipped:
+        return state
     runtime = get_runtime()
     project_id = UUID(state["project_id"])  # type: ignore[arg-type]
 
-    # Prefer explicit requested ids.
     requested = list(state.get("requested_requirement_ids") or [])
     if requested:
         rows = list(
@@ -51,8 +52,7 @@ def extract_requirements_node(state: AgentState) -> AgentState:
             status="ok",
             summary=f"requested_ids={len(items)}",
         )
-        maybe_interrupt(state, NODE_EXTRACT)
-        return touch(state)
+        return finish_node(state, NODE_EXTRACT)
 
     try:
         result = extract_requirements(
@@ -100,5 +100,4 @@ def extract_requirements_node(state: AgentState) -> AgentState:
             state["status"] = "completed_with_warnings"
             append_warning(state, "no requirements after extract")
             state["route_decision"] = "completed_with_warnings"
-    maybe_interrupt(state, NODE_EXTRACT)
-    return touch(state)
+    return finish_node(state, NODE_EXTRACT)

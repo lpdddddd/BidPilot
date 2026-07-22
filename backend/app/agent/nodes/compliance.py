@@ -3,11 +3,11 @@ from __future__ import annotations
 from uuid import UUID
 
 from app.agent.nodes._helpers import (
+    begin_node,
+    finish_node,
     get_runtime,
     mark_fatal_error,
-    mark_node_start,
     mark_retryable_error,
-    maybe_interrupt,
     record_tool_event,
 )
 from app.agent.state import NODE_COMPLIANCE, AgentState, append_warning, touch
@@ -18,7 +18,9 @@ from app.tools.compliance_tools import (
 
 
 def run_compliance_check(state: AgentState) -> AgentState:
-    state = mark_node_start(state, NODE_COMPLIANCE)
+    state, skipped = begin_node(state, NODE_COMPLIANCE)
+    if skipped:
+        return state
     runtime = get_runtime()
     project_id = UUID(state["project_id"])  # type: ignore[arg-type]
 
@@ -30,8 +32,7 @@ def run_compliance_check(state: AgentState) -> AgentState:
             status="ok",
             summary=f"reused compliance_run_id={state['compliance_run_id']}",
         )
-        maybe_interrupt(state, NODE_COMPLIANCE)
-        return touch(state)
+        return finish_node(state, NODE_COMPLIANCE)
 
     idem = f"agent-{state['run_id']}-compliance"
     try:
@@ -76,14 +77,12 @@ def run_compliance_check(state: AgentState) -> AgentState:
         and (f.status.value if hasattr(f.status, "value") else f.status) == "fail"
         for f in findings
     )
-    # Also treat critical severity fails in qualification categories.
     if not critical_qual:
         critical_qual = any(
             (f.severity.value if hasattr(f.severity, "value") else f.severity) == "critical"
             and (f.status.value if hasattr(f.status, "value") else f.status) == "fail"
             for f in findings
         )
-    # Allow metadata override for deterministic tests.
     meta = state.get("metadata") or {}
     if "force_critical_qualification" in meta:
         critical_qual = bool(meta["force_critical_qualification"])
@@ -116,5 +115,4 @@ def run_compliance_check(state: AgentState) -> AgentState:
     }
     if critical_qual:
         append_warning(state, "critical qualification finding detected")
-    maybe_interrupt(state, NODE_COMPLIANCE)
-    return touch(state)
+    return finish_node(state, NODE_COMPLIANCE)

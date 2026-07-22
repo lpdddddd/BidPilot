@@ -16,9 +16,12 @@ def test_empty_state_has_required_fields():
     assert state["requirement_matches"] == []
     assert state["tool_events"] == []
     assert state["retry_counts"] == {}
+    assert state["completed_nodes"] == []
+    assert state["draft_findings"] == []
     model = AgentStateModel.model_validate(state)
     assert model.run_id == "r1"
     assert model.graph_version == GRAPH_VERSION
+    assert model.completed_nodes == []
 
 
 def test_agent_state_model_accepts_extra_routing_fields():
