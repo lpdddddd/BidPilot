@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -84,6 +84,15 @@ class MatchCandidateItem(BaseModel):
     additional_company_chunk_ids: list[UUID] = Field(default_factory=list)
     needs_review: bool = True
     conflict_note: str | None = None
+    # not_applicable: must prove scope exclusion with locatable evidence
+    not_applicable_basis: (
+        Literal["requirement_scope_exclusion", "project_scope_exclusion"] | None
+    ) = None
+    not_applicable_evidence_quote: str | None = None
+    not_applicable_evidence_chunk_id: UUID | None = None
+    # conflicting_evidence: second company-side evidence (conflict side)
+    conflicting_company_chunk_id: UUID | None = None
+    conflicting_company_evidence_quote: str | None = None
 
 
 class MatchBatchResult(BaseModel):

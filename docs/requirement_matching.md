@@ -27,7 +27,8 @@ tender · announcement · amendment · contract
 ```
 
 项目 A 的 Requirement / 企业 chunks **绝不可**被项目 B 使用。  
-企业材料为空时**不调用 LLM**，创建真实失败（或无材料）状态的 run，并**保留**已有 Match。
+企业材料为空时**不调用 LLM**，进入真实失败（或无材料）状态的 run，并**保留**已有 Match。  
+空材料路径**禁止**产出 `not_applicable`。
 
 ## 数据模型
 
@@ -46,8 +47,49 @@ tender · announcement · amendment · contract
 | `supported` | 当前材料有直接、充分、可定位的支持证据；仍需人工审核 |
 | `partially_supported` | 仅支持一部分，或主体/期限/范围仍不清 |
 | `insufficient_evidence` | **当前已选材料范围内**证据不足；**不等于**企业不具备 |
-| `conflicting_evidence` | 企业材料内部存在相互矛盾的直接证据 |
-| `not_applicable` | 仅当 Requirement 明确不适用且可由原文支持 |
+| `conflicting_evidence` | 企业材料内部存在相互矛盾的直接证据（双侧可定位） |
+| `not_applicable` | 仅当 Requirement 明确限定适用范围，且可定位证据证明当前对象在范围外 |
+
+### `not_applicable` 证据规则（收紧）
+
+仅当同时满足：
+
+1. Requirement 原文本身明确限定适用范围；
+2. 可定位证据证明当前对象/范围在适用之外。
+
+必须提供完整字段：
+
+- `not_applicable_basis`：`requirement_scope_exclusion` | `project_scope_exclusion`
+- `not_applicable_evidence_quote`：可在证据 chunk 中连续定位
+- `not_applicable_evidence_chunk_id`
+
+校验：
+
+- `requirement_scope_exclusion` → chunk 必须是该 Requirement 的招标主证据
+  （`EvidenceLink` / 本轮 payload 中的 `tender_primary_evidence_chunks`）；
+- `project_scope_exclusion` → chunk 必须是本轮传给模型的、当前项目、允许类型的企业侧候选；
+- 定位只从 chunk 元数据派生；
+- 模型主观判断、常识、缺少企业证据、材料为空 → **禁止** `not_applicable`；
+  无法证明则拒绝该项或安全降级为 `insufficient_evidence`（文案「当前材料未找到充分证据」）。
+
+UI 标签：**「明确不适用，待人工审核」**，详情展示 basis + 引文 + 定位。
+
+### `conflicting_evidence` 双侧证据
+
+必须同时提供两段**不同文本位置**的企业侧证据：
+
+| 侧 | 字段 | Link `role` |
+|----|------|-------------|
+| 支持 | `primary_company_chunk_id` + `company_evidence_quote` | `company_support` |
+| 冲突 | `conflicting_company_chunk_id` + `conflicting_company_evidence_quote` | `company_conflict` |
+
+规则：
+
+- 两侧 chunk 均须在本轮该 Requirement 的企业候选集合内，引文可定位；
+- 禁止同一 chunk + 同一引文；
+- `conflict_note` 中的关键 token 必须能在两侧证据文本中找到；
+- 仅单侧 / 重复证据 / 引文失败 → 拒绝 `conflicting_evidence`，可降级为
+  `partially_supported` 或 `insufficient_evidence`（summary 消毒，不编造事实）。
 
 ### 风险规则（确定性后端规则）
 
@@ -67,7 +109,7 @@ tender · announcement · amendment · contract
 2. **企业侧**：主 chunk + 短引文 + `RequirementEvidenceMatchLink`
    （`role`: `company_support` / `company_conflict`）。
 
-文件名、页码、章节、条款一律从企业侧 chunk 元数据派生，**禁止**采信模型自填定位。  
+文件名、页码、章节、条款一律从企业侧 / 招标侧 chunk 元数据派生，**禁止**采信模型自填定位。  
 跳转 Document Center 使用真实定位路径。
 
 ## 证据验证与禁止过度结论
@@ -75,8 +117,10 @@ tender · announcement · amendment · contract
 复用 `evidence_validate`（空白规范化、引文连续匹配、关键事实 token 等）：
 
 - `requirement_id` 必须属于本次 run；
-- `supported` / `partially_supported` / `conflicting_evidence` 必须有单一主 chunk + 可定位 quote；
-- 主 chunk 必须属于本轮实际传给模型的企业侧候选；
+- `supported` / `partially_supported` 必须有单一主 chunk + 可定位 quote；
+- `conflicting_evidence` 必须有双侧不同位置的企业证据；
+- `not_applicable` 必须有完整 basis + 可定位 quote + 授权 chunk；
+- 主企业 chunk 必须属于本轮实际传给模型的企业侧候选；
 - `summary` 不得出现原 Requirement 或企业证据中没有的金额、日期、资质等级、技术参数等；
 - 资质等级错配（如「一级」支撑「特级」）拒绝 `supported`，可安全降级；
 - 禁止输出「必然中标 / 完全满足 / 一定不符合」等绝对结论；
@@ -84,21 +128,33 @@ tender · announcement · amendment · contract
 
 检索仅用**当前项目企业侧**文档上的轻量词面重叠缩小候选；**不**修改 Dense / BM25 / RRF / rerank。
 
-## force、幂等与事务安全
+## force、幂等、取消与原子提交
 
 - 默认重跑同一 `requirement_ids + document_ids/document_types` 范围幂等，不重复插入自动 Match；
 - `force=true` 只替换本次实际匹配 Requirement 范围内、`source=auto_match` 的自动记录；
 - 手工 / 导入 / 已人工审核 Match **永不**删除；
-- 全部模型调用与结构化验证完成后，才在**单一事务**中删除范围内可替换旧记录、写入新 Match / Link、更新 run；
-- 任一 batch 致命失败、全部候选被拒、任务取消 → run `failed`，旧 Match 完整保留；
-- 合法「企业资料为空」或合法 `insufficient_evidence` 与异常失败严格区分；
-- 无 orphan EvidenceLink / MatchLink。
+- **全部** batch 的模型调用与结构化验证完成后，才在**单一事务**中：
+  可选 force 删除范围内可替换旧记录 → 写入全部新 Match / Link → 更新 run；
+- 结果语义：
+  - `valid_result`：全部 batch 完成且存在合法非纯不足结论；
+  - `valid_empty_or_insufficient_result`：全部 batch 完成，合法 `insufficient_evidence` 也算成功；
+  - `invalid_or_incomplete_result`：任一 batch LLM/JSON/schema/证据致命失败、全部候选被拒、取消、或持久化错误；
+- `invalid_or_incomplete_result`（**无论** `force`）：
+  run → `failed`（取消则为 `cancelled`）；
+  **零**新自动 Match 写入；**零**旧自动 Match 删除/替换；无 orphan Link；
+- 单条合法 `insufficient_evidence` **不是**失败；成功 batch 内被拒的条目可对未覆盖需求合成 `insufficient_evidence`；
+  致命失败的 batch **不**合成、不写入；
+- 取消：`POST .../runs/{run_id}/cancel`；仅 `queued` / `running` 可取消；
+  设置 `status=cancelled` 与 `config_json.cancel_requested=true`；
+  终态（succeeded/failed/cancelled）返回 409，不改写状态；
+  执行中在 batch 前、LLM 返回后、persist 前检查取消；取消则丢弃内存结果、不写 Match。
 
 ## API 与前端
 
 ```text
 POST /api/v1/projects/{project_id}/requirement-matches/runs
 GET  /api/v1/projects/{project_id}/requirement-matches/runs/{run_id}
+POST /api/v1/projects/{project_id}/requirement-matches/runs/{run_id}/cancel
 GET  /api/v1/projects/{project_id}/requirement-matches
 GET  /api/v1/projects/{project_id}/requirement-matches/{match_id}
 ```
@@ -120,13 +176,13 @@ GET  /api/v1/projects/{project_id}/requirement-matches/{match_id}
 }
 ```
 
-项目详情 → **材料匹配**：空态 / 运行态（真实轮询）/ 结果态 / 双侧证据详情。  
+项目详情 → **材料匹配**：空态 / 运行态（真实轮询与真实取消）/ 结果态 / 双侧证据详情。  
 结果一律标记**待人工审核**；无自动裁决、通过率、投标建议或提交操作。
 
 ## 与第 7 步 force 成功语义的关系
 
 抽取 run 在候选**全部证据校验失败**时必须 `failed` 且 `force=true` **不得**清空旧 Requirement。  
-匹配 run 采用同一原则：验证失败或无效结果不得替换旧 Match。
+匹配 run 采用同一原则：验证失败或无效结果不得替换旧 Match（`force` 与否均原子失败）。
 
 ## 当前限制
 

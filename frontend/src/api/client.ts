@@ -251,6 +251,18 @@ export async function getRequirementMatchRun(
   return data;
 }
 
+export async function cancelRequirementMatchRun(
+  projectId: string,
+  runId: string,
+): Promise<MatchRun> {
+  const { data } = await http.post<MatchRun>(
+    `/api/v1/projects/${projectId}/requirement-matches/runs/${runId}/cancel`,
+    {},
+    { timeout: 60000 },
+  );
+  return data;
+}
+
 export async function listRequirementMatches(
   projectId: string,
   params: MatchListParams = {},

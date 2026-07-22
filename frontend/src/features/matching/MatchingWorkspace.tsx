@@ -22,6 +22,7 @@ import {
 } from "@ant-design/icons";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  cancelRequirementMatchRun,
   getRequirementMatch,
   getRequirementMatchRun,
   listDocuments,
@@ -29,6 +30,7 @@ import {
   startRequirementMatching,
 } from "../../api/client";
 import type {
+  CompanyEvidenceLink,
   EvidenceMatchStatus,
   MatchRun,
   MatchSummary,
@@ -82,7 +84,17 @@ const MATCH_STATUS_LABELS: Record<EvidenceMatchStatus, string> = {
   partially_supported: "部分支持",
   insufficient_evidence: "当前材料未找到充分证据",
   conflicting_evidence: "材料冲突",
-  not_applicable: "不适用",
+  not_applicable: "明确不适用，待人工审核",
+};
+
+const NOT_APPLICABLE_BASIS_LABELS: Record<string, string> = {
+  requirement_scope_exclusion: "招标要求适用范围排除",
+  project_scope_exclusion: "企业/项目范围排除",
+};
+
+const COMPANY_LINK_ROLE_LABELS: Record<string, string> = {
+  company_support: "支持侧证据",
+  company_conflict: "冲突侧证据",
 };
 
 const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS).map(([value, label]) => ({
@@ -175,15 +187,23 @@ function MatchProgress({
   run,
   onCancel,
   onRetry,
+  cancelling,
   retrying,
 }: {
   run: MatchRun;
   onCancel: () => void;
   onRetry: () => void;
+  cancelling: boolean;
   retrying: boolean;
 }) {
   const statusLabel =
-    run.status === "queued" ? "排队中" : run.status === "running" ? "匹配中" : run.status;
+    run.status === "queued"
+      ? "排队中"
+      : run.status === "running"
+        ? "匹配中"
+        : run.status === "cancelled"
+          ? "已取消"
+          : run.status;
 
   return (
     <div className="bp-req-progress">
@@ -213,11 +233,11 @@ function MatchProgress({
         </div>
       )}
       <div className="bp-req-failed-actions" style={{ marginTop: 16 }}>
-        <Button icon={<StopOutlined />} onClick={onCancel}>
-          取消关注
+        <Button icon={<StopOutlined />} loading={cancelling} onClick={onCancel}>
+          取消匹配
         </Button>
         <Button icon={<ReloadOutlined />} loading={retrying} onClick={onRetry}>
-          重新开始
+          重新开始匹配
         </Button>
       </div>
     </div>
@@ -270,6 +290,60 @@ function MatchDetailPanel({
     (typeof matchMeta?.conflict_note === "string" && matchMeta.conflict_note) ||
     (typeof reqMeta?.conflict_note === "string" && reqMeta.conflict_note) ||
     null;
+  const naBasis =
+    typeof matchMeta?.not_applicable_basis === "string"
+      ? matchMeta.not_applicable_basis
+      : null;
+  const naQuote =
+    typeof matchMeta?.not_applicable_evidence_quote === "string"
+      ? matchMeta.not_applicable_evidence_quote
+      : null;
+  const naLocation =
+    matchMeta?.not_applicable_location &&
+    typeof matchMeta.not_applicable_location === "object"
+      ? (matchMeta.not_applicable_location as Record<string, unknown>)
+      : null;
+
+  const supportLinks = match.company_links.filter((l) => l.role === "company_support");
+  const conflictLinks = match.company_links.filter((l) => l.role === "company_conflict");
+  const otherLinks = match.company_links.filter(
+    (l) => l.role !== "company_support" && l.role !== "company_conflict",
+  );
+
+  const renderCompanyLink = (link: CompanyEvidenceLink) => (
+    <article key={link.id} className="bp-req-evidence-card">
+      <div className="bp-req-evidence-head">
+        <span className="bp-req-evidence-file">{link.document_file_name || "未知文件"}</span>
+        {link.document_type && (
+          <Tag bordered={false}>{DOC_TYPE_LABELS[link.document_type] ?? link.document_type}</Tag>
+        )}
+        {link.role && (
+          <Tag bordered={false} color={link.role === "company_conflict" ? "error" : "default"}>
+            {COMPANY_LINK_ROLE_LABELS[link.role] ?? link.role}
+          </Tag>
+        )}
+      </div>
+      <div className="bp-req-evidence-meta">
+        {link.section && <span>章节 {link.section}</span>}
+        {link.clause_id && <span>条款 {link.clause_id}</span>}
+        {link.chunk_index != null && <span>切片 #{link.chunk_index}</span>}
+        <span>{pageRangeLabel(link.page_start, link.page_end)}</span>
+      </div>
+      {(link.quote || link.notes) && (
+        <blockquote className="bp-req-evidence-quote">{link.quote || link.notes}</blockquote>
+      )}
+      {onOpenSource && link.document_id && (
+        <Button
+          type="link"
+          size="small"
+          className="bp-req-open-source"
+          onClick={() => onOpenSource(link.document_id!, link.chunk_id ?? undefined)}
+        >
+          在文档中心打开
+        </Button>
+      )}
+    </article>
+  );
 
   return (
     <div className="bp-req-detail">
@@ -336,6 +410,65 @@ function MatchDetailPanel({
         </>
       )}
 
+      {match.status === "not_applicable" && (
+        <>
+          <h3 className="bp-req-subhead">不适用依据（待人工审核）</h3>
+          <div className="bp-meta-grid">
+            <div className="bp-meta-item">
+              <div className="bp-meta-label">依据类型</div>
+              <div className="bp-meta-value">
+                {naBasis ? (NOT_APPLICABLE_BASIS_LABELS[naBasis] ?? naBasis) : "-"}
+              </div>
+            </div>
+            {naLocation && (
+              <>
+                <div className="bp-meta-item">
+                  <div className="bp-meta-label">来源文件</div>
+                  <div className="bp-meta-value">
+                    {typeof naLocation.file_name === "string" ? naLocation.file_name : "-"}
+                  </div>
+                </div>
+                <div className="bp-meta-item">
+                  <div className="bp-meta-label">定位</div>
+                  <div className="bp-meta-value">
+                    {[
+                      typeof naLocation.section === "string" ? `章节 ${naLocation.section}` : null,
+                      typeof naLocation.clause_id === "string"
+                        ? `条款 ${naLocation.clause_id}`
+                        : null,
+                      pageRangeLabel(
+                        typeof naLocation.page_start === "number" ? naLocation.page_start : null,
+                        typeof naLocation.page_end === "number" ? naLocation.page_end : null,
+                      ),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "-"}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          {naQuote && <div className="bp-req-quote-block" style={{ marginTop: 12 }}>{naQuote}</div>}
+          {onOpenSource &&
+            typeof naLocation?.document_id === "string" &&
+            naLocation.document_id && (
+              <Button
+                type="link"
+                size="small"
+                className="bp-req-open-source"
+                onClick={() =>
+                  onOpenSource(
+                    naLocation.document_id as string,
+                    typeof naLocation.chunk_id === "string" ? naLocation.chunk_id : undefined,
+                  )
+                }
+              >
+                在文档中心打开
+              </Button>
+            )}
+        </>
+      )}
+
       {hasPotentialConflict && (
         <>
           <h3 className="bp-req-subhead">冲突提示</h3>
@@ -394,81 +527,75 @@ function MatchDetailPanel({
         </div>
       )}
 
-      <h3 className="bp-req-subhead">企业材料证据</h3>
-      {match.primary_company_quote && (
-        <div className="bp-req-quote-block" style={{ marginBottom: 12 }}>
-          {match.primary_company_quote}
-        </div>
-      )}
-      {match.company_links.length === 0 && !match.primary_company_quote ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={
-            match.status === "insufficient_evidence"
-              ? "当前材料未找到充分证据"
-              : "暂无企业材料引用"
-          }
-        />
+      {match.status === "conflicting_evidence" ? (
+        <>
+          <h3 className="bp-req-subhead">冲突支持侧证据（{supportLinks.length}）</h3>
+          {supportLinks.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无支持侧企业证据" />
+          ) : (
+            <div className="bp-req-evidence-list">{supportLinks.map(renderCompanyLink)}</div>
+          )}
+          <h3 className="bp-req-subhead">冲突对立侧证据（{conflictLinks.length}）</h3>
+          {conflictLinks.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无冲突侧企业证据" />
+          ) : (
+            <div className="bp-req-evidence-list">{conflictLinks.map(renderCompanyLink)}</div>
+          )}
+          {conflictNote && (
+            <>
+              <h3 className="bp-req-subhead">冲突说明</h3>
+              <div className="bp-req-quote-block">{conflictNote}</div>
+            </>
+          )}
+          {otherLinks.length > 0 && (
+            <>
+              <h3 className="bp-req-subhead">其他企业证据</h3>
+              <div className="bp-req-evidence-list">{otherLinks.map(renderCompanyLink)}</div>
+            </>
+          )}
+        </>
       ) : (
-        <div className="bp-req-evidence-list">
-          {match.company_links.map((link) => (
-            <article key={link.id} className="bp-req-evidence-card">
-              <div className="bp-req-evidence-head">
-                <span className="bp-req-evidence-file">
-                  {link.document_file_name || "未知文件"}
-                </span>
-                {link.document_type && (
-                  <Tag bordered={false}>
-                    {DOC_TYPE_LABELS[link.document_type] ?? link.document_type}
-                  </Tag>
+        <>
+          <h3 className="bp-req-subhead">企业材料证据</h3>
+          {match.primary_company_quote && (
+            <div className="bp-req-quote-block" style={{ marginBottom: 12 }}>
+              {match.primary_company_quote}
+            </div>
+          )}
+          {match.company_links.length === 0 && !match.primary_company_quote ? (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                match.status === "insufficient_evidence"
+                  ? "当前材料未找到充分证据"
+                  : match.status === "not_applicable"
+                    ? "不适用依据见上方招标/范围证据"
+                    : "暂无企业材料引用"
+              }
+            />
+          ) : (
+            <div className="bp-req-evidence-list">
+              {match.company_links.map(renderCompanyLink)}
+              {match.company_links.length === 0 &&
+                match.primary_company_document_id &&
+                onOpenSource && (
+                  <Button
+                    type="link"
+                    size="small"
+                    className="bp-req-open-source"
+                    onClick={() =>
+                      onOpenSource(
+                        match.primary_company_document_id!,
+                        match.primary_company_chunk_id ?? undefined,
+                      )
+                    }
+                  >
+                    在文档中心打开
+                  </Button>
                 )}
-                {link.role && (
-                  <Tag bordered={false} color="default">
-                    {link.role}
-                  </Tag>
-                )}
-              </div>
-              <div className="bp-req-evidence-meta">
-                {link.section && <span>章节 {link.section}</span>}
-                {link.clause_id && <span>条款 {link.clause_id}</span>}
-                {link.chunk_index != null && <span>切片 #{link.chunk_index}</span>}
-                <span>{pageRangeLabel(link.page_start, link.page_end)}</span>
-              </div>
-              {(link.quote || link.notes) && (
-                <blockquote className="bp-req-evidence-quote">
-                  {link.quote || link.notes}
-                </blockquote>
-              )}
-              {onOpenSource && link.document_id && (
-                <Button
-                  type="link"
-                  size="small"
-                  className="bp-req-open-source"
-                  onClick={() => onOpenSource(link.document_id!, link.chunk_id ?? undefined)}
-                >
-                  在文档中心打开
-                </Button>
-              )}
-            </article>
-          ))}
-          {match.company_links.length === 0 &&
-            match.primary_company_document_id &&
-            onOpenSource && (
-              <Button
-                type="link"
-                size="small"
-                className="bp-req-open-source"
-                onClick={() =>
-                  onOpenSource(
-                    match.primary_company_document_id!,
-                    match.primary_company_chunk_id ?? undefined,
-                  )
-                }
-              >
-                在文档中心打开
-              </Button>
-            )}
-        </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -635,6 +762,14 @@ export default function MatchingWorkspace({
     },
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelRequirementMatchRun(projectId, runId!),
+    onSuccess: (data) => {
+      void queryClient.setQueryData(["requirement-match-run", projectId, data.id], data);
+      invalidateMatches();
+    },
+  });
+
   const confirmForceMatch = () => {
     Modal.confirm({
       title: "强制重新匹配？",
@@ -712,6 +847,7 @@ export default function MatchingWorkspace({
   const showEmpty =
     !isMatching &&
     !matchingFailed &&
+    !matchingCancelled &&
     !listQuery.isLoading &&
     (listQuery.data?.total ?? 0) === 0 &&
     Object.keys(filters).length === 0 &&
@@ -721,15 +857,49 @@ export default function MatchingWorkspace({
     return (
       <MatchProgress
         run={run}
-        onCancel={() => setRunId(null)}
+        onCancel={() => {
+          if (runId) cancelMutation.mutate();
+        }}
         onRetry={() =>
           startMutation.mutate({
             force: false,
             documentTypes: selectedDocTypes.length ? selectedDocTypes : [...MATCH_DOC_TYPES],
           })
         }
+        cancelling={cancelMutation.isPending}
         retrying={startMutation.isPending}
       />
+    );
+  }
+
+  if (matchingCancelled && run) {
+    return (
+      <div className="bp-req-failed">
+        <Alert
+          type="info"
+          showIcon
+          message="已取消"
+          description={run.error_summary || "任务已取消，未写入匹配结果"}
+        />
+        <div className="bp-req-failed-actions">
+          <Button
+            type="primary"
+            icon={<ReloadOutlined />}
+            loading={startMutation.isPending}
+            onClick={() =>
+              startMutation.mutate({
+                force: false,
+                documentTypes: selectedDocTypes.length ? selectedDocTypes : [...MATCH_DOC_TYPES],
+              })
+            }
+          >
+            重新开始匹配
+          </Button>
+          <Button icon={<StopOutlined />} onClick={() => setRunId(null)}>
+            返回
+          </Button>
+        </div>
+      </div>
     );
   }
 

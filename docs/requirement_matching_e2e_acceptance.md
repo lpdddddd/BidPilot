@@ -1,7 +1,7 @@
 # Requirement Matching E2E Acceptance (Step 8)
 
 **Date:** 2026-07-22  
-**Baseline:** after `fix: preserve requirements when forced extraction validation fails` + this feature commit
+**Baseline:** after `feat: add traceable requirement to company evidence matching` + security semantic hardenings (`not_applicable` / dual conflict / cancel / atomic failure)
 
 ## Environment
 
@@ -15,7 +15,7 @@
 | Company scope | synthetic desensitized `e2e_company_qual.txt` (`qualification`, 5 chunks) |
 | Match scope | 2 qualification + 2 material Requirements; `force=true` |
 
-## Run stats
+## Run stats (prior live fixture)
 
 | Metric | Value |
 |--------|--------|
@@ -28,6 +28,11 @@
 | failed | 0 |
 | Wall time | ~6 s |
 
+> **Note:** No new live enterprise/Qwen run was executed for the 2026-07-22 security hardenings.
+> Prior synthetic sample above still applies for basic supported/insufficient paths.
+> New cancel / dual-conflict / not_applicable / atomic-failure paths are covered by
+> automated unit tests (`tests/test_requirement_matching.py`), marked N/A for live E2E here.
+
 ## Coverage checklist
 
 | Target | Result | Notes (desensitized) |
@@ -36,6 +41,15 @@
 | 资格：电子与智能化贰级资质 | PASS `supported` | Quote grounded in section「二、专业资质」; file `e2e_company_qual.txt` |
 | 材料：预付款比例条款 | PASS `insufficient_evidence` | No payment-schedule evidence in company doc; UI semantics = 当前材料未找到充分证据 |
 | 材料：质保期贰年 | PASS `insufficient_evidence` | No warranty-period evidence; risk elevated for mandatory-like material |
+
+## Security hardenings (unit / N/A live)
+
+| Hardening | Live E2E | Automated |
+|-----------|----------|-----------|
+| `not_applicable` requires locatable scope evidence + basis | N/A (no new live run) | Covered |
+| Dual company evidence for `conflicting_evidence` | N/A | Covered |
+| Real cancellable match run (`POST .../cancel`) | N/A | Covered |
+| Global atomic failure (any batch fatal → zero writes) | N/A | Covered |
 
 ## Spot checks
 
@@ -46,11 +60,12 @@
 
 ## Verdict
 
-**Real Qwen3-8B requirement↔company matching: PASS** on this anonymized fixture (supported + insufficient_evidence covered; partially_supported not observed in this 4-item scope).
+**Real Qwen3-8B requirement↔company matching: PASS** on the prior anonymized fixture (supported + insufficient_evidence).  
+Security semantic hardenings: **PASS via automated tests**; live re-acceptance **N/A** (no new live run; synthetic sample only — not production customer data).
 
 ## Blockers / N/A
 
-- Live `partially_supported` / `conflicting_evidence` not forced in this fixture (covered by mock LLM unit tests).
+- Live `partially_supported` / `conflicting_evidence` / `not_applicable` / cancel not forced in the prior fixture (covered by mock LLM unit tests).
 - Uploaded company file is a **synthetic desensitized sample** for acceptance only; not production customer data.
 
 ## Reproduce

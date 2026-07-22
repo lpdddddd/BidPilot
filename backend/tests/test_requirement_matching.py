@@ -941,3 +941,940 @@ def test_start_filters_excluded_document_types(db):
     svc.execute_run(run.id)
     assert DocumentType.tender.value not in seen
     assert DocumentType.personnel.value in seen
+
+
+# ---------------------------------------------------------------------------
+# Goal 1: not_applicable evidence rules
+# ---------------------------------------------------------------------------
+
+
+def _attach_tender_evidence(
+    db: Session,
+    project: BidProject,
+    req: Requirement,
+    *,
+    tender: Document,
+    content: str,
+    section: str = "适用范围",
+    clause_id: str = "S.1",
+) -> DocumentChunk:
+    t_chunk = _chunk(
+        db,
+        project,
+        tender,
+        index=0,
+        content=content,
+        section=section,
+        clause_id=clause_id,
+        page_start=3,
+        page_end=3,
+    )
+    db.add(
+        EvidenceLink(
+            requirement_id=req.id,
+            document_id=tender.id,
+            chunk_id=t_chunk.id,
+            evidence_type="quote",
+            notes=content[:80],
+        )
+    )
+    db.flush()
+    return t_chunk
+
+
+def test_not_applicable_without_evidence_rejected(db):
+    project = _org_project(db, "NA1")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    _chunk(db, project, company, index=0, content="本公司具备一级资质。")
+    req = _requirement(
+        db,
+        project,
+        normalized="本包件仅适用于北京市海淀区项目。",
+        title="包件范围",
+    )
+    db.commit()
+
+    llm = FakeLlm(
+        lambda _m: {
+            "items": [
+                {
+                    "requirement_id": str(req.id),
+                    "status": "not_applicable",
+                    "summary": "当前项目不在海淀，故不适用",
+                    "needs_review": True,
+                    "not_applicable_basis": None,
+                    "not_applicable_evidence_quote": None,
+                    "not_applicable_evidence_chunk_id": None,
+                }
+            ]
+        }
+    )
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest())
+    svc.execute_run(run.id)
+    refreshed = svc.get_run(project.id, run.id)
+    # Unfounded not_applicable → all rejected → failed, zero writes
+    assert refreshed.status == ExtractionRunStatus.failed
+    assert list(db.scalars(select(RequirementEvidenceMatch))) == []
+
+
+def test_empty_company_materials_never_not_applicable(db):
+    project = _org_project(db, "NA2")
+    tender = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
+    req = _requirement(
+        db,
+        project,
+        normalized="本包件仅适用于A标段。",
+        source_document=tender,
+    )
+    _attach_tender_evidence(
+        db, project, req, tender=tender, content="本包件仅适用于A标段，其他标段不适用。"
+    )
+    db.commit()
+
+    llm = FakeLlm()
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest())
+    svc.execute_run(run.id)
+    refreshed = svc.get_run(project.id, run.id)
+    assert refreshed.status == ExtractionRunStatus.failed
+    assert "企业材料为空" in (refreshed.error_summary or "")
+    assert llm.chat_calls == []
+    assert list(db.scalars(select(RequirementEvidenceMatch))) == []
+
+
+def test_legal_not_applicable_with_tender_scope_evidence(db):
+    project = _org_project(db, "NA3")
+    tender = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    _chunk(db, project, company, index=0, content="本公司注册于朝阳区，具备一级资质。")
+    req = _requirement(
+        db,
+        project,
+        normalized="本包件仅适用于海淀区范围内的项目。",
+        title="包件适用",
+        source_document=tender,
+        category=RequirementCategory.commercial,
+        mandatory=False,
+        risk_level=RiskLevel.low,
+    )
+    t_chunk = _attach_tender_evidence(
+        db,
+        project,
+        req,
+        tender=tender,
+        content="本包件仅适用于海淀区范围内的项目，其他区域不适用。",
+    )
+    db.commit()
+
+    llm = FakeLlm(
+        lambda _m: {
+            "items": [
+                {
+                    "requirement_id": str(req.id),
+                    "status": "not_applicable",
+                    "summary": "招标要求限定海淀区范围，当前对象不在适用范围内，待人工审核",
+                    "needs_review": True,
+                    "not_applicable_basis": "requirement_scope_exclusion",
+                    "not_applicable_evidence_quote": (
+                        "本包件仅适用于海淀区范围内的项目，其他区域不适用"
+                    ),
+                    "not_applicable_evidence_chunk_id": str(t_chunk.id),
+                }
+            ]
+        }
+    )
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest())
+    svc.execute_run(run.id)
+    refreshed = svc.get_run(project.id, run.id)
+    assert refreshed.status == ExtractionRunStatus.succeeded
+    match = db.scalar(select(RequirementEvidenceMatch))
+    assert match is not None
+    assert match.status == EvidenceMatchStatus.not_applicable
+    assert match.needs_review is True
+    meta = match.metadata_json or {}
+    assert meta.get("not_applicable_basis") == "requirement_scope_exclusion"
+    assert "海淀区" in (meta.get("not_applicable_evidence_quote") or "")
+    assert meta.get("not_applicable_evidence_chunk_id") == str(t_chunk.id)
+    loc = meta.get("not_applicable_location") or {}
+    assert loc.get("section") == "适用范围"
+    assert loc.get("clause_id") == "S.1"
+
+
+def test_not_applicable_rejects_cross_project_and_tender_as_company_basis(db):
+    project_a = _org_project(db, "NA4a")
+    project_b = _org_project(db, "NA4b")
+    tender_a = _doc(db, project_a, document_type=DocumentType.tender, file_name="ta.pdf")
+    company_a = _doc(
+        db, project_a, document_type=DocumentType.qualification, file_name="qa.pdf"
+    )
+    _chunk(db, project_a, company_a, index=0, content="A公司简介文字。")
+    tender_b = _doc(db, project_b, document_type=DocumentType.tender, file_name="tb.pdf")
+    t_chunk_b = _chunk(
+        db,
+        project_b,
+        tender_b,
+        index=0,
+        content="本包件仅适用于B市项目。",
+    )
+    req = _requirement(
+        db,
+        project_a,
+        normalized="本包件仅适用于A市项目。",
+        source_document=tender_a,
+    )
+    # Legitimate tender evidence on A (unused by bad LLM response)
+    _attach_tender_evidence(
+        db, project_a, req, tender=tender_a, content="本包件仅适用于A市项目，其他城市不适用。"
+    )
+    db.commit()
+
+    # Cross-project tender chunk as requirement_scope evidence → reject
+    llm = FakeLlm(
+        lambda _m: {
+            "items": [
+                {
+                    "requirement_id": str(req.id),
+                    "status": "not_applicable",
+                    "summary": "跨项目证据，待人工审核",
+                    "needs_review": True,
+                    "not_applicable_basis": "requirement_scope_exclusion",
+                    "not_applicable_evidence_quote": "本包件仅适用于B市项目",
+                    "not_applicable_evidence_chunk_id": str(t_chunk_b.id),
+                }
+            ]
+        }
+    )
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project_a.id, MatchStartRequest())
+    svc.execute_run(run.id)
+    assert svc.get_run(project_a.id, run.id).status == ExtractionRunStatus.failed
+    assert list(db.scalars(select(RequirementEvidenceMatch))) == []
+
+    # project_scope_exclusion citing tender-type chunk id (not in company set) → reject
+    tender_chunk_a = db.scalar(
+        select(DocumentChunk).where(DocumentChunk.document_id == tender_a.id)
+    )
+    assert tender_chunk_a is not None
+    llm2 = FakeLlm(
+        lambda _m: {
+            "items": [
+                {
+                    "requirement_id": str(req.id),
+                    "status": "not_applicable",
+                    "summary": "误用招标文件作企业范围排除，待人工审核",
+                    "needs_review": True,
+                    "not_applicable_basis": "project_scope_exclusion",
+                    "not_applicable_evidence_quote": "本包件仅适用于A市项目，其他城市不适用",
+                    "not_applicable_evidence_chunk_id": str(tender_chunk_a.id),
+                }
+            ]
+        }
+    )
+    svc2 = RequirementMatchService(db, llm=llm2)
+    run2 = svc2.start_matching(project_a.id, MatchStartRequest())
+    svc2.execute_run(run2.id)
+    assert svc2.get_run(project_a.id, run2.id).status == ExtractionRunStatus.failed
+    assert list(db.scalars(select(RequirementEvidenceMatch))) == []
+
+
+# ---------------------------------------------------------------------------
+# Goal 2: conflicting_evidence dual company evidence
+# ---------------------------------------------------------------------------
+
+
+def test_conflicting_single_evidence_rejected(db):
+    project = _org_project(db, "CF1")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    chunk = _chunk(
+        db,
+        project,
+        company,
+        index=0,
+        content="本公司具备一级资质，同时声明不具备一级资质。",
+    )
+    req = _requirement(db, project, normalized="投标人须具备一级资质。")
+    db.commit()
+
+    llm = FakeLlm(
+        lambda _m: {
+            "items": [
+                {
+                    "requirement_id": str(req.id),
+                    "status": "conflicting_evidence",
+                    "summary": "材料自相矛盾，需人工确认",
+                    "primary_company_chunk_id": str(chunk.id),
+                    "company_evidence_quote": "本公司具备一级资质",
+                    "conflicting_company_chunk_id": None,
+                    "conflicting_company_evidence_quote": None,
+                    "needs_review": True,
+                }
+            ]
+        }
+    )
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest())
+    svc.execute_run(run.id)
+    match = db.scalar(select(RequirementEvidenceMatch))
+    # Downgraded to partially_supported (one valid support side) rather than conflict
+    assert match is not None
+    assert match.status == EvidenceMatchStatus.partially_supported
+    links = list(
+        db.scalars(
+            select(RequirementEvidenceMatchLink).where(
+                RequirementEvidenceMatchLink.match_id == match.id
+            )
+        )
+    )
+    assert all(link.role == "company_support" for link in links)
+    assert not any(link.role == "company_conflict" for link in links)
+
+
+def test_conflicting_same_chunk_same_quote_rejected(db):
+    project = _org_project(db, "CF2")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    chunk = _chunk(db, project, company, index=0, content="本公司具备一级资质。")
+    req = _requirement(db, project, normalized="投标人须具备一级资质。")
+    db.commit()
+
+    llm = FakeLlm(
+        lambda _m: {
+            "items": [
+                {
+                    "requirement_id": str(req.id),
+                    "status": "conflicting_evidence",
+                    "summary": "伪冲突，需人工确认",
+                    "primary_company_chunk_id": str(chunk.id),
+                    "company_evidence_quote": "本公司具备一级资质",
+                    "conflicting_company_chunk_id": str(chunk.id),
+                    "conflicting_company_evidence_quote": "本公司具备一级资质",
+                    "conflict_note": "一级资质表述冲突",
+                    "needs_review": True,
+                }
+            ]
+        }
+    )
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest())
+    svc.execute_run(run.id)
+    match = db.scalar(select(RequirementEvidenceMatch))
+    assert match is not None
+    assert match.status != EvidenceMatchStatus.conflicting_evidence
+
+
+def test_conflicting_two_chunks_persists_dual_links(db):
+    project = _org_project(db, "CF3")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    chunk_a = _chunk(
+        db, project, company, index=0, content="本公司具备一级建筑业企业资质。"
+    )
+    chunk_b = _chunk(
+        db, project, company, index=1, content="本公司仅具备二级建筑业企业资质。"
+    )
+    req = _requirement(db, project, normalized="投标人须具备一级建筑业企业资质。")
+    db.commit()
+
+    llm = FakeLlm(
+        lambda _m: {
+            "items": [
+                {
+                    "requirement_id": str(req.id),
+                    "status": "conflicting_evidence",
+                    "summary": "企业材料中一级与二级资质表述冲突，需人工确认",
+                    "primary_company_chunk_id": str(chunk_a.id),
+                    "company_evidence_quote": "本公司具备一级建筑业企业资质",
+                    "conflicting_company_chunk_id": str(chunk_b.id),
+                    "conflicting_company_evidence_quote": "本公司仅具备二级建筑业企业资质",
+                    "conflict_note": "一级与二级资质冲突",
+                    "needs_review": True,
+                }
+            ]
+        }
+    )
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest())
+    svc.execute_run(run.id)
+    refreshed = svc.get_run(project.id, run.id)
+    assert refreshed.status == ExtractionRunStatus.succeeded
+    assert refreshed.conflict_count == 1
+    match = db.scalar(select(RequirementEvidenceMatch))
+    assert match is not None
+    assert match.status == EvidenceMatchStatus.conflicting_evidence
+    links = list(
+        db.scalars(
+            select(RequirementEvidenceMatchLink).where(
+                RequirementEvidenceMatchLink.match_id == match.id
+            )
+        )
+    )
+    roles = {link.role for link in links}
+    assert roles == {"company_support", "company_conflict"}
+    by_role = {link.role: link for link in links}
+    assert by_role["company_support"].chunk_id == chunk_a.id
+    assert by_role["company_conflict"].chunk_id == chunk_b.id
+
+
+def test_conflicting_unlocatable_quote_not_persisted_as_conflict(db):
+    project = _org_project(db, "CF4")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    chunk_a = _chunk(db, project, company, index=0, content="本公司具备一级资质。")
+    chunk_b = _chunk(db, project, company, index=1, content="本公司具备二级资质。")
+    req = _requirement(db, project, normalized="投标人须具备一级资质。")
+    db.commit()
+
+    llm = FakeLlm(
+        lambda _m: {
+            "items": [
+                {
+                    "requirement_id": str(req.id),
+                    "status": "conflicting_evidence",
+                    "summary": "冲突引文无法定位，需人工确认",
+                    "primary_company_chunk_id": str(chunk_a.id),
+                    "company_evidence_quote": "本公司具备一级资质",
+                    "conflicting_company_chunk_id": str(chunk_b.id),
+                    "conflicting_company_evidence_quote": "这段话完全不存在于原文XYZ",
+                    "needs_review": True,
+                }
+            ]
+        }
+    )
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest())
+    svc.execute_run(run.id)
+    match = db.scalar(select(RequirementEvidenceMatch))
+    assert match is not None
+    assert match.status != EvidenceMatchStatus.conflicting_evidence
+
+
+def test_conflicting_cross_project_evidence_rejected(db):
+    project_a = _org_project(db, "CF5a")
+    project_b = _org_project(db, "CF5b")
+    company_a = _doc(
+        db, project_a, document_type=DocumentType.qualification, file_name="a.pdf"
+    )
+    company_b = _doc(
+        db, project_b, document_type=DocumentType.qualification, file_name="b.pdf"
+    )
+    chunk_a = _chunk(db, project_a, company_a, index=0, content="A公司具备一级资质。")
+    chunk_b = _chunk(db, project_b, company_b, index=0, content="B公司具备二级资质。")
+    req = _requirement(db, project_a, normalized="投标人须具备一级资质。")
+    db.commit()
+
+    llm = FakeLlm(
+        lambda _m: {
+            "items": [
+                {
+                    "requirement_id": str(req.id),
+                    "status": "conflicting_evidence",
+                    "summary": "跨项目冲突证据，需人工确认",
+                    "primary_company_chunk_id": str(chunk_a.id),
+                    "company_evidence_quote": "A公司具备一级资质",
+                    "conflicting_company_chunk_id": str(chunk_b.id),
+                    "conflicting_company_evidence_quote": "B公司具备二级资质",
+                    "needs_review": True,
+                }
+            ]
+        }
+    )
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project_a.id, MatchStartRequest())
+    svc.execute_run(run.id)
+    match = db.scalar(
+        select(RequirementEvidenceMatch).where(
+            RequirementEvidenceMatch.project_id == project_a.id
+        )
+    )
+    # Conflict side not in allowed set → cannot be conflicting_evidence
+    if match is not None:
+        assert match.status != EvidenceMatchStatus.conflicting_evidence
+        links = list(
+            db.scalars(
+                select(RequirementEvidenceMatchLink).where(
+                    RequirementEvidenceMatchLink.match_id == match.id
+                )
+            )
+        )
+        assert all(link.chunk_id != chunk_b.id for link in links)
+
+
+# ---------------------------------------------------------------------------
+# Goal 3: cancellable match run
+# ---------------------------------------------------------------------------
+
+
+def test_cancel_queued_run(db, client):
+    project = _org_project(db, "CX1")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    _chunk(db, project, company, index=0, content="本公司具备一级资质。")
+    _requirement(db, project, normalized="投标人须具备一级资质。")
+    db.commit()
+
+    svc = RequirementMatchService(db, llm=FakeLlm())
+    run = svc.start_matching(project.id, MatchStartRequest())
+    assert run.status == ExtractionRunStatus.queued
+
+    cancelled = svc.cancel_run(project.id, run.id)
+    assert cancelled.status == ExtractionRunStatus.cancelled
+    assert (cancelled.config_json or {}).get("cancel_requested") is True
+    assert "取消" in (cancelled.error_summary or "")
+
+    # execute_run should no-op
+    svc.execute_run(run.id)
+    assert svc.get_run(project.id, run.id).status == ExtractionRunStatus.cancelled
+    assert list(db.scalars(select(RequirementEvidenceMatch))) == []
+
+    # API path
+    run2 = svc.start_matching(project.id, MatchStartRequest())
+    resp = client.post(
+        f"/api/v1/projects/{project.id}/requirement-matches/runs/{run2.id}/cancel"
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == ExtractionRunStatus.cancelled.value
+
+
+def test_cancel_running_before_next_batch(db, monkeypatch):
+    import app.services.requirement_match_service as match_mod
+
+    monkeypatch.setattr(match_mod, "BATCH_SIZE", 1)
+
+    project = _org_project(db, "CX2")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    chunk = _chunk(db, project, company, index=0, content="本公司具备一级资质。")
+    req_a = _requirement(db, project, normalized="投标人须具备一级资质。", title="A")
+    req_b = _requirement(db, project, normalized="须提交营业执照复印件。", title="B")
+    db.commit()
+
+    llm = FakeLlm()
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest())
+
+    calls = {"n": 0}
+    original = svc._match_batch
+
+    def wrapped(batch, company_chunks, project_id, *, run_id=None):
+        result = original(batch, company_chunks, project_id, run_id=run_id)
+        calls["n"] += 1
+        if calls["n"] == 1:
+            svc.cancel_run(project.id, run.id)
+        return result
+
+    svc._match_batch = wrapped  # type: ignore[method-assign]
+
+    def responder(messages):
+        payload = _match_payload(messages)
+        rid = payload["requirements"][0]["requirement_id"]
+        req = req_a if rid == str(req_a.id) else req_b
+        return {
+            "items": [
+                _supported_item(
+                    req,
+                    chunk,
+                    company_evidence_quote="本公司具备一级资质",
+                    summary="材料含一级资质引文，需人工确认",
+                )
+            ]
+        }
+
+    llm._responder = responder
+    svc.execute_run(run.id)
+    refreshed = svc.get_run(project.id, run.id)
+    assert refreshed.status == ExtractionRunStatus.cancelled
+    assert calls["n"] == 1
+    assert list(db.scalars(select(RequirementEvidenceMatch))) == []
+
+
+def test_cancel_after_llm_before_persist(db, monkeypatch):
+    import app.services.requirement_match_service as match_mod
+
+    monkeypatch.setattr(match_mod, "BATCH_SIZE", 4)
+
+    project = _org_project(db, "CX3")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    chunk = _chunk(db, project, company, index=0, content="本公司具备一级资质。")
+    req = _requirement(db, project, normalized="投标人须具备一级资质。")
+    db.commit()
+
+    llm = FakeLlm()
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest())
+
+    def responder(_m):
+        # Cancel after LLM returns, before validate/persist (checked inside _match_batch)
+        svc.cancel_run(project.id, run.id)
+        return {
+            "items": [
+                _supported_item(
+                    req,
+                    chunk,
+                    company_evidence_quote="本公司具备一级资质",
+                    summary="材料含一级资质引文，需人工确认",
+                )
+            ]
+        }
+
+    llm._responder = responder
+    svc.execute_run(run.id)
+    assert svc.get_run(project.id, run.id).status == ExtractionRunStatus.cancelled
+    assert list(db.scalars(select(RequirementEvidenceMatch))) == []
+
+
+def test_force_cancel_keeps_old_matches(db):
+    project = _org_project(db, "CX4")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    chunk = _chunk(db, project, company, index=0, content="本公司具备一级资质。")
+    req = _requirement(db, project, normalized="投标人须具备一级资质。")
+    old = RequirementEvidenceMatch(
+        project_id=project.id,
+        requirement_id=req.id,
+        status=EvidenceMatchStatus.supported,
+        summary="保留旧匹配",
+        needs_review=True,
+        risk_level=RiskLevel.medium,
+        primary_company_chunk_id=chunk.id,
+        primary_company_document_id=company.id,
+        metadata_json={"source": "auto_match", "match_key": auto_match_key(req.id)},
+    )
+    db.add(old)
+    db.commit()
+
+    llm = FakeLlm()
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest(force=True))
+
+    def responder(_m):
+        svc.cancel_run(project.id, run.id)
+        return {
+            "items": [
+                _supported_item(
+                    req,
+                    chunk,
+                    company_evidence_quote="本公司具备一级资质",
+                    summary="新结果，需人工确认",
+                )
+            ]
+        }
+
+    llm._responder = responder
+    svc.execute_run(run.id)
+    assert svc.get_run(project.id, run.id).status == ExtractionRunStatus.cancelled
+    still = db.get(RequirementEvidenceMatch, old.id)
+    assert still is not None
+    assert still.summary == "保留旧匹配"
+
+
+def test_terminal_cancel_returns_error(db, client):
+    project = _org_project(db, "CX5")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    chunk = _chunk(db, project, company, index=0, content="本公司具备一级资质。")
+    req = _requirement(db, project, normalized="投标人须具备一级资质。")
+    db.commit()
+
+    llm = FakeLlm(
+        lambda _m: {
+            "items": [
+                _supported_item(
+                    req,
+                    chunk,
+                    company_evidence_quote="本公司具备一级资质",
+                    summary="材料含一级资质引文，需人工确认",
+                )
+            ]
+        }
+    )
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest())
+    svc.execute_run(run.id)
+    assert svc.get_run(project.id, run.id).status == ExtractionRunStatus.succeeded
+
+    with pytest.raises(Exception) as excinfo:
+        svc.cancel_run(project.id, run.id)
+    assert getattr(excinfo.value, "status_code", None) == 409
+
+    resp = client.post(
+        f"/api/v1/projects/{project.id}/requirement-matches/runs/{run.id}/cancel"
+    )
+    assert resp.status_code == 409
+    assert "无法取消" in resp.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Goal 4: global atomic failure
+# ---------------------------------------------------------------------------
+
+
+def test_atomic_second_batch_bad_json_zero_writes(db, monkeypatch):
+    import app.services.requirement_match_service as match_mod
+
+    monkeypatch.setattr(match_mod, "BATCH_SIZE", 1)
+
+    project = _org_project(db, "AT1")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    chunk = _chunk(db, project, company, index=0, content="本公司具备一级资质。")
+    req_a = _requirement(db, project, normalized="投标人须具备一级资质。", title="A")
+    req_b = _requirement(db, project, normalized="须提交营业执照复印件。", title="B")
+    db.commit()
+
+    calls = {"n": 0}
+
+    def responder(messages):
+        calls["n"] += 1
+        payload = _match_payload(messages)
+        rid = payload["requirements"][0]["requirement_id"]
+        if calls["n"] == 1:
+            req = req_a if rid == str(req_a.id) else req_b
+            return {
+                "items": [
+                    _supported_item(
+                        req,
+                        chunk,
+                        company_evidence_quote="本公司具备一级资质",
+                        summary="材料含一级资质引文，需人工确认",
+                    )
+                ]
+            }
+        return "not-json{{{"
+
+    llm = FakeLlm(responder)
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest(force=False))
+    svc.execute_run(run.id)
+    refreshed = svc.get_run(project.id, run.id)
+    assert refreshed.status == ExtractionRunStatus.failed
+    assert (refreshed.config_json or {}).get("result_kind") == "invalid_or_incomplete_result"
+    assert list(db.scalars(select(RequirementEvidenceMatch))) == []
+    # No orphan match links
+    assert list(db.scalars(select(RequirementEvidenceMatchLink))) == []
+
+
+def test_atomic_force_false_failure_keeps_existing(db, monkeypatch):
+    import app.services.requirement_match_service as match_mod
+
+    monkeypatch.setattr(match_mod, "BATCH_SIZE", 1)
+
+    project = _org_project(db, "AT2")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    chunk = _chunk(db, project, company, index=0, content="本公司具备一级资质。")
+    req_a = _requirement(db, project, normalized="投标人须具备一级资质。", title="A")
+    req_b = _requirement(db, project, normalized="须提交营业执照复印件。", title="B")
+    old = RequirementEvidenceMatch(
+        project_id=project.id,
+        requirement_id=req_a.id,
+        status=EvidenceMatchStatus.insufficient_evidence,
+        summary="旧自动匹配",
+        needs_review=True,
+        risk_level=RiskLevel.high,
+        metadata_json={"source": "auto_match", "match_key": auto_match_key(req_a.id)},
+    )
+    db.add(old)
+    db.commit()
+
+    calls = {"n": 0}
+
+    def responder(_m):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {
+                "items": [
+                    _supported_item(
+                        req_a,
+                        chunk,
+                        company_evidence_quote="本公司具备一级资质",
+                        summary="材料含一级资质引文，需人工确认",
+                    )
+                ]
+            }
+        return "BAD"
+
+    llm = FakeLlm(responder)
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest(force=False))
+    svc.execute_run(run.id)
+    assert svc.get_run(project.id, run.id).status == ExtractionRunStatus.failed
+    still = db.get(RequirementEvidenceMatch, old.id)
+    assert still is not None
+    assert still.summary == "旧自动匹配"
+    assert db.scalar(
+        select(RequirementEvidenceMatch).where(
+            RequirementEvidenceMatch.requirement_id == req_b.id
+        )
+    ) is None
+
+
+def test_atomic_force_true_failure_keeps_scoped_old_and_links(db, monkeypatch):
+    import app.services.requirement_match_service as match_mod
+
+    monkeypatch.setattr(match_mod, "BATCH_SIZE", 1)
+
+    project = _org_project(db, "AT3")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    chunk = _chunk(db, project, company, index=0, content="本公司具备一级资质。")
+    req_a = _requirement(db, project, normalized="投标人须具备一级资质。", title="A")
+    req_b = _requirement(db, project, normalized="须提交营业执照复印件。", title="B")
+    old = RequirementEvidenceMatch(
+        project_id=project.id,
+        requirement_id=req_a.id,
+        status=EvidenceMatchStatus.supported,
+        summary="旧force范围",
+        needs_review=True,
+        risk_level=RiskLevel.medium,
+        primary_company_chunk_id=chunk.id,
+        primary_company_document_id=company.id,
+        primary_company_quote="本公司具备一级资质",
+        metadata_json={"source": "auto_match", "match_key": auto_match_key(req_a.id)},
+    )
+    db.add(old)
+    db.flush()
+    old_link = RequirementEvidenceMatchLink(
+        match_id=old.id,
+        document_id=company.id,
+        chunk_id=chunk.id,
+        quote="本公司具备一级资质",
+        role="company_support",
+    )
+    db.add(old_link)
+    db.commit()
+    old_link_id = old_link.id
+
+    calls = {"n": 0}
+
+    def responder(_m):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {
+                "items": [
+                    _supported_item(
+                        req_a,
+                        chunk,
+                        company_evidence_quote="本公司具备一级资质",
+                        summary="新结果，需人工确认",
+                    )
+                ]
+            }
+        return "{not valid"
+
+    llm = FakeLlm(responder)
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest(force=True))
+    svc.execute_run(run.id)
+    assert svc.get_run(project.id, run.id).status == ExtractionRunStatus.failed
+    still = db.get(RequirementEvidenceMatch, old.id)
+    assert still is not None
+    assert still.summary == "旧force范围"
+    assert db.get(RequirementEvidenceMatchLink, old_link_id) is not None
+    _ = req_b
+
+
+def test_atomic_all_ok_mix_supported_insufficient(db, monkeypatch):
+    import app.services.requirement_match_service as match_mod
+
+    monkeypatch.setattr(match_mod, "BATCH_SIZE", 1)
+
+    project = _org_project(db, "AT4")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    chunk = _chunk(db, project, company, index=0, content="本公司具备一级资质。")
+    req_a = _requirement(db, project, normalized="投标人须具备一级资质。", title="A")
+    req_b = _requirement(db, project, normalized="须具备特级资质。", title="B")
+    db.commit()
+
+    def responder(messages):
+        payload = _match_payload(messages)
+        rid = payload["requirements"][0]["requirement_id"]
+        if rid == str(req_a.id):
+            return {
+                "items": [
+                    _supported_item(
+                        req_a,
+                        chunk,
+                        company_evidence_quote="本公司具备一级资质",
+                        summary="材料含一级资质引文，需人工确认",
+                    )
+                ]
+            }
+        return {
+            "items": [
+                {
+                    "requirement_id": str(req_b.id),
+                    "status": "insufficient_evidence",
+                    "summary": "当前材料未找到充分证据",
+                    "needs_review": True,
+                }
+            ]
+        }
+
+    llm = FakeLlm(responder)
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest())
+    svc.execute_run(run.id)
+    refreshed = svc.get_run(project.id, run.id)
+    assert refreshed.status == ExtractionRunStatus.succeeded
+    assert refreshed.matched_count == 1
+    assert refreshed.missing_evidence_count == 1
+    matches = list(db.scalars(select(RequirementEvidenceMatch)))
+    assert len(matches) == 2
+    statuses = {m.status for m in matches}
+    assert EvidenceMatchStatus.supported in statuses
+    assert EvidenceMatchStatus.insufficient_evidence in statuses
+
+
+def test_atomic_all_insufficient_succeeds(db):
+    project = _org_project(db, "AT5")
+    company = _doc(db, project, document_type=DocumentType.case, file_name="c.pdf")
+    _chunk(db, project, company, index=0, content="近三年完成若干信息化项目。")
+    req = _requirement(db, project, normalized="投标人须具备特级资质。")
+    db.commit()
+
+    llm = FakeLlm(
+        lambda _m: {
+            "items": [
+                {
+                    "requirement_id": str(req.id),
+                    "status": "insufficient_evidence",
+                    "summary": "当前材料未找到充分证据",
+                    "needs_review": True,
+                }
+            ]
+        }
+    )
+    svc = RequirementMatchService(db, llm=llm)
+    run = svc.start_matching(project.id, MatchStartRequest())
+    svc.execute_run(run.id)
+    refreshed = svc.get_run(project.id, run.id)
+    assert refreshed.status == ExtractionRunStatus.succeeded
+    assert (refreshed.config_json or {}).get("result_kind") == (
+        "valid_empty_or_insufficient_result"
+    )
+    match = db.scalar(select(RequirementEvidenceMatch))
+    assert match is not None
+    assert match.status == EvidenceMatchStatus.insufficient_evidence
+
+
+def test_all_rejected_now_fails_both_force_modes(db):
+    project = _org_project(db, "AT6")
+    company = _doc(db, project, document_type=DocumentType.qualification, file_name="q.pdf")
+    chunk = _chunk(db, project, company, index=0, content="本公司具备一级资质。")
+    req = _requirement(db, project, normalized="投标人须具备一级资质。")
+    db.commit()
+
+    def bad(_m):
+        return {
+            "items": [
+                _supported_item(
+                    req,
+                    chunk,
+                    company_evidence_quote="完全不存在的引文",
+                    summary="坏引文，需人工确认",
+                )
+            ]
+        }
+
+    for force in (False, True):
+        llm = FakeLlm(bad)
+        svc = RequirementMatchService(db, llm=llm)
+        run = svc.start_matching(project.id, MatchStartRequest(force=force))
+        svc.execute_run(run.id)
+        refreshed = svc.get_run(project.id, run.id)
+        assert refreshed.status == ExtractionRunStatus.failed
+        assert (refreshed.config_json or {}).get("result_kind") == (
+            "invalid_or_incomplete_result"
+        )

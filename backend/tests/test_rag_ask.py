@@ -520,10 +520,13 @@ def test_resolve_llm_load_target_prefers_explicit_path(tmp_path):
     assert resolve_llm_load_target(settings) == str(weights.resolve())
 
 
-def test_resolve_llm_load_target_falls_back_to_source(tmp_path):
+def test_resolve_llm_load_target_falls_back_to_source(tmp_path, monkeypatch):
     from app.core.config import Settings
     from app.services.llm_model_resolve import resolve_llm_load_target
 
+    # Host may export LLM_MODEL_PATH for live serving; clear so this unit test
+    # asserts Hub-id fallback without depending on machine-local weights.
+    monkeypatch.delenv("LLM_MODEL_PATH", raising=False)
     settings = Settings(llm_model_path="", llm_model_source="Qwen/Qwen3-8B")
     assert resolve_llm_load_target(settings) == "Qwen/Qwen3-8B"
 

@@ -82,12 +82,20 @@ _MODALITY_TOKENS = frozenset(
 )
 
 SYSTEM_PROMPT = """你是 BidPilot 的企业材料证据匹配器。
-只可根据本轮提供的招标 Requirement 和企业侧原始 chunks 作出结论。
+只可根据本轮提供的招标 Requirement、招标主证据 chunks 和企业侧原始 chunks 作出结论。
 招标要求本身以输入 Requirement 为准，不得改写、补充或生成新的要求。
 不得依赖外部知识、行业惯例、企业常识或经验推断。
 只有存在直接、可定位且足以支持该具体 Requirement 的企业原文时，才可输出 supported。
 缺少证据只可输出 insufficient_evidence，含义是当前材料范围内证据不足，不代表企业不具备。
-企业材料彼此存在直接矛盾时才可输出 conflicting_evidence。
+企业材料彼此存在直接矛盾时才可输出 conflicting_evidence，且必须同时提供：
+1) primary_company_chunk_id + company_evidence_quote（支持侧）
+2) conflicting_company_chunk_id + conflicting_company_evidence_quote（冲突侧）
+两侧必须是不同文本位置（不同 chunk，或同一 chunk 的不同引文），禁止同一 chunk+同一引文。
+not_applicable 仅当 Requirement 原文明确限定适用范围，且可定位证据证明当前对象/范围在适用之外；
+必须提供 not_applicable_basis、not_applicable_evidence_quote、not_applicable_evidence_chunk_id。
+basis=requirement_scope_exclusion 时证据必须来自该 Requirement 的招标主证据 chunk；
+basis=project_scope_exclusion 时证据必须来自本轮企业侧候选 chunk。
+模型主观判断、常识、缺少企业材料或材料为空 → 禁止 not_applicable，应输出 insufficient_evidence。
 每个 supported、partially_supported、conflicting_evidence 必须提供
 primary_company_chunk_id 和可精确匹配的 company_evidence_quote。
 summary 只能描述材料与该要求的证据关系，不得断言必然中标、完全满足或一定不符合。
@@ -331,6 +339,62 @@ class RequirementMatchService:
             )
         return MatchRunResponse.model_validate(run)
 
+    def cancel_run(self, project_id: UUID, run_id: UUID) -> MatchRunResponse:
+        self._require_project(project_id)
+        run = self.db.get(RequirementMatchRun, run_id)
+        if run is None or run.project_id != project_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="匹配任务不存在",
+            )
+        if run.status in (
+            ExtractionRunStatus.succeeded,
+            ExtractionRunStatus.failed,
+            ExtractionRunStatus.cancelled,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="任务已结束，无法取消",
+            )
+        if run.status not in (
+            ExtractionRunStatus.queued,
+            ExtractionRunStatus.running,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="当前状态不可取消",
+            )
+        cfg = dict(run.config_json or {})
+        cfg["cancel_requested"] = True
+        run.config_json = cfg
+        run.status = ExtractionRunStatus.cancelled
+        run.finished_at = datetime.now(UTC)
+        run.error_summary = "任务已取消，未写入匹配结果"
+        self.db.commit()
+        self.db.refresh(run)
+        return MatchRunResponse.model_validate(run)
+
+    def _is_cancel_requested(self, run_id: UUID) -> bool:
+        run = self.db.get(RequirementMatchRun, run_id)
+        if run is None:
+            return True
+        self.db.refresh(run)
+        if run.status == ExtractionRunStatus.cancelled:
+            return True
+        return bool((run.config_json or {}).get("cancel_requested"))
+
+    def _mark_cancelled(self, run: RequirementMatchRun, *, processed: int, failed: int) -> None:
+        run.status = ExtractionRunStatus.cancelled
+        run.finished_at = datetime.now(UTC)
+        run.processed_requirements = processed
+        run.failed_requirement_count = failed
+        run.error_summary = "任务已取消，未写入匹配结果"
+        cfg = dict(run.config_json or {})
+        cfg["cancel_requested"] = True
+        cfg["result_kind"] = "invalid_or_incomplete_result"
+        run.config_json = cfg
+        self.db.commit()
+
     def list_matches(
         self,
         project_id: UUID,
@@ -525,6 +589,9 @@ class RequirementMatchService:
             return
         if run.status == ExtractionRunStatus.cancelled:
             return
+        if self._is_cancel_requested(run_id):
+            self._mark_cancelled(run, processed=0, failed=0)
+            return
 
         run.status = ExtractionRunStatus.running
         run.started_at = datetime.now(UTC)
@@ -533,6 +600,10 @@ class RequirementMatchService:
 
         acc = _RunAccumulator()
         try:
+            if self._is_cancel_requested(run_id):
+                self._mark_cancelled(run, processed=0, failed=0)
+                return
+
             force = bool((run.config_json or {}).get("force"))
             requirements = self._load_requirements(run)
             company_chunks = self._load_company_chunks(run)
@@ -548,8 +619,13 @@ class RequirementMatchService:
             }
             self.db.commit()
 
+            if self._is_cancel_requested(run_id):
+                self._mark_cancelled(run, processed=0, failed=0)
+                return
+
             if not company_chunks:
                 # Empty company materials: do NOT call LLM; fail run; keep old matches.
+                # Never produce not_applicable from empty materials.
                 run.status = ExtractionRunStatus.failed
                 run.finished_at = datetime.now(UTC)
                 run.processed_requirements = 0
@@ -577,11 +653,29 @@ class RequirementMatchService:
                 return
 
             batch_fatal = False
+            cancelled = False
             for batch in _batched(requirements, BATCH_SIZE):
+                if self._is_cancel_requested(run_id):
+                    cancelled = True
+                    acc.validated.clear()
+                    acc.pending_synth.clear()
+                    break
                 try:
-                    llm_validated, raw_n, rejected_n = self._match_batch(
-                        batch, company_chunks, run.project_id
+                    batch_result = self._match_batch(
+                        batch, company_chunks, run.project_id, run_id=run_id
                     )
+                    if batch_result is None:
+                        cancelled = True
+                        acc.validated.clear()
+                        acc.pending_synth.clear()
+                        break
+                    llm_validated, raw_n, rejected_n = batch_result
+                    # Cancel may arrive during/after LLM; discard before persisting.
+                    if self._is_cancel_requested(run_id):
+                        cancelled = True
+                        acc.validated.clear()
+                        acc.pending_synth.clear()
+                        break
                     acc.raw_item_count += raw_n
                     acc.rejected_count += rejected_n
                     acc.llm_validated_count += len(llm_validated)
@@ -600,32 +694,55 @@ class RequirementMatchService:
                     )
                     acc.failed_requirement_count += len(batch)
                     acc.errors.append(f"{type(exc).__name__}: {exc}")
+                    # Fatal batch → remaining requirements are incomplete; stop early.
+                    break
                 finally:
-                    acc.processed_requirements += len(batch)
-                    run.processed_requirements = acc.processed_requirements
-                    run.failed_requirement_count = acc.failed_requirement_count
-                    self.db.commit()
+                    if not cancelled:
+                        acc.processed_requirements += len(batch)
+                        run.processed_requirements = acc.processed_requirements
+                        run.failed_requirement_count = acc.failed_requirement_count
+                        self.db.commit()
+
+            if cancelled or self._is_cancel_requested(run_id):
+                acc.validated.clear()
+                acc.pending_synth.clear()
+                self._mark_cancelled(
+                    run,
+                    processed=acc.processed_requirements,
+                    failed=acc.failed_requirement_count,
+                )
+                return
 
             all_rejected = (
                 not batch_fatal
                 and acc.raw_item_count > 0
                 and acc.llm_validated_count == 0
             )
+            # ANY batch fatal OR all candidates rejected → invalid for both force modes.
             invalid_or_incomplete = batch_fatal or all_rejected
 
-            if force and invalid_or_incomplete:
+            if invalid_or_incomplete:
                 reasons = list(acc.errors)
                 if all_rejected:
                     reasons.append(
                         f"模型输出候选 {acc.raw_item_count} 条，"
                         f"全部未通过证据校验（拒绝 {acc.rejected_count}）"
                     )
+                if batch_fatal:
+                    prefix = (
+                        "force 重跑中止：结果无效或不完整，已保留旧自动匹配结果。 "
+                        if force
+                        else "匹配中止：结果无效或不完整，未写入匹配结果。 "
+                    )
+                else:
+                    prefix = (
+                        "force 重跑中止：结果无效或不完整，已保留旧自动匹配结果。 "
+                        if force
+                        else "匹配中止：候选全部未通过证据校验，未写入匹配结果。 "
+                    )
                 run.status = ExtractionRunStatus.failed
                 run.finished_at = datetime.now(UTC)
-                run.error_summary = (
-                    "force 重跑中止：结果无效或不完整，已保留旧自动匹配结果。 "
-                    + "; ".join(reasons)
-                )[:2000]
+                run.error_summary = (prefix + "; ".join(reasons))[:2000]
                 run.failed_requirement_count = acc.failed_requirement_count
                 run.processed_requirements = acc.processed_requirements
                 run.config_json = {
@@ -634,30 +751,36 @@ class RequirementMatchService:
                     "raw_item_count": acc.raw_item_count,
                     "rejected_count": acc.rejected_count,
                 }
+                # Discard in-memory results — zero writes / deletes.
+                acc.validated.clear()
+                acc.pending_synth.clear()
                 self.db.commit()
                 return
 
-            if not force and all_rejected:
-                run.status = ExtractionRunStatus.succeeded
-                run.finished_at = datetime.now(UTC)
-                run.processed_requirements = acc.processed_requirements
-                run.failed_requirement_count = acc.failed_requirement_count
-                run.error_summary = (
-                    f"候选全部未通过证据校验（raw={acc.raw_item_count}, "
-                    f"rejected={acc.rejected_count}），未写入"
-                )[:2000]
-                run.config_json = {
-                    **(run.config_json or {}),
-                    "result_kind": "invalid_or_incomplete_result",
-                    "raw_item_count": acc.raw_item_count,
-                    "rejected_count": acc.rejected_count,
-                }
-                self.db.commit()
+            if self._is_cancel_requested(run_id):
+                acc.validated.clear()
+                acc.pending_synth.clear()
+                self._mark_cancelled(
+                    run,
+                    processed=acc.processed_requirements,
+                    failed=acc.failed_requirement_count,
+                )
                 return
 
             # LLM omitted some requirements (or returned empty items): fill gaps.
+            # Only legal when all batches completed successfully (not fatal).
             for req in acc.pending_synth:
                 acc.validated.append(self._synthesize_insufficient(req))
+
+            if self._is_cancel_requested(run_id):
+                acc.validated.clear()
+                acc.pending_synth.clear()
+                self._mark_cancelled(
+                    run,
+                    processed=acc.processed_requirements,
+                    failed=acc.failed_requirement_count,
+                )
+                return
 
             stats = self._persist_matches(
                 run.project_id,
@@ -674,38 +797,42 @@ class RequirementMatchService:
             run.failed_requirement_count = acc.failed_requirement_count
             run.processed_requirements = acc.processed_requirements
             run.finished_at = datetime.now(UTC)
+            has_supported_or_partial = any(
+                v.status
+                in (
+                    EvidenceMatchStatus.supported,
+                    EvidenceMatchStatus.partially_supported,
+                    EvidenceMatchStatus.conflicting_evidence,
+                    EvidenceMatchStatus.not_applicable,
+                )
+                for v in acc.validated
+            )
             run.config_json = {
                 **(run.config_json or {}),
                 "result_kind": (
-                    "validated_nonempty_result"
-                    if acc.validated
-                    else "valid_empty_result"
+                    "valid_result"
+                    if has_supported_or_partial
+                    else "valid_empty_or_insufficient_result"
                 ),
                 "raw_item_count": acc.raw_item_count,
                 "rejected_count": acc.rejected_count,
                 "created_count": stats["created_count"],
                 "skipped_existing": stats["skipped_existing"],
             }
-
-            if batch_fatal and not acc.validated:
-                run.status = ExtractionRunStatus.failed
-                run.error_summary = "; ".join(acc.errors)[:2000]
-            else:
-                run.status = ExtractionRunStatus.succeeded
-                if acc.errors:
-                    run.error_summary = (
-                        f"部分批次失败（{acc.failed_requirement_count} requirements）: "
-                        + "; ".join(acc.errors)[:1800]
-                    )
+            run.status = ExtractionRunStatus.succeeded
             self.db.commit()
         except Exception as exc:
             logger.exception("Match run %s crashed", run_id)
             self.db.rollback()
             run = self.db.get(RequirementMatchRun, run_id)
-            if run is not None:
+            if run is not None and run.status != ExtractionRunStatus.cancelled:
                 run.status = ExtractionRunStatus.failed
                 run.finished_at = datetime.now(UTC)
                 run.error_summary = f"{type(exc).__name__}: {exc}"[:2000]
+                run.config_json = {
+                    **(run.config_json or {}),
+                    "result_kind": "invalid_or_incomplete_result",
+                }
                 self.db.commit()
             raise
 
@@ -735,9 +862,14 @@ class RequirementMatchService:
         stmt = stmt.where(Requirement.review_status.in_(list(ReviewStatus)))
         rows = list(
             self.db.scalars(
-                stmt.options(selectinload(Requirement.evidence_links)).order_by(
-                    Requirement.created_at.asc()
-                )
+                stmt.options(
+                    selectinload(Requirement.evidence_links).selectinload(
+                        EvidenceLink.chunk
+                    ),
+                    selectinload(Requirement.evidence_links).selectinload(
+                        EvidenceLink.document
+                    ),
+                ).order_by(Requirement.created_at.asc())
             )
         )
         return rows
@@ -810,6 +942,29 @@ class RequirementMatchService:
             return positive[:top_k]
         return [ctx for ctx, _ in scored[: min(3, len(scored))]]
 
+    def _tender_primary_contexts(
+        self, requirement: Requirement
+    ) -> list[_ChunkContext]:
+        """Load locatable tender primary evidence chunks for a Requirement."""
+        out: list[_ChunkContext] = []
+        seen: set[UUID] = set()
+        for elink in requirement.evidence_links or []:
+            if elink.chunk_id is None or elink.chunk_id in seen:
+                continue
+            chunk = elink.chunk
+            doc = elink.document
+            if chunk is None:
+                chunk = self.db.get(DocumentChunk, elink.chunk_id)
+            if doc is None and elink.document_id is not None:
+                doc = self.db.get(Document, elink.document_id)
+            if chunk is None or doc is None:
+                continue
+            if chunk.project_id != requirement.project_id:
+                continue
+            seen.add(chunk.id)
+            out.append(_ChunkContext(chunk=chunk, document=doc))
+        return out
+
     def _synthesize_insufficient(self, requirement: Requirement) -> _ValidatedMatch:
         note = None
         meta_extra: dict[str, Any] = {}
@@ -845,15 +1000,24 @@ class RequirementMatchService:
         requirements: list[Requirement],
         company_chunks: list[_ChunkContext],
         project_id: UUID,
-    ) -> tuple[list[_ValidatedMatch], int, int]:
+        *,
+        run_id: UUID | None = None,
+    ) -> tuple[list[_ValidatedMatch], int, int] | None:
+        """Returns (validated, raw_count, rejected) or None if cancelled after LLM."""
         # Build per-requirement candidate chunk sets; union for prompt payload.
         per_req_chunks: dict[UUID, list[_ChunkContext]] = {}
+        per_req_tender: dict[UUID, list[_ChunkContext]] = {}
         allowed_chunk_ids: set[UUID] = set()
+        tender_by_id: dict[UUID, _ChunkContext] = {}
         for req in requirements:
             selected = self._select_related_chunks(req, company_chunks)
             per_req_chunks[req.id] = selected
             for ctx in selected:
                 allowed_chunk_ids.add(ctx.chunk.id)
+            tender_ctxs = self._tender_primary_contexts(req)
+            per_req_tender[req.id] = tender_ctxs
+            for ctx in tender_ctxs:
+                tender_by_id[ctx.chunk.id] = ctx
 
         by_chunk_id = {
             ctx.chunk.id: ctx
@@ -875,6 +1039,20 @@ class RequirementMatchService:
                     ),
                     "candidate_chunk_ids": [
                         str(c.chunk.id) for c in per_req_chunks.get(req.id, [])
+                    ],
+                    "tender_primary_evidence_chunks": [
+                        {
+                            "chunk_id": str(ctx.chunk.id),
+                            "document_id": str(ctx.document.id),
+                            "document_type": ctx.document.document_type.value,
+                            "file_name": ctx.document.file_name,
+                            "section": ctx.chunk.section,
+                            "clause_id": ctx.chunk.clause_id,
+                            "page_start": ctx.chunk.page_start,
+                            "page_end": ctx.chunk.page_end,
+                            "content": ctx.chunk.content,
+                        }
+                        for ctx in per_req_tender.get(req.id, [])
                     ],
                 }
                 for req in requirements
@@ -900,7 +1078,15 @@ class RequirementMatchService:
             '{"items":[{"requirement_id":"<UUID>","status":"supported|partially_supported|'
             'insufficient_evidence|conflicting_evidence|not_applicable",'
             '"summary":"仅描述证据关系","primary_company_chunk_id":"<chunk UUID 或 null>",'
-            '"company_evidence_quote":"原文连续短引文或 null","needs_review":true}]}\n'
+            '"company_evidence_quote":"原文连续短引文或 null",'
+            '"conflicting_company_chunk_id":"<冲突侧 chunk UUID 或 null>",'
+            '"conflicting_company_evidence_quote":"冲突侧原文引文或 null",'
+            '"conflict_note":"冲突说明或 null",'
+            '"not_applicable_basis":'
+            '"requirement_scope_exclusion|project_scope_exclusion|null",'
+            '"not_applicable_evidence_quote":"适用范围排除引文或 null",'
+            '"not_applicable_evidence_chunk_id":"<证据 chunk UUID 或 null>",'
+            '"needs_review":true}]}\n'
             "<<<MATCH_INPUT>>>\n"
             + json.dumps(payload, ensure_ascii=False)
         )
@@ -912,6 +1098,9 @@ class RequirementMatchService:
             max_tokens=max(getattr(self.llm, "max_tokens", 1024) or 1024, 2048),
             request_id=str(uuid.uuid4()),
         )
+        # Cancel may arrive during LLM; abort before validating / staging.
+        if run_id is not None and self._is_cancel_requested(run_id):
+            return None
         try:
             data = _parse_llm_json(result.content)
             batch_result = MatchBatchResult.model_validate(data)
@@ -934,6 +1123,8 @@ class RequirementMatchService:
                 req_by_id=req_by_id,
                 by_chunk_id=by_chunk_id,
                 per_req_chunks=per_req_chunks,
+                per_req_tender=per_req_tender,
+                tender_by_id=tender_by_id,
                 project_id=project_id,
             )
             if ok is not None:
@@ -947,6 +1138,24 @@ class RequirementMatchService:
                 )
         return validated, len(batch_result.items), rejected
 
+    def _location_meta_from_ctx(
+        self, ctx: _ChunkContext, project_id: UUID
+    ) -> dict[str, Any]:
+        return {
+            "document_id": str(ctx.document.id),
+            "chunk_id": str(ctx.chunk.id),
+            "file_name": ctx.document.file_name,
+            "document_type": ctx.document.document_type.value,
+            "section": ctx.chunk.section,
+            "clause_id": ctx.chunk.clause_id,
+            "page_start": ctx.chunk.page_start,
+            "page_end": ctx.chunk.page_end,
+            "chunk_index": ctx.chunk.chunk_index,
+            "document_center_path": document_center_path(
+                project_id, ctx.document.id, ctx.chunk.id
+            ),
+        }
+
     def _validate_candidate(
         self,
         item: MatchCandidateItem,
@@ -954,6 +1163,8 @@ class RequirementMatchService:
         req_by_id: dict[UUID, Requirement],
         by_chunk_id: dict[UUID, _ChunkContext],
         per_req_chunks: dict[UUID, list[_ChunkContext]],
+        per_req_tender: dict[UUID, list[_ChunkContext]],
+        tender_by_id: dict[UUID, _ChunkContext],
         project_id: UUID,
     ) -> _ValidatedMatch | None:
         requirement = req_by_id.get(item.requirement_id)
@@ -965,6 +1176,19 @@ class RequirementMatchService:
         quote: str | None = None
 
         allowed_for_req = {c.chunk.id for c in per_req_chunks.get(requirement.id, [])}
+        tender_ids = {c.chunk.id for c in per_req_tender.get(requirement.id, [])}
+
+        # ---- not_applicable: strict locatable scope-exclusion evidence ----
+        if status_val == EvidenceMatchStatus.not_applicable:
+            return self._validate_not_applicable(
+                item,
+                requirement=requirement,
+                by_chunk_id=by_chunk_id,
+                allowed_for_req=allowed_for_req,
+                tender_ids=tender_ids,
+                tender_by_id=tender_by_id,
+                project_id=project_id,
+            )
 
         if status_val in _STATUS_REQUIRING_PRIMARY:
             if item.primary_company_chunk_id is None or not item.company_evidence_quote:
@@ -982,7 +1206,7 @@ class RequirementMatchService:
                 return None
             quote = normalize_whitespace(item.company_evidence_quote)
         else:
-            # insufficient / not_applicable: primary may be null; if provided, validate.
+            # insufficient: primary may be null; if provided, validate.
             if item.primary_company_chunk_id is not None:
                 if item.primary_company_chunk_id not in by_chunk_id:
                     return None
@@ -996,11 +1220,36 @@ class RequirementMatchService:
                         return None
                     quote = normalize_whitespace(item.company_evidence_quote)
 
+        # ---- conflicting_evidence: dual distinct company evidences ----
+        conflict_ctx: _ChunkContext | None = None
+        conflict_quote: str | None = None
+        if status_val == EvidenceMatchStatus.conflicting_evidence:
+            dual = self._validate_conflict_dual(
+                item,
+                primary_ctx=primary_ctx,
+                primary_quote=quote,
+                by_chunk_id=by_chunk_id,
+                allowed_for_req=allowed_for_req,
+            )
+            if dual is None:
+                # Cannot form legal conflict: downgrade if one support side exists.
+                if primary_ctx is not None and quote:
+                    status_val = EvidenceMatchStatus.partially_supported
+                else:
+                    return None
+            else:
+                conflict_ctx, conflict_quote = dual
+
         evidence_text = ""
         if primary_ctx is not None:
             evidence_text = primary_ctx.chunk.content or ""
             if quote:
                 evidence_text = f"{quote}\n{evidence_text}"
+        if conflict_ctx is not None:
+            conflict_body = conflict_ctx.chunk.content or ""
+            if conflict_quote:
+                conflict_body = f"{conflict_quote}\n{conflict_body}"
+            evidence_text = f"{evidence_text}\n{conflict_body}"
 
         req_text = requirement.normalized_requirement or requirement.title or ""
 
@@ -1044,39 +1293,42 @@ class RequirementMatchService:
         if any(b in summary for b in banned):
             return None
 
-        # Additional chunks (must be in allowed set and contain quote when provided).
+        # Company evidence links.
         company_links: list[tuple[Document, DocumentChunk, str, str]] = []
-        if primary_ctx is not None and quote:
-            role = (
-                "company_conflict"
-                if status_val == EvidenceMatchStatus.conflicting_evidence
-                else "company_support"
+        if status_val == EvidenceMatchStatus.conflicting_evidence:
+            if primary_ctx is None or not quote or conflict_ctx is None or not conflict_quote:
+                return None
+            company_links.append(
+                (primary_ctx.document, primary_ctx.chunk, quote, "company_support")
             )
             company_links.append(
-                (primary_ctx.document, primary_ctx.chunk, quote, role)
+                (
+                    conflict_ctx.document,
+                    conflict_ctx.chunk,
+                    conflict_quote,
+                    "company_conflict",
+                )
+            )
+            if item.conflict_note:
+                meta_extra["conflict_note"] = normalize_whitespace(item.conflict_note)
+        elif primary_ctx is not None and quote:
+            company_links.append(
+                (primary_ctx.document, primary_ctx.chunk, quote, "company_support")
             )
 
         for cid in item.additional_company_chunk_ids:
             if cid == (primary_ctx.chunk.id if primary_ctx else None):
                 continue
+            if conflict_ctx is not None and cid == conflict_ctx.chunk.id:
+                continue
             if cid not in by_chunk_id or cid not in allowed_for_req:
                 return None
             ctx = by_chunk_id[cid]
             if quote and not quote_in_content(quote, ctx.chunk.content or ""):
-                # Supplemental without same quote is OK only as conflict note holder;
-                # skip rather than reject whole candidate.
+                # Supplemental without same quote: skip rather than reject.
                 continue
             company_links.append(
-                (
-                    ctx.document,
-                    ctx.chunk,
-                    quote or "",
-                    (
-                        "company_conflict"
-                        if status_val == EvidenceMatchStatus.conflicting_evidence
-                        else "company_support"
-                    ),
-                )
+                (ctx.document, ctx.chunk, quote or "", "company_support")
             )
 
         needs_review = True
@@ -1098,6 +1350,144 @@ class RequirementMatchService:
             primary_document=primary_ctx.document if primary_ctx else None,
             primary_quote=quote,
             company_links=company_links,
+            needs_review=needs_review,
+            metadata_extra=meta_extra,
+        )
+
+    def _validate_conflict_dual(
+        self,
+        item: MatchCandidateItem,
+        *,
+        primary_ctx: _ChunkContext | None,
+        primary_quote: str | None,
+        by_chunk_id: dict[UUID, _ChunkContext],
+        allowed_for_req: set[UUID],
+    ) -> tuple[_ChunkContext, str] | None:
+        """Validate second company-side conflict evidence; None if illegal."""
+        if primary_ctx is None or not primary_quote:
+            return None
+        if (
+            item.conflicting_company_chunk_id is None
+            or not item.conflicting_company_evidence_quote
+        ):
+            return None
+        cid = item.conflicting_company_chunk_id
+        if cid not in by_chunk_id or cid not in allowed_for_req:
+            return None
+        conflict_ctx = by_chunk_id[cid]
+        if conflict_ctx.document.document_type in EXCLUDED_MATCH_DOCUMENT_TYPES:
+            return None
+        if conflict_ctx.document.project_id != primary_ctx.document.project_id:
+            return None
+        if not quote_in_content(
+            item.conflicting_company_evidence_quote,
+            conflict_ctx.chunk.content or "",
+        ):
+            return None
+        conflict_quote = normalize_whitespace(item.conflicting_company_evidence_quote)
+        # Forbid identical evidence (same chunk + same quote).
+        if (
+            conflict_ctx.chunk.id == primary_ctx.chunk.id
+            and soft_normalize_for_grounding(conflict_quote)
+            == soft_normalize_for_grounding(primary_quote)
+        ):
+            return None
+        # conflict_note critical tokens must appear across the two evidence texts.
+        if item.conflict_note:
+            support_hay = f"{primary_quote}\n{primary_ctx.chunk.content or ''}"
+            conflict_hay = f"{conflict_quote}\n{conflict_ctx.chunk.content or ''}"
+            combined = f"{support_hay}\n{conflict_hay}"
+            hay = soft_normalize_for_grounding(combined)
+            for tok in extract_critical_tokens(item.conflict_note):
+                needle = soft_normalize_for_grounding(tok)
+                if needle and needle not in hay:
+                    return None
+        return conflict_ctx, conflict_quote
+
+    def _validate_not_applicable(
+        self,
+        item: MatchCandidateItem,
+        *,
+        requirement: Requirement,
+        by_chunk_id: dict[UUID, _ChunkContext],
+        allowed_for_req: set[UUID],
+        tender_ids: set[UUID],
+        tender_by_id: dict[UUID, _ChunkContext],
+        project_id: UUID,
+    ) -> _ValidatedMatch | None:
+        """Strict not_applicable: basis + locatable quote + authorized chunk.
+
+        Unfounded not_applicable is rejected (caller may synthesize insufficient).
+        """
+        basis = item.not_applicable_basis
+        na_quote_raw = item.not_applicable_evidence_quote
+        na_chunk_id = item.not_applicable_evidence_chunk_id
+        if basis is None or not na_quote_raw or na_chunk_id is None:
+            return None
+
+        ctx: _ChunkContext | None = None
+        if basis == "requirement_scope_exclusion":
+            if na_chunk_id not in tender_ids or na_chunk_id not in tender_by_id:
+                return None
+            ctx = tender_by_id[na_chunk_id]
+            # Tender primary must belong to current project.
+            if ctx.chunk.project_id != project_id or ctx.document.project_id != project_id:
+                return None
+        elif basis == "project_scope_exclusion":
+            if na_chunk_id not in by_chunk_id or na_chunk_id not in allowed_for_req:
+                return None
+            ctx = by_chunk_id[na_chunk_id]
+            if ctx.document.document_type in EXCLUDED_MATCH_DOCUMENT_TYPES:
+                return None
+            if ctx.document.project_id != project_id:
+                return None
+        else:
+            return None
+
+        if not quote_in_content(na_quote_raw, ctx.chunk.content or ""):
+            return None
+        na_quote = normalize_whitespace(na_quote_raw)
+
+        req_text = requirement.normalized_requirement or requirement.title or ""
+        evidence_text = f"{na_quote}\n{ctx.chunk.content or ''}"
+
+        summary = normalize_whitespace(item.summary)
+        if not summary:
+            summary = "Requirement 明确限定适用范围，当前对象不在适用范围内，待人工审核"
+        if not _summary_tokens_ok(summary, req_text, evidence_text):
+            summary = "Requirement 明确限定适用范围，当前对象不在适用范围内，待人工审核"
+
+        banned = ("必然中标", "完全满足", "一定不符合", "必然不符合", "企业不符合")
+        if any(b in summary for b in banned):
+            return None
+
+        loc = self._location_meta_from_ctx(ctx, project_id)
+        meta_extra: dict[str, Any] = {
+            "not_applicable_basis": basis,
+            "not_applicable_evidence_quote": na_quote,
+            "not_applicable_evidence_chunk_id": str(na_chunk_id),
+            "not_applicable_location": loc,
+        }
+        req_meta = requirement.metadata_json or {}
+        needs_review = True
+        if req_meta.get("potential_conflict"):
+            meta_extra["requirement_potential_conflict"] = True
+            meta_extra["conflict_inheritance_note"] = (
+                item.conflict_note or "招标要求本身存在待确认冲突"
+            )
+
+        return _ValidatedMatch(
+            item=item,
+            requirement=requirement,
+            status=EvidenceMatchStatus.not_applicable,
+            summary=summary,
+            risk_level=risk_for_match(
+                requirement, EvidenceMatchStatus.not_applicable
+            ),
+            primary_chunk=None,
+            primary_document=None,
+            primary_quote=None,
+            company_links=[],
             needs_review=needs_review,
             metadata_extra=meta_extra,
         )

@@ -34,7 +34,10 @@ def run_requirement_matching(run_id: UUID) -> None:
 def _mark_failed(session, run_id: UUID, reason: str) -> None:  # noqa: ANN001
     try:
         run = session.get(RequirementMatchRun, run_id)
-        if run is not None and run.status != ExtractionRunStatus.succeeded:
+        if run is not None and run.status not in (
+            ExtractionRunStatus.succeeded,
+            ExtractionRunStatus.cancelled,
+        ):
             run.status = ExtractionRunStatus.failed
             run.finished_at = datetime.now(UTC)
             run.error_summary = reason

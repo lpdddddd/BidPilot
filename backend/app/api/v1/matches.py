@@ -48,6 +48,18 @@ def get_requirement_match_run(
     return RequirementMatchService(db).get_run(project_id, run_id)
 
 
+@router.post(
+    "/{project_id}/requirement-matches/runs/{run_id}/cancel",
+    response_model=MatchRunResponse,
+)
+def cancel_requirement_match_run(
+    project_id: UUID,
+    run_id: UUID,
+    db: Session = Depends(get_db),
+) -> MatchRunResponse:
+    return RequirementMatchService(db).cancel_run(project_id, run_id)
+
+
 @router.get(
     "/{project_id}/requirement-matches",
     response_model=MatchListResponse,
