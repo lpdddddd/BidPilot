@@ -10,9 +10,21 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ -f "${ROOT_DIR}/.env" ]]; then
+  # Load KEY=VALUE lines only (skip comments/blank). Values may contain spaces.
   set -a
-  # shellcheck disable=SC1091
-  source "${ROOT_DIR}/.env"
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    [[ -z "${line}" || "${line}" =~ ^[[:space:]]*# ]] && continue
+    if [[ "${line}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+      key="${line%%=*}"
+      val="${line#*=}"
+      # Strip matching surrounding quotes.
+      if [[ "${val}" =~ ^\".*\"$ || "${val}" =~ ^\'.*\'$ ]]; then
+        val="${val:1:${#val}-2}"
+      fi
+      printf -v "${key}" '%s' "${val}"
+      export "${key}"
+    fi
+  done < "${ROOT_DIR}/.env"
   set +a
 fi
 
@@ -49,6 +61,9 @@ echo "  source_kind=${SOURCE_KIND}"
 echo "  served_model_name=${SERVED_NAME}"
 echo "  listen=http://${HOST}:${PORT}/v1"
 echo "  tensor_parallel=${TP} gpu_mem_util=${GPU_UTIL} max_model_len=${MAX_LEN}"
+
+# RTX 5090 (sm_120): FlashInfer sampler JIT can fail capability checks on some stacks.
+export VLLM_USE_FLASHINFER_SAMPLER="${VLLM_USE_FLASHINFER_SAMPLER:-0}"
 
 exec vllm serve "${MODEL}" \
   --served-model-name "${SERVED_NAME}" \
