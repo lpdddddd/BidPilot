@@ -949,8 +949,8 @@ def test_force_keeps_old_on_llm_failure(db):
     assert after[0].id == old_id
 
 
-def test_force_keeps_old_on_validation_only_failures_still_succeeds_empty_replace(db):
-    """All batches OK but every candidate rejected → force clears scoped autos."""
+def test_force_keeps_old_when_all_candidates_fail_validation(db):
+    """force=true + candidates all rejected → run failed, old autos kept."""
     project = _org_project(db, "G7")
     doc = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
     chunk = _chunk(db, project, doc, index=0, content="投标人须具备一级资质。")
@@ -960,7 +960,13 @@ def test_force_keeps_old_on_validation_only_failures_still_succeeds_empty_replac
     )
     run = svc.start_extraction(project.id, ExtractionStartRequest())
     svc.execute_run(run.id)
-    assert len(list(db.scalars(select_reqs(db, project.id)))) == 1
+    before = list(db.scalars(select_reqs(db, project.id)))
+    assert len(before) == 1
+    old_id = before[0].id
+    old_links = list(
+        db.scalars(select(EvidenceLink).where(EvidenceLink.requirement_id == old_id))
+    )
+    assert len(old_links) == 1
 
     bad = _valid_item(
         chunk,
@@ -971,11 +977,139 @@ def test_force_keeps_old_on_validation_only_failures_still_succeeds_empty_replac
     run2 = svc2.start_extraction(project.id, ExtractionStartRequest(force=True))
     svc2.execute_run(run2.id)
     r2 = svc2.get_run(project.id, run2.id)
+    assert r2.status == ExtractionRunStatus.failed
+    assert r2.error_summary
+    assert "证据校验" in (r2.error_summary or "")
+    assert (r2.config_json or {}).get("result_kind") == "invalid_or_incomplete_result"
+    after = list(db.scalars(select_reqs(db, project.id)))
+    assert len(after) == 1
+    assert after[0].id == old_id
+    assert list(
+        db.scalars(select(EvidenceLink).where(EvidenceLink.requirement_id == old_id))
+    )
+
+
+def test_force_valid_empty_items_replaces_scoped_autos(db):
+    """Legitimate empty items (no rejects) may replace scoped autos under force."""
+    project = _org_project(db, "G8")
+    doc = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
+    chunk = _chunk(db, project, doc, index=0, content="本章仅为背景介绍，无强制要求。")
+    db.commit()
+    svc = RequirementExtractionService(
+        db,
+        llm=FakeLlm(
+            lambda _m: {
+                "items": [
+                    _valid_item(
+                        chunk,
+                        category="project_info",
+                        normalized_requirement="本章仅为背景介绍，无强制要求",
+                        evidence_quote="本章仅为背景介绍，无强制要求",
+                    )
+                ]
+            }
+        ),
+    )
+    run = svc.start_extraction(project.id, ExtractionStartRequest())
+    svc.execute_run(run.id)
+    assert len(list(db.scalars(select_reqs(db, project.id)))) == 1
+
+    svc2 = RequirementExtractionService(db, llm=FakeLlm(lambda _m: {"items": []}))
+    run2 = svc2.start_extraction(project.id, ExtractionStartRequest(force=True))
+    svc2.execute_run(run2.id)
+    r2 = svc2.get_run(project.id, run2.id)
     assert r2.status == ExtractionRunStatus.succeeded
-    # Scoped auto replaced by empty set of valid candidates.
+    assert (r2.config_json or {}).get("result_kind") == "valid_empty_result"
     autos = [
         r
         for r in db.scalars(select_reqs(db, project.id))
         if (r.metadata_json or {}).get("source") == "auto_extraction"
     ]
     assert autos == []
+
+
+def test_force_keeps_old_on_bad_quote_all_rejected(db):
+    project = _org_project(db, "G9")
+    doc = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
+    chunk = _chunk(db, project, doc, index=0, content="投标人须具备一级资质。")
+    db.commit()
+    svc = RequirementExtractionService(
+        db, llm=FakeLlm(lambda _m: {"items": [_valid_item(chunk)]})
+    )
+    run = svc.start_extraction(project.id, ExtractionStartRequest())
+    svc.execute_run(run.id)
+    old_id = list(db.scalars(select_reqs(db, project.id)))[0].id
+
+    bad = _valid_item(chunk, evidence_quote="这段引文完全不存在")
+    svc2 = RequirementExtractionService(db, llm=FakeLlm(lambda _m: {"items": [bad]}))
+    run2 = svc2.start_extraction(project.id, ExtractionStartRequest(force=True))
+    svc2.execute_run(run2.id)
+    assert svc2.get_run(project.id, run2.id).status == ExtractionRunStatus.failed
+    assert list(db.scalars(select_reqs(db, project.id)))[0].id == old_id
+
+
+def test_force_partial_batch_json_failure_keeps_old(db):
+    """Any batch invalid JSON under force → no replacement even if other batches ok."""
+    project = _org_project(db, "G10")
+    doc = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
+    # Force two batches by creating > BATCH_SIZE chunks (BATCH_SIZE=4).
+    chunks = [
+        _chunk(
+            db,
+            project,
+            doc,
+            index=i,
+            content=f"条款{i}：投标人须具备一级资质。",
+            clause_id=f"1.{i}",
+            page_start=i + 1,
+            page_end=i + 1,
+        )
+        for i in range(5)
+    ]
+    db.commit()
+
+    call_n = {"n": 0}
+
+    def responder(messages):
+        call_n["n"] += 1
+        if call_n["n"] == 1:
+            c = chunks[0]
+            return {
+                "items": [
+                    _valid_item(
+                        c,
+                        normalized_requirement="投标人须具备一级资质",
+                        evidence_quote="投标人须具备一级资质",
+                    )
+                ]
+            }
+        return "NOT-JSON{{"
+
+    # Seed an auto requirement first.
+    seed = RequirementExtractionService(
+        db,
+        llm=FakeLlm(
+            lambda _m: {
+                "items": [
+                    _valid_item(
+                        chunks[0],
+                        normalized_requirement="投标人须具备一级资质",
+                        evidence_quote="投标人须具备一级资质",
+                    )
+                ]
+            }
+        ),
+    )
+    r0 = seed.start_extraction(project.id, ExtractionStartRequest())
+    seed.execute_run(r0.id)
+    before = list(db.scalars(select_reqs(db, project.id)))
+    assert len(before) >= 1
+    old_ids = {r.id for r in before}
+
+    svc = RequirementExtractionService(db, llm=FakeLlm(responder))
+    run = svc.start_extraction(project.id, ExtractionStartRequest(force=True))
+    svc.execute_run(run.id)
+    r = svc.get_run(project.id, run.id)
+    assert r.status == ExtractionRunStatus.failed
+    after_ids = {r.id for r in db.scalars(select_reqs(db, project.id))}
+    assert old_ids == after_ids

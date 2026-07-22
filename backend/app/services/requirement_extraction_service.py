@@ -112,6 +112,8 @@ class _ValidatedCandidate:
 class _RunAccumulator:
     candidates: list[_ValidatedCandidate] = field(default_factory=list)
     candidate_count: int = 0
+    raw_item_count: int = 0
+    rejected_count: int = 0
     created_count: int = 0
     merged_count: int = 0
     conflict_count: int = 0
@@ -428,7 +430,9 @@ class RequirementExtractionService:
             batch_fatal = False
             for batch in _batched(contexts, BATCH_SIZE):
                 try:
-                    validated = self._extract_batch(batch)
+                    validated, raw_n, rejected_n = self._extract_batch(batch)
+                    acc.raw_item_count += raw_n
+                    acc.rejected_count += rejected_n
                     acc.candidate_count += len(validated)
                     acc.candidates.extend(validated)
                 except Exception as exc:  # noqa: BLE001 - isolate batch failures
@@ -447,19 +451,66 @@ class RequirementExtractionService:
                     run.failed_chunk_count = acc.failed_chunk_count
                     self.db.commit()
 
-            # force=true: never delete old autos if any batch failed — keep prior data.
-            if force and batch_fatal:
+            # Classify outcome. Do NOT confuse legitimate empty extraction with
+            # "model returned candidates that all failed evidence checks".
+            all_rejected = (
+                not batch_fatal
+                and acc.raw_item_count > 0
+                and acc.candidate_count == 0
+            )
+            invalid_or_incomplete = batch_fatal or all_rejected
+
+            if force and invalid_or_incomplete:
+                reasons = list(acc.errors)
+                if all_rejected:
+                    reasons.append(
+                        f"模型输出候选 {acc.raw_item_count} 条，"
+                        f"全部未通过证据校验（拒绝 {acc.rejected_count}）"
+                    )
                 run.status = ExtractionRunStatus.failed
                 run.finished_at = datetime.now(UTC)
                 run.error_summary = (
-                    "force 重跑中止：存在批次失败，已保留旧自动抽取结果。 "
-                    + "; ".join(acc.errors)
+                    "force 重跑中止：结果无效或不完整，已保留旧自动抽取结果。 "
+                    + "; ".join(reasons)
                 )[:2000]
                 run.candidate_count = acc.candidate_count
                 run.failed_chunk_count = acc.failed_chunk_count
                 run.processed_chunks = acc.processed_chunks
+                run.config_json = {
+                    **(run.config_json or {}),
+                    "result_kind": "invalid_or_incomplete_result",
+                    "raw_item_count": acc.raw_item_count,
+                    "rejected_count": acc.rejected_count,
+                }
                 self.db.commit()
                 return
+
+            if not force and all_rejected:
+                # Non-force: nothing to write; succeed with zero creates.
+                run.status = ExtractionRunStatus.succeeded
+                run.finished_at = datetime.now(UTC)
+                run.candidate_count = 0
+                run.created_count = 0
+                run.processed_chunks = acc.processed_chunks
+                run.failed_chunk_count = acc.failed_chunk_count
+                run.error_summary = (
+                    f"候选全部未通过证据校验（raw={acc.raw_item_count}, "
+                    f"rejected={acc.rejected_count}），未写入"
+                )[:2000]
+                run.config_json = {
+                    **(run.config_json or {}),
+                    "result_kind": "invalid_or_incomplete_result",
+                    "raw_item_count": acc.raw_item_count,
+                    "rejected_count": acc.rejected_count,
+                }
+                self.db.commit()
+                return
+
+            result_kind = (
+                "validated_nonempty_result"
+                if acc.candidate_count > 0
+                else "valid_empty_result"
+            )
 
             created, merged, conflicts = self._persist_candidates(
                 run.project_id,
@@ -479,8 +530,14 @@ class RequirementExtractionService:
             run.failed_chunk_count = acc.failed_chunk_count
             run.processed_chunks = acc.processed_chunks
             run.finished_at = datetime.now(UTC)
+            run.config_json = {
+                **(run.config_json or {}),
+                "result_kind": result_kind,
+                "raw_item_count": acc.raw_item_count,
+                "rejected_count": acc.rejected_count,
+            }
 
-            if acc.errors and acc.created_count == 0 and acc.candidate_count == 0:
+            if batch_fatal and acc.created_count == 0 and acc.candidate_count == 0:
                 run.status = ExtractionRunStatus.failed
                 run.error_summary = "; ".join(acc.errors)[:2000]
             else:
@@ -586,7 +643,9 @@ class RequirementExtractionService:
         rows = list(self.db.execute(stmt).all())
         return [_ChunkContext(chunk=c, document=d) for c, d in rows]
 
-    def _extract_batch(self, batch: list[_ChunkContext]) -> list[_ValidatedCandidate]:
+    def _extract_batch(
+        self, batch: list[_ChunkContext]
+    ) -> tuple[list[_ValidatedCandidate], int, int]:
         by_id = {ctx.chunk.id: ctx for ctx in batch}
         payload = {
             "chunks": [
@@ -636,16 +695,18 @@ class RequirementExtractionService:
             ) from exc
 
         validated: list[_ValidatedCandidate] = []
+        rejected = 0
         for item in batch_result.items:
             ok = self._validate_candidate(item, by_id)
             if ok is not None:
                 validated.append(ok)
             else:
+                rejected += 1
                 logger.info(
                     "Rejected extraction candidate category=%s (evidence grounding failed)",
                     item.category.value,
                 )
-        return validated
+        return validated, len(batch_result.items), rejected
 
     def _validate_candidate(
         self,
