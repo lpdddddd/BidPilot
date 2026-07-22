@@ -246,7 +246,15 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 - 追加式 `RequirementMatchReview` 审计；Match 保留原始自动结果与证据链
 - 已审核 Match 受 `force` 保护；reopen 后可 supersede 再匹配且不丢历史
 - 无完整认证：`actor_authn=unverified_local_operator` + 本地 `actor_label`
-- **尚未实现**：LoRA / Agent / 自动投标结论 / 投标方案生成 / 投标提交
+
+## 可追溯响应准备草稿（第 10 步）
+
+基于已确认 Match 与可定位证据，生成待人工复核的响应准备草稿（非投标提交文件）。
+详见 `docs/proposal_drafting.md`。
+
+- 正向正文仅用 `confirmed` + `active` + `supported|partially_supported`
+- 不可变版本 / 来源快照 / 人工修订与审核；Markdown·DOCX 仅 reviewed 可导出
+- **尚未实现**：LoRA / Agent / 自动投标结论 / 价格与法律承诺生成 / 投标提交
 
 ## 测试 / 静态检查
 
