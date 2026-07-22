@@ -47,7 +47,13 @@ from app.schemas.requirement import (
     RequirementListResponse,
     RequirementSummary,
 )
-from app.services.evidence_validate import normalize_whitespace, quote_in_content
+from app.services.evidence_validate import (
+    critical_tokens_supported,
+    display_title_from_requirement,
+    grounded_requirement_text,
+    normalize_whitespace,
+    quote_in_content,
+)
 from app.services.llm_client import LlmClient, LlmError, get_llm_client
 
 logger = logging.getLogger("bidpilot.requirement_extraction")
@@ -59,8 +65,11 @@ SYSTEM_PROMPT = """你是 BidPilot 的招标要求结构化抽取器。
 只可依据本轮给出的原始 chunk 抽取明确陈述的要求。
 禁止依赖外部知识、常识推断、经验补全或编造。
 禁止生成原文不存在的资质、金额、日期、页码、章节、条款号、评分规则、废标条件或合同条款。
-每条结果必须提供 source_chunk_ids 和 evidence_quote。
-evidence_quote 必须是来源 chunk 中可逐字或经空白规范化后匹配的连续原文。
+每条结果必须提供唯一的 source_chunk_id（主证据 chunk）和 evidence_quote。
+evidence_quote 必须是该主 chunk 中可逐字或经空白规范化后匹配的连续原文。
+normalized_requirement 必须是主 chunk 原文的可逆整理（仅允许空白/标点/编号整理），
+不得改写实体、等级、金额、日期、数量、比例、否定词或义务语气。
+页码、章节、条款号由系统从主 chunk 元数据派生，不要自行编造。
 要求无法由原文明确支持时，不输出该条目。
 不确定该内容是否为硬性要求时，可输出但 needs_review=true。
 输出必须是符合给定 schema 的 JSON，不要输出思考过程。"""
@@ -86,6 +95,8 @@ class _ValidatedCandidate:
     item: ExtractionCandidateItem
     primary_chunk: DocumentChunk
     primary_document: Document
+    grounded_requirement: str
+    display_title: str
     chunk_ids: list[UUID]
     document_ids: list[UUID]
     evidence_quote: str
@@ -94,6 +105,7 @@ class _ValidatedCandidate:
     potential_conflict: bool
     conflict_note: str | None
     needs_review: bool
+    score: Any  # Decimal | None — only when present in primary chunk
 
 
 @dataclass
@@ -158,6 +170,10 @@ def _parse_llm_json(raw: str) -> dict[str, Any]:
 
 
 def _locator_ok(item: ExtractionCandidateItem, chunk: DocumentChunk) -> bool:
+    """If the model supplied locators, they must match the primary chunk.
+
+    Persistence always derives locators from the chunk itself.
+    """
     if item.source_section is not None and (
         chunk.section is None or item.source_section != chunk.section
     ):
@@ -178,6 +194,26 @@ def _locator_ok(item: ExtractionCandidateItem, chunk: DocumentChunk) -> bool:
         if not (ps <= item.source_page <= pe):
             return False
     return True
+
+
+def _score_supported(score: Any, chunk_content: str) -> bool:
+    if score is None:
+        return True
+    from app.services.evidence_validate import soft_normalize_for_grounding
+
+    hay = soft_normalize_for_grounding(chunk_content)
+    raw = str(score)
+    candidates = {raw}
+    try:
+        as_float = float(score)
+        if as_float == int(as_float):
+            candidates.add(str(int(as_float)))
+    except (TypeError, ValueError):
+        pass
+    for c in list(candidates):
+        candidates.add(f"{c}分")
+        candidates.add(f"{c}%")
+    return any(c and soft_normalize_for_grounding(c) in hay for c in candidates)
 
 
 def _extract_value_tokens(text: str) -> set[str]:
@@ -368,26 +404,35 @@ class RequirementExtractionService:
         acc = _RunAccumulator()
         try:
             force = bool((run.config_json or {}).get("force"))
-            if force:
-                self._delete_auto_requirements(run.project_id)
-
             contexts = self._load_eligible_chunks(run)
+            scoped_document_ids = {ctx.document.id for ctx in contexts}
             run.total_chunks = len(contexts)
+            run.config_json = {
+                **(run.config_json or {}),
+                "scoped_document_ids": [str(i) for i in sorted(scoped_document_ids, key=str)],
+            }
             self.db.commit()
 
             if not contexts:
+                # Empty scope: force still atomically clears only this (empty) scope.
+                if force:
+                    self._delete_auto_requirements(
+                        run.project_id, document_ids=scoped_document_ids
+                    )
                 run.status = ExtractionRunStatus.succeeded
                 run.finished_at = datetime.now(UTC)
                 run.processed_chunks = 0
                 self.db.commit()
                 return
 
+            batch_fatal = False
             for batch in _batched(contexts, BATCH_SIZE):
                 try:
                     validated = self._extract_batch(batch)
                     acc.candidate_count += len(validated)
                     acc.candidates.extend(validated)
                 except Exception as exc:  # noqa: BLE001 - isolate batch failures
+                    batch_fatal = True
                     logger.warning(
                         "Extraction batch failed run=%s: %s",
                         run_id,
@@ -402,11 +447,26 @@ class RequirementExtractionService:
                     run.failed_chunk_count = acc.failed_chunk_count
                     self.db.commit()
 
+            # force=true: never delete old autos if any batch failed — keep prior data.
+            if force and batch_fatal:
+                run.status = ExtractionRunStatus.failed
+                run.finished_at = datetime.now(UTC)
+                run.error_summary = (
+                    "force 重跑中止：存在批次失败，已保留旧自动抽取结果。 "
+                    + "; ".join(acc.errors)
+                )[:2000]
+                run.candidate_count = acc.candidate_count
+                run.failed_chunk_count = acc.failed_chunk_count
+                run.processed_chunks = acc.processed_chunks
+                self.db.commit()
+                return
+
             created, merged, conflicts = self._persist_candidates(
                 run.project_id,
                 run.id,
                 acc.candidates,
                 force=force,
+                scoped_document_ids=scoped_document_ids,
             )
             acc.created_count = created
             acc.merged_count = merged
@@ -453,17 +513,39 @@ class RequirementExtractionService:
             )
         return project
 
-    def _delete_auto_requirements(self, project_id: UUID) -> None:
-        """Remove only auto-extracted requirements; never touch manual/imported."""
+    def _delete_auto_requirements(
+        self,
+        project_id: UUID,
+        *,
+        document_ids: set[UUID],
+    ) -> int:
+        """Delete auto-extracted requirements only within the scoped documents.
+
+        Never deletes manual, imported, or human-reviewed requirements.
+        """
+        if not document_ids:
+            return 0
         rows = list(
-            self.db.scalars(select(Requirement).where(Requirement.project_id == project_id))
+            self.db.scalars(
+                select(Requirement).where(
+                    Requirement.project_id == project_id,
+                    Requirement.source_document_id.in_(document_ids),
+                )
+            )
         )
+        deleted = 0
         for req in rows:
             meta = req.metadata_json or {}
-            if meta.get("source") == AUTO_SOURCE:
-                self.db.execute(delete(EvidenceLink).where(EvidenceLink.requirement_id == req.id))
-                self.db.delete(req)
+            if meta.get("source") != AUTO_SOURCE:
+                continue
+            # Preserve anything that was human-reviewed.
+            if req.review_status == ReviewStatus.reviewed:
+                continue
+            self.db.execute(delete(EvidenceLink).where(EvidenceLink.requirement_id == req.id))
+            self.db.delete(req)
+            deleted += 1
         self.db.flush()
+        return deleted
 
     def _load_eligible_chunks(self, run: RequirementExtractionRun) -> list[_ChunkContext]:
         defaults = [t.value for t in DEFAULT_EXTRACTION_DOCUMENT_TYPES]
@@ -523,8 +605,17 @@ class RequirementExtractionService:
             ]
         }
         user_content = (
-            "请从以下 chunks 抽取招标要求，仅输出 JSON，"
-            '格式为 {"items":[...]}：\n'
+            "请从以下 chunks 抽取招标要求。只输出一个 JSON 对象，不要 Markdown，不要解释。\n"
+            "schema 示例：\n"
+            '{"items":[{"category":"qualification","normalized_requirement":"须与原文连续片段一致",'
+            '"mandatory":true,"source_chunk_id":"<chunk UUID>",'
+            '"evidence_quote":"原文连续短引文","needs_review":false,'
+            '"potential_conflict":false,"score":null}]}\n'
+            "规则：normalized_requirement 必须是主 chunk 原文的连续片段（仅可整理空白/标点）；"
+            "source_chunk_id 必须是下列某个 chunk_id；category 只能是 "
+            "project_info/qualification/commercial/technical/scoring/material/"
+            "deadline/mandatory/invalid_bid/contract。\n"
+            "<<<CHUNKS>>>\n"
             + json.dumps(payload, ensure_ascii=False)
         )
         result = self.llm.chat(
@@ -532,12 +623,13 @@ class RequirementExtractionService:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},
             ],
+            max_tokens=max(getattr(self.llm, "max_tokens", 1024) or 1024, 2048),
             request_id=str(uuid.uuid4()),
         )
         try:
             data = _parse_llm_json(result.content)
             batch_result = ExtractionBatchResult.model_validate(data)
-        except (json.JSONDecodeError, ValueError, TypeError) as exc:
+        except Exception as exc:  # noqa: BLE001 - normalize parse/schema failures
             raise LlmError(
                 "大模型返回的 JSON 无效",
                 detail=f"{type(exc).__name__}: {exc}",
@@ -548,6 +640,11 @@ class RequirementExtractionService:
             ok = self._validate_candidate(item, by_id)
             if ok is not None:
                 validated.append(ok)
+            else:
+                logger.info(
+                    "Rejected extraction candidate category=%s (evidence grounding failed)",
+                    item.category.value,
+                )
         return validated
 
     def _validate_candidate(
@@ -555,47 +652,68 @@ class RequirementExtractionService:
         item: ExtractionCandidateItem,
         by_id: dict[UUID, _ChunkContext],
     ) -> _ValidatedCandidate | None:
-        # All chunk ids must belong to this batch.
-        if any(cid not in by_id for cid in item.source_chunk_ids):
+        primary_id = item.source_chunk_id
+        if primary_id not in by_id:
             return None
-
-        primary_id = item.source_chunk_ids[0]
         primary_ctx = by_id[primary_id]
-        # Quote must appear in at least one cited chunk; prefer primary.
-        matched_ctx: _ChunkContext | None = None
-        for cid in item.source_chunk_ids:
-            ctx = by_id[cid]
-            if quote_in_content(item.evidence_quote, ctx.chunk.content):
-                matched_ctx = ctx
-                break
-        if matched_ctx is None:
+
+        # Quote must live in the PRIMARY chunk (not "any of the list").
+        if not quote_in_content(item.evidence_quote, primary_ctx.chunk.content):
             return None
 
-        # Locator fields must match the primary (first) cited chunk metadata.
+        # If model supplied locators, they must match the primary chunk.
         if not _locator_ok(item, primary_ctx.chunk):
             return None
 
-        # Also verify locators against the quote-matched chunk if different.
-        if matched_ctx.chunk.id != primary_ctx.chunk.id and not _locator_ok(
-            item, matched_ctx.chunk
-        ):
-            # Soft: require quote match only on matched; locators tied to primary.
-            pass
+        grounded = grounded_requirement_text(
+            item.normalized_requirement, primary_ctx.chunk.content
+        )
+        if grounded is None:
+            return None
 
-        code = stable_requirement_code(item.category, item.normalized_requirement)
+        # Critical tokens in the grounded text must also appear in the quote
+        # or the same primary chunk (already checked via grounded_requirement_text
+        # against chunk). Extra: reject if tokens only in chunk but contradict quote
+        # when quote is short — still OK if chunk supports them.
+        if not critical_tokens_supported(grounded, primary_ctx.chunk.content):
+            return None
+
+        if not _score_supported(item.score, primary_ctx.chunk.content):
+            return None
+
+        # Supplemental chunks: only keep those that also contain the same quote.
+        # Never let them override primary locators / document.
+        supplemental_ids: list[UUID] = []
+        for cid in item.source_chunk_ids:
+            if cid == primary_id:
+                continue
+            if cid not in by_id:
+                return None  # unknown id in list → reject whole candidate
+            ctx = by_id[cid]
+            if quote_in_content(item.evidence_quote, ctx.chunk.content):
+                supplemental_ids.append(cid)
+
+        chunk_ids = [primary_id, *supplemental_ids]
+        document_ids = [by_id[c].document.id for c in chunk_ids]
+
+        code = stable_requirement_code(item.category, grounded)
         risk = risk_for_category(item.category, potential_conflict=item.potential_conflict)
+        title = display_title_from_requirement(grounded)
         return _ValidatedCandidate(
             item=item,
             primary_chunk=primary_ctx.chunk,
             primary_document=primary_ctx.document,
-            chunk_ids=list(item.source_chunk_ids),
-            document_ids=[by_id[c].document.id for c in item.source_chunk_ids],
-            evidence_quote=item.evidence_quote,
+            grounded_requirement=grounded,
+            display_title=title,
+            chunk_ids=chunk_ids,
+            document_ids=document_ids,
+            evidence_quote=normalize_whitespace(item.evidence_quote),
             risk_level=risk,
             requirement_code=code,
             potential_conflict=bool(item.potential_conflict),
             conflict_note=item.conflict_note,
             needs_review=bool(item.needs_review),
+            score=item.score,
         )
 
     def _persist_candidates(
@@ -605,14 +723,23 @@ class RequirementExtractionService:
         candidates: list[_ValidatedCandidate],
         *,
         force: bool,
+        scoped_document_ids: set[UUID],
     ) -> tuple[int, int, int]:
-        # Within-run dedupe: category + exact normalized text.
+        """Persist validated candidates.
+
+        When force=True, delete scoped auto requirements then insert new rows
+        inside this same transaction (caller commits with run stats).
+        """
+        # Within-run dedupe: category + exact grounded normalized text.
         groups: dict[tuple[RequirementCategory, str], list[_ValidatedCandidate]] = defaultdict(
             list
         )
         for cand in candidates:
-            key = (cand.item.category, normalize_whitespace(cand.item.normalized_requirement))
+            key = (cand.item.category, cand.grounded_requirement)
             groups[key].append(cand)
+
+        if force:
+            self._delete_auto_requirements(project_id, document_ids=scoped_document_ids)
 
         existing_codes = {
             r.requirement_code: r
@@ -636,57 +763,59 @@ class RequirementExtractionService:
 
             existing = existing_codes.get(primary.requirement_code)
             if existing is not None and not force:
-                # Idempotent skip (unless force already deleted autos).
                 meta = existing.metadata_json or {}
                 if meta.get("source") == AUTO_SOURCE:
                     merged += 1
                     continue
-                # Manual/imported with same code: skip creating duplicate auto row.
                 continue
 
-            # Collect unique evidence (document_id, chunk_id).
+            # After force delete, codes may still collide with manual/imported.
+            if existing is not None and force:
+                meta = existing.metadata_json or {}
+                is_auto = meta.get("source") == AUTO_SOURCE
+                if not is_auto or existing.review_status == ReviewStatus.reviewed:
+                    continue
+
             evidence_keys: set[tuple[UUID, UUID]] = set()
             evidence_rows: list[tuple[UUID, UUID, str]] = []
+            # Primary evidence first — locators always from primary chunk/document.
+            primary_key = (primary.primary_document.id, primary.primary_chunk.id)
+            evidence_keys.add(primary_key)
+            evidence_rows.append(
+                (primary.primary_document.id, primary.primary_chunk.id, primary.evidence_quote)
+            )
             for cand in group:
-                for cid in cand.chunk_ids:
-                    doc_id = cand.primary_document.id
-                    if cid in cand.chunk_ids:
-                        idx = cand.chunk_ids.index(cid)
-                        doc_id = cand.document_ids[idx]
+                for cid, doc_id in zip(cand.chunk_ids, cand.document_ids, strict=True):
                     ev_key = (doc_id, cid)
                     if ev_key in evidence_keys:
                         continue
                     evidence_keys.add(ev_key)
                     evidence_rows.append((doc_id, cid, cand.evidence_quote))
 
-            # Prefer first evidence quote / locator from primary.
             req_meta: dict[str, Any] = {
                 "source": AUTO_SOURCE,
                 "extraction_run_id": str(run_id),
+                "source_chunk_id": str(primary.primary_chunk.id),
                 "evidence_quote": primary.evidence_quote,
                 "needs_review": primary.needs_review or primary.potential_conflict,
                 "potential_conflict": primary.potential_conflict,
                 "conflict_note": primary.conflict_note,
+                "title_display_only": True,
             }
             req = Requirement(
                 project_id=project_id,
                 source_document_id=primary.primary_document.id,
                 requirement_code=primary.requirement_code,
                 category=primary.item.category,
-                title=primary.item.title[:1024],
-                normalized_requirement=normalize_whitespace(primary.item.normalized_requirement),
+                title=primary.display_title[:1024],
+                normalized_requirement=primary.grounded_requirement,
                 mandatory=primary.item.mandatory,
-                score=primary.item.score,
+                score=primary.score,
                 risk_level=primary.risk_level,
-                source_page=primary.item.source_page
-                if primary.item.source_page is not None
-                else primary.primary_chunk.page_start,
-                source_section=primary.item.source_section
-                if primary.item.source_section is not None
-                else primary.primary_chunk.section,
-                source_clause_id=primary.item.source_clause_id
-                if primary.item.source_clause_id is not None
-                else primary.primary_chunk.clause_id,
+                # Locators ALWAYS from the primary evidence chunk.
+                source_page=primary.primary_chunk.page_start,
+                source_section=primary.primary_chunk.section,
+                source_clause_id=primary.primary_chunk.clause_id,
                 quality_level=QualityLevel.pending,
                 review_status=ReviewStatus.unreviewed,
                 metadata_json=req_meta,
@@ -709,7 +838,7 @@ class RequirementExtractionService:
 
         self.db.flush()
         conflict_count = self._mark_conflicts(project_id, persisted)
-        self.db.commit()
+        self.db.flush()
         return created, merged, conflict_count
 
     def _mark_conflicts(

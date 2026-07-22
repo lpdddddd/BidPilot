@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.enums import DocumentType, ExtractionRunStatus, RequirementCategory
 
@@ -68,19 +68,43 @@ class ExtractionRunResponse(BaseModel):
 
 class ExtractionCandidateItem(BaseModel):
     category: RequirementCategory
-    title: str = Field(min_length=1, max_length=1024)
+    title: str | None = Field(default=None, max_length=1024)
     normalized_requirement: str = Field(min_length=1)
     mandatory: bool = False
     score: Decimal | None = None
     requirement_code_hint: str | None = None
-    source_chunk_ids: list[UUID] = Field(min_length=1)
+    # Primary evidence (required). Locators are ALWAYS derived from this chunk.
+    source_chunk_id: UUID
     evidence_quote: str = Field(min_length=1)
+    # Optional supplemental chunks (must also contain the quote if used).
+    source_chunk_ids: list[UUID] = Field(default_factory=list)
+    # Model-supplied locators are ignored for persistence; accepted only for
+    # backward-compatible schema parsing.
     source_section: str | None = None
     source_clause_id: str | None = None
     source_page: int | None = None
     needs_review: bool = False
     potential_conflict: bool = False
     conflict_note: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_primary_chunk(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        primary = data.get("source_chunk_id")
+        ids = data.get("source_chunk_ids") or []
+        if primary is None and ids:
+            data = {**data, "source_chunk_id": ids[0]}
+            primary = ids[0]
+        if primary is not None:
+            # Ensure primary is included in supplemental list for downstream loops.
+            id_list = list(ids) if isinstance(ids, list) else []
+            primary_s = str(primary)
+            if primary_s not in {str(x) for x in id_list}:
+                id_list = [primary, *id_list]
+            data = {**data, "source_chunk_ids": id_list}
+        return data
 
 
 class ExtractionBatchResult(BaseModel):

@@ -124,13 +124,16 @@ def _chunk(
 
 
 def _valid_item(chunk: DocumentChunk, **overrides) -> dict:
-    quote = chunk.content[: min(40, len(chunk.content))]
+    # Default grounded text = chunk body without trailing sentence punctuation.
+    grounded = chunk.content.strip().rstrip("。．.;；")
+    quote = grounded[: min(40, len(grounded))] or grounded
     base = {
         "category": "qualification",
         "title": "投标人资质要求",
-        "normalized_requirement": "投标人须具备建筑工程施工总承包一级资质",
+        "normalized_requirement": grounded,
         "mandatory": True,
         "score": None,
+        "source_chunk_id": str(chunk.id),
         "source_chunk_ids": [str(chunk.id)],
         "evidence_quote": quote,
         "source_section": chunk.section,
@@ -141,11 +144,24 @@ def _valid_item(chunk: DocumentChunk, **overrides) -> dict:
         "conflict_note": None,
     }
     base.update(overrides)
+    if "source_chunk_id" not in overrides and "source_chunk_ids" in overrides:
+        ids = overrides["source_chunk_ids"]
+        if ids:
+            base["source_chunk_id"] = ids[0]
     return base
 
 
 def select_reqs(db: Session, project_id: UUID):
     return select(Requirement).where(Requirement.project_id == project_id)
+
+
+def _chunks_payload(messages) -> dict:
+    user = messages[-1]["content"]
+    if "<<<CHUNKS>>>" in user:
+        raw = user.split("<<<CHUNKS>>>\n", 1)[-1]
+    else:
+        raw = user.split("：\n", 1)[-1]
+    return json.loads(raw)
 
 
 @pytest.fixture()
@@ -178,8 +194,7 @@ def test_only_allowed_doc_types_scanned(db):
     seen_ids: list[str] = []
 
     def responder(messages):
-        user = messages[-1]["content"]
-        payload = json.loads(user.split("：\n", 1)[-1])
+        payload = _chunks_payload(messages)
         for c in payload["chunks"]:
             seen_ids.append(c["chunk_id"])
         return {"items": [_valid_item(t_chunk)]}
@@ -220,8 +235,7 @@ def test_project_isolation(db):
     seen: list[str] = []
 
     def responder(messages):
-        user = messages[-1]["content"]
-        payload = json.loads(user.split("：\n", 1)[-1])
+        payload = _chunks_payload(messages)
         for c in payload["chunks"]:
             seen.append(c["chunk_id"])
         return {"items": [_valid_item(chunk_a, normalized_requirement="项目A要求具备一级资质")]}
@@ -394,7 +408,13 @@ def test_idempotent_rerun(db):
 def test_force_replaces_only_auto(db):
     project = _org_project(db, "T11")
     doc = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
-    chunk = _chunk(db, project, doc, index=0, content="投标人须具备一级资质。")
+    chunk = _chunk(
+        db,
+        project,
+        doc,
+        index=0,
+        content="投标人须具备一级资质。近三年无重大违法记录。",
+    )
     manual = Requirement(
         project_id=project.id,
         source_document_id=doc.id,
@@ -411,18 +431,36 @@ def test_force_replaces_only_auto(db):
     db.add(manual)
     db.commit()
 
-    llm = FakeLlm(lambda _m: {"items": [_valid_item(chunk)]})
+    llm = FakeLlm(
+        lambda _m: {
+            "items": [
+                _valid_item(
+                    chunk,
+                    normalized_requirement="投标人须具备一级资质",
+                    evidence_quote="投标人须具备一级资质",
+                )
+            ]
+        }
+    )
     svc = RequirementExtractionService(db, llm=llm)
     run1 = svc.start_extraction(project.id, ExtractionStartRequest())
     svc.execute_run(run1.id)
+    autos_before = [
+        r
+        for r in db.scalars(select_reqs(db, project.id))
+        if (r.metadata_json or {}).get("source") == "auto_extraction"
+    ]
+    assert len(autos_before) == 1
 
     llm2 = FakeLlm(
         lambda _m: {
             "items": [
                 _valid_item(
                     chunk,
-                    normalized_requirement="投标人须具备建筑工程施工总承包特级资质",
-                    evidence_quote="投标人须具备一级资质",
+                    category="mandatory",
+                    title="无重大违法",
+                    normalized_requirement="近三年无重大违法记录",
+                    evidence_quote="近三年无重大违法记录",
                 )
             ]
         }
@@ -436,6 +474,7 @@ def test_force_replaces_only_auto(db):
     assert ("manual-001", "manual") in sources
     autos = [r for r in rows if (r.metadata_json or {}).get("source") == "auto_extraction"]
     assert len(autos) == 1
+    assert "近三年无重大违法记录" in (autos[0].normalized_requirement or "")
     assert db.get(Requirement, manual.id) is not None
 
 
@@ -465,8 +504,7 @@ def test_merge_same_normalized_keeps_multiple_evidence(db):
     norm = "投标人须具备建筑工程施工总承包一级资质"
 
     def responder(messages):
-        user = messages[-1]["content"]
-        payload = json.loads(user.split("：\n", 1)[-1])
+        payload = _chunks_payload(messages)
         ids = {c["chunk_id"] for c in payload["chunks"]}
         items = []
         if str(c1.id) in ids:
@@ -529,8 +567,7 @@ def test_conflict_marked(db):
     db.commit()
 
     def responder(messages):
-        user = messages[-1]["content"]
-        payload = json.loads(user.split("：\n", 1)[-1])
+        payload = _chunks_payload(messages)
         items = []
         for c in payload["chunks"]:
             if c["chunk_id"] == str(c1.id):
@@ -552,7 +589,7 @@ def test_conflict_marked(db):
                         c2,
                         category="commercial",
                         title="投标保证金",
-                        normalized_requirement="投标保证金为人民币20万元",
+                        normalized_requirement="投标保证金调整为人民币20万元",
                         evidence_quote="投标保证金调整为人民币 20 万元",
                         source_page=1,
                         source_clause_id="4.1",
@@ -665,3 +702,280 @@ def test_stable_requirement_code_deterministic():
     b = stable_requirement_code(RequirementCategory.qualification, "  投标人须具备一级资质  ")
     assert a == b
     assert a.startswith("auto-qualification-")
+
+
+def test_reject_fabricated_grade_despite_valid_quote(db):
+    """原文一级 → 模型写特级：即使 quote 含「一级资质」也必须拒绝。"""
+    project = _org_project(db, "G1")
+    doc = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
+    chunk = _chunk(db, project, doc, index=0, content="投标人须具备一级资质。")
+    db.commit()
+    item = _valid_item(
+        chunk,
+        normalized_requirement="投标人须具备特级资质",
+        evidence_quote="一级资质",
+    )
+    llm = FakeLlm(lambda _m: {"items": [item]})
+    svc = RequirementExtractionService(db, llm=llm)
+    run = svc.start_extraction(project.id, ExtractionStartRequest())
+    svc.execute_run(run.id)
+    assert list(db.scalars(select_reqs(db, project.id))) == []
+
+
+def test_reject_rewritten_amount_date_score(db):
+    project = _org_project(db, "G2")
+    doc = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
+    chunk = _chunk(
+        db,
+        project,
+        doc,
+        index=0,
+        content="投标保证金为人民币伍万元整，投标截止时间为2026年8月1日，技术分占百分之五十。",
+    )
+    db.commit()
+    items = [
+        _valid_item(
+            chunk,
+            category="commercial",
+            normalized_requirement="投标保证金为人民币拾万元整",
+            evidence_quote="投标保证金为人民币伍万元整",
+        ),
+        _valid_item(
+            chunk,
+            category="deadline",
+            normalized_requirement="投标截止时间为2026年9月1日",
+            evidence_quote="投标截止时间为2026年8月1日",
+        ),
+        _valid_item(
+            chunk,
+            category="scoring",
+            normalized_requirement="技术分占百分之六十",
+            evidence_quote="技术分占百分之五十",
+            score="60",
+        ),
+    ]
+    llm = FakeLlm(lambda _m: {"items": items})
+    svc = RequirementExtractionService(db, llm=llm)
+    run = svc.start_extraction(project.id, ExtractionStartRequest())
+    svc.execute_run(run.id)
+    assert list(db.scalars(select_reqs(db, project.id))) == []
+
+
+def test_accept_whitespace_punct_numbering_normalization(db):
+    project = _org_project(db, "G3")
+    doc = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
+    chunk = _chunk(
+        db,
+        project,
+        doc,
+        index=0,
+        content="1、投标人须具备一级资质。",
+    )
+    db.commit()
+    item = _valid_item(
+        chunk,
+        normalized_requirement="投标人须具备一级资质",
+        evidence_quote="投标人须具备一级资质",
+    )
+    llm = FakeLlm(lambda _m: {"items": [item]})
+    svc = RequirementExtractionService(db, llm=llm)
+    run = svc.start_extraction(project.id, ExtractionStartRequest())
+    svc.execute_run(run.id)
+    reqs = list(db.scalars(select_reqs(db, project.id)))
+    assert len(reqs) == 1
+    links = list(db.scalars(select(EvidenceLink).where(EvidenceLink.requirement_id == reqs[0].id)))
+    assert len(links) == 1
+
+
+def test_primary_locator_follows_quote_chunk_not_first_list_item(db):
+    """引文在第二 chunk：主定位必须全部来自第二 chunk。"""
+    project = _org_project(db, "G4")
+    doc1 = _doc(db, project, document_type=DocumentType.tender, file_name="a.pdf")
+    doc2 = _doc(db, project, document_type=DocumentType.amendment, file_name="b.pdf")
+    c1 = _chunk(
+        db,
+        project,
+        doc1,
+        index=0,
+        content="本章为总则，不含保证金条款。",
+        section="第一章",
+        clause_id="1.1",
+        page_start=1,
+        page_end=1,
+    )
+    c2 = _chunk(
+        db,
+        project,
+        doc2,
+        index=0,
+        content="投标保证金为人民币伍万元整。",
+        section="补遗第二条",
+        clause_id="2.2",
+        page_start=3,
+        page_end=3,
+    )
+    db.commit()
+
+    item = {
+        "category": "commercial",
+        "title": "投标保证金",
+        "normalized_requirement": "投标保证金为人民币伍万元整",
+        "mandatory": True,
+        "source_chunk_id": str(c2.id),
+        "source_chunk_ids": [str(c1.id), str(c2.id)],
+        "evidence_quote": "投标保证金为人民币伍万元整",
+        # Misleading locators pointing at chunk1 — must be rejected OR ignored.
+        "source_section": "第一章",
+        "source_clause_id": "1.1",
+        "source_page": 1,
+    }
+    llm = FakeLlm(lambda _m: {"items": [item]})
+    svc = RequirementExtractionService(db, llm=llm)
+    run = svc.start_extraction(project.id, ExtractionStartRequest())
+    svc.execute_run(run.id)
+    # Misleading locators that don't match primary chunk → reject.
+    assert list(db.scalars(select_reqs(db, project.id))) == []
+
+    # Correct locators (or omitted) with primary = c2.
+    item2 = {
+        "category": "commercial",
+        "title": "投标保证金",
+        "normalized_requirement": "投标保证金为人民币伍万元整",
+        "mandatory": True,
+        "source_chunk_id": str(c2.id),
+        "source_chunk_ids": [str(c2.id)],
+        "evidence_quote": "投标保证金为人民币伍万元整",
+    }
+    llm2 = FakeLlm(lambda _m: {"items": [item2]})
+    svc2 = RequirementExtractionService(db, llm=llm2)
+    run2 = svc2.start_extraction(project.id, ExtractionStartRequest(force=True))
+    svc2.execute_run(run2.id)
+    reqs = list(db.scalars(select_reqs(db, project.id)))
+    assert len(reqs) == 1
+    req = reqs[0]
+    assert req.source_document_id == doc2.id
+    assert req.source_section == "补遗第二条"
+    assert req.source_clause_id == "2.2"
+    assert req.source_page == 3
+    detail = svc2.get_requirement(project.id, req.id)
+    assert detail.evidence_links[0].chunk_id == c2.id
+    assert detail.evidence_links[0].document_id == doc2.id
+    assert detail.evidence_links[0].section == "补遗第二条"
+
+
+def test_force_scoped_to_document_a_keeps_document_b(db):
+    project = _org_project(db, "G5")
+    doc_a = _doc(db, project, document_type=DocumentType.tender, file_name="a.pdf")
+    doc_b = _doc(db, project, document_type=DocumentType.tender, file_name="b.pdf")
+    ca = _chunk(db, project, doc_a, index=0, content="文档A要求具备一级资质。")
+    cb = _chunk(db, project, doc_b, index=0, content="文档B要求具备二级资质。")
+    db.commit()
+
+    def responder_all(messages):
+        payload = _chunks_payload(messages)
+        items = []
+        for c in payload["chunks"]:
+            if c["chunk_id"] == str(ca.id):
+                items.append(
+                    _valid_item(
+                        ca,
+                        normalized_requirement="文档A要求具备一级资质",
+                        evidence_quote="文档A要求具备一级资质",
+                    )
+                )
+            if c["chunk_id"] == str(cb.id):
+                items.append(
+                    _valid_item(
+                        cb,
+                        normalized_requirement="文档B要求具备二级资质",
+                        evidence_quote="文档B要求具备二级资质",
+                    )
+                )
+        return {"items": items}
+
+    svc = RequirementExtractionService(db, llm=FakeLlm(responder_all))
+    run = svc.start_extraction(project.id, ExtractionStartRequest())
+    svc.execute_run(run.id)
+    assert len(list(db.scalars(select_reqs(db, project.id)))) == 2
+
+    def responder_a_only(messages):
+        return {
+            "items": [
+                _valid_item(
+                    ca,
+                    category="mandatory",
+                    normalized_requirement="文档A要求具备一级资质",
+                    evidence_quote="文档A要求具备一级资质",
+                )
+            ]
+        }
+
+    svc2 = RequirementExtractionService(db, llm=FakeLlm(responder_a_only))
+    run2 = svc2.start_extraction(
+        project.id,
+        ExtractionStartRequest(document_ids=[doc_a.id], force=True),
+    )
+    svc2.execute_run(run2.id)
+    rows = list(db.scalars(select_reqs(db, project.id)))
+    assert len(rows) == 2
+    b_rows = [r for r in rows if r.source_document_id == doc_b.id]
+    assert len(b_rows) == 1
+    assert "二级资质" in (b_rows[0].normalized_requirement or "")
+
+
+def test_force_keeps_old_on_llm_failure(db):
+    project = _org_project(db, "G6")
+    doc = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
+    chunk = _chunk(db, project, doc, index=0, content="投标人须具备一级资质。")
+    db.commit()
+    svc = RequirementExtractionService(
+        db, llm=FakeLlm(lambda _m: {"items": [_valid_item(chunk)]})
+    )
+    run = svc.start_extraction(project.id, ExtractionStartRequest())
+    svc.execute_run(run.id)
+    before = list(db.scalars(select_reqs(db, project.id)))
+    assert len(before) == 1
+    old_id = before[0].id
+
+    llm_fail = FakeLlm(lambda _m: {"items": []})
+    llm_fail.raise_error = LlmUnavailableError("大模型服务不可用", detail="down")
+    svc2 = RequirementExtractionService(db, llm=llm_fail)
+    run2 = svc2.start_extraction(project.id, ExtractionStartRequest(force=True))
+    svc2.execute_run(run2.id)
+    r2 = svc2.get_run(project.id, run2.id)
+    assert r2.status == ExtractionRunStatus.failed
+    after = list(db.scalars(select_reqs(db, project.id)))
+    assert len(after) == 1
+    assert after[0].id == old_id
+
+
+def test_force_keeps_old_on_validation_only_failures_still_succeeds_empty_replace(db):
+    """All batches OK but every candidate rejected → force clears scoped autos."""
+    project = _org_project(db, "G7")
+    doc = _doc(db, project, document_type=DocumentType.tender, file_name="t.pdf")
+    chunk = _chunk(db, project, doc, index=0, content="投标人须具备一级资质。")
+    db.commit()
+    svc = RequirementExtractionService(
+        db, llm=FakeLlm(lambda _m: {"items": [_valid_item(chunk)]})
+    )
+    run = svc.start_extraction(project.id, ExtractionStartRequest())
+    svc.execute_run(run.id)
+    assert len(list(db.scalars(select_reqs(db, project.id)))) == 1
+
+    bad = _valid_item(
+        chunk,
+        normalized_requirement="投标人须具备特级资质",
+        evidence_quote="一级资质",
+    )
+    svc2 = RequirementExtractionService(db, llm=FakeLlm(lambda _m: {"items": [bad]}))
+    run2 = svc2.start_extraction(project.id, ExtractionStartRequest(force=True))
+    svc2.execute_run(run2.id)
+    r2 = svc2.get_run(project.id, run2.id)
+    assert r2.status == ExtractionRunStatus.succeeded
+    # Scoped auto replaced by empty set of valid candidates.
+    autos = [
+        r
+        for r in db.scalars(select_reqs(db, project.id))
+        if (r.metadata_json or {}).get("source") == "auto_extraction"
+    ]
+    assert autos == []

@@ -46,19 +46,20 @@
 
 每个候选必须：
 
-1. `source_chunk_ids` 全部属于本轮 batch；
-2. `evidence_quote` 经空白规范化后可在对应 chunk 原文中匹配；
-3. `source_page` / `source_section` / `source_clause_id` 与 chunk 元数据一致或为空；
-4. `category` 属于既有枚举。
+1. 唯一 `source_chunk_id` 属于本轮 batch（主证据）；
+2. `evidence_quote` 经空白规范化后可在**该主 chunk** 原文中连续匹配；
+3. `normalized_requirement` 经空白/标点/编号软规范化后，必须是主 chunk 的连续子串，且关键 token（数字、日期、金额、资质等级、应/须/必须/不得/可/宜 等）均出现在主 chunk；无法证明则拒绝；
+4. `document_id` / 页码 / 章节 / 条款 **一律从主 chunk 元数据派生**，忽略模型自填定位；
+5. `score` 仅当数值出现在主 chunk 时保留。
 
-无证据、未知 chunk、虚构页码/章节/条款、无效 JSON 的条目一律拒绝。
-单 batch 失败不回滚已成功写入的结果；失败摘要不含文档全文。
+补充证据 `source_chunk_ids` 仅在同样包含该 quote 时写入额外 EvidenceLink，不得覆盖主定位。
 
 ## 去重与冲突
 
 - **去重**：同一 extraction run 内，仅合并「类别相同且规范化文本完全一致」的候选；保留全部 EvidenceLink。不做激进语义去重。
-- **幂等**：相同自动抽取 `requirement_code` 不重复插入；`force=true` 仅替换 `metadata_json.source=auto_extraction` 的记录，**永不删除**手工/导入 Requirement。
-- **冲突**：同类不同数值/日期/资质/评分；同条款号互相矛盾；`amendment` 与 `tender` 明显差异 → 标记 `potential_conflict`，UI「需人工确认」，系统**不自动裁决**。
+- **幂等**：相同自动抽取 `requirement_code` 不重复插入。
+- **`force=true`**：仅删除「本次实际扫描文档集合」内、且 `metadata_json.source=auto_extraction` 且未人工 `reviewed` 的记录；删除发生在全部批次成功之后，与写入在同一事务语义下完成。任一批次致命失败则**保留旧结果**、不删除。范围外自动抽取与手工/导入记录一律保留。
+- **冲突**：同类不同数值/日期；同条款号互相矛盾；`amendment` 与 `tender` 明显差异 → 标记需人工确认，不自动裁决。
 
 ## API
 
