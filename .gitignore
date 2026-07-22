@@ -75,6 +75,9 @@ datasets/fixtures/**
 !datasets/reports/llamafactory_real_validation.json
 !datasets/reports/training_readiness_report.json
 !datasets/reports/artifact_consistency_report.json
+# Auto reference set: keep summary/report/splits; regenerate JSONL via make dataset-build-reference
+!datasets/eval/
+!datasets/eval/reference/
 !datasets/eval/reference/.gitkeep
 !datasets/eval/reference/reference_dataset_summary.md
 !datasets/eval/reference/reference_dataset_report.json
