@@ -28,7 +28,10 @@ def llm_health() -> LlmHealthResponse:
     from app.services.llm_model_resolve import resolve_llm_load_target
 
     probe = get_llm_client().health_check()
-    load_target = resolve_llm_load_target()
+    try:
+        load_target = resolve_llm_load_target()
+    except FileNotFoundError as exc:
+        load_target = f"invalid:{exc}"
     detail = probe["detail"]
     detail = f"{detail}; load_target={load_target}" if detail else f"load_target={load_target}"
     return LlmHealthResponse(

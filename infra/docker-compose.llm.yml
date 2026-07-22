@@ -1,18 +1,23 @@
-# Optional vLLM profile for BidPilot grounded RAG (Qwen3-8B).
+# Optional vLLM profile — Hugging Face Hub id mode (no local weight mount).
 # Not started by `make infra-up`. Requires NVIDIA GPU + nvidia-container-toolkit.
 #
-# Uses the same env vars as scripts/serve_qwen3_vllm.sh:
-#   LLM_MODEL          served name
-#   LLM_MODEL_SOURCE   Hub id fallback (only if local path missing)
-#   LLM_MODEL_PATH     host path to weights (mounted read-only at /models/llm)
+# Shared env with scripts/serve_qwen3_vllm.sh:
+#   LLM_MODEL          served name (backend calls this)
+#   LLM_MODEL_SOURCE   Hub repo id (default Qwen/Qwen3-8B)
+#   LLM_BASE_URL       http://localhost:8001/v1
 #
-# Usage:
-#   docker compose --env-file .env -f infra/docker-compose.yml \
-#     -f infra/docker-compose.llm.yml --profile llm up -d
+# Hub mode (downloads/caches via HF_HOME):
+#   docker compose --env-file .env \
+#     -f infra/docker-compose.yml -f infra/docker-compose.llm.yml \
+#     --profile llm up -d
 #
-# Then:
-#   LLM_ENABLED=true
-#   LLM_BASE_URL=http://localhost:8001/v1
+# Local weights mode (mount LLM_MODEL_PATH — must be non-empty and valid):
+#   docker compose --env-file .env \
+#     -f infra/docker-compose.yml -f infra/docker-compose.llm.yml \
+#     -f infra/docker-compose.llm.local.yml \
+#     --profile llm up -d
+#
+# Then set LLM_ENABLED=true on the API process.
 
 services:
   vllm-qwen3:
@@ -26,31 +31,25 @@ services:
       CUDA_VISIBLE_DEVICES: ${LLM_CUDA_VISIBLE_DEVICES:-0}
       LLM_MODEL: ${LLM_MODEL:-bidpilot-qwen3-8b}
       LLM_MODEL_SOURCE: ${LLM_MODEL_SOURCE:-Qwen/Qwen3-8B}
-      LLM_MODEL_PATH: /models/llm
     ports:
       - "${LLM_PORT:-8001}:8000"
     volumes:
-      # Prefer the same local snapshot used by serve_qwen3_vllm.sh.
-      - ${LLM_MODEL_PATH:-/root/autodl-tmp/models/Qwen3-8B}:/models/llm:ro
       - ${HF_HOME:-${HOME}/.cache/huggingface}:/root/.cache/huggingface
-    # Load from mounted local dir when config.json exists; else Hub id.
-    entrypoint: ["/bin/bash", "-lc"]
     command:
-      - >
-        if [ -f /models/llm/config.json ]; then
-          MODEL=/models/llm;
-        else
-          MODEL="$${LLM_MODEL_SOURCE:-Qwen/Qwen3-8B}";
-        fi;
-        echo "Serving $$MODEL as $${LLM_MODEL:-bidpilot-qwen3-8b}";
-        exec vllm serve "$$MODEL"
-        --served-model-name "$${LLM_MODEL:-bidpilot-qwen3-8b}"
-        --host 0.0.0.0
-        --port 8000
-        --tensor-parallel-size 1
-        --gpu-memory-utilization 0.90
-        --max-model-len 16384
-        --enable-prefix-caching
+      - ${LLM_MODEL_SOURCE:-Qwen/Qwen3-8B}
+      - --served-model-name
+      - ${LLM_MODEL:-bidpilot-qwen3-8b}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --tensor-parallel-size
+      - "1"
+      - --gpu-memory-utilization
+      - "0.90"
+      - --max-model-len
+      - "16384"
+      - --enable-prefix-caching
     deploy:
       resources:
         reservations:

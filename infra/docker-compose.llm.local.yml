@@ -1,0 +1,34 @@
+# Local-weights override for the optional `llm` profile.
+# Only use when LLM_MODEL_PATH is a non-empty host directory with config.json.
+#
+#   export LLM_MODEL_PATH=/absolute/path/to/Qwen3-8B
+#   docker compose --env-file .env \
+#     -f infra/docker-compose.yml \
+#     -f infra/docker-compose.llm.yml \
+#     -f infra/docker-compose.llm.local.yml \
+#     --profile llm up -d
+#
+# Do not use this file with an empty LLM_MODEL_PATH (Docker rejects empty binds).
+
+services:
+  vllm-qwen3:
+    volumes:
+      - type: bind
+        source: ${LLM_MODEL_PATH:?LLM_MODEL_PATH must be set to a host weights directory}
+        target: /models/llm
+        read_only: true
+    command:
+      - /models/llm
+      - --served-model-name
+      - ${LLM_MODEL:-bidpilot-qwen3-8b}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --tensor-parallel-size
+      - "1"
+      - --gpu-memory-utilization
+      - "0.90"
+      - --max-model-len
+      - "16384"
+      - --enable-prefix-caching

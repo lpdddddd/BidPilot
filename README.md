@@ -166,26 +166,49 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 正文以 `delta` 推给前端；校验通过后才发 `final`（含完整 answer / citations / trace），
 校验失败只发 `error`。
 
-- 统一模型配置（`scripts/serve_qwen3_vllm.sh` 与 `infra/docker-compose.llm.yml` 共用）：
-  - `LLM_MODEL`：served name（默认 `bidpilot-qwen3-8b`）
-  - `LLM_MODEL_SOURCE`：Hub id 回退（默认 `Qwen/Qwen3-8B`）
-  - `LLM_MODEL_PATH`：本地权重目录（默认 `/root/autodl-tmp/models/Qwen3-8B`）
+- 统一模型配置（脚本与 Compose 共用，**不硬编码机器路径**）：
+  - `LLM_MODEL`：服务暴露名 / 后端调用名（默认 `bidpilot-qwen3-8b`）
+  - `LLM_MODEL_SOURCE`：Hugging Face repo id（默认 `Qwen/Qwen3-8B`）
+  - `LLM_MODEL_PATH`：可选本地权重目录（非空且含 `config.json` 时优先；默认为空）
   - 另有 `LLM_ENABLED`、`LLM_BASE_URL`、`LLM_API_KEY`、超时与 RAG 截断参数
-- 启动模型（不纳入 `make infra-up`）：
-  - 脚本：`./scripts/serve_qwen3_vllm.sh`
-  - Compose：`make llm-up` 提示，或
-    `docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.llm.yml --profile llm up -d`
+- 启动模型（不纳入 `make infra-up`，可选 profile `llm`）：
+  - **本机脚本（5090）**：
+    ```bash
+    # Hub 下载/缓存
+    unset LLM_MODEL_PATH
+    ./scripts/serve_qwen3_vllm.sh
+
+    # 或本地权重
+    export LLM_MODEL_PATH=/absolute/path/to/Qwen3-8B
+    ./scripts/serve_qwen3_vllm.sh
+    ```
+  - **Compose · Hub**：
+    ```bash
+    docker compose --env-file .env \
+      -f infra/docker-compose.yml -f infra/docker-compose.llm.yml \
+      --profile llm up -d
+    ```
+  - **Compose · 本地挂载**（`LLM_MODEL_PATH` 必须非空）：
+    ```bash
+    export LLM_MODEL_PATH=/absolute/path/to/Qwen3-8B
+    docker compose --env-file .env \
+      -f infra/docker-compose.yml -f infra/docker-compose.llm.yml \
+      -f infra/docker-compose.llm.local.yml \
+      --profile llm up -d
+    ```
+  - Qwen3-8B 仅用于基础 RAG 验证；**未完成微调**
 - API：
   - `POST /api/v1/projects/{pid}/ask`（`stream=false` JSON /
     `stream=true` SSE：`retrieval` → `generation_started` → `final` / `error`）
   - `GET /api/v1/health/llm`（真实连通性 + `load_target`）
 - 验收：
   - Mock（无 GPU）：`make rag-smoke`
-  - 真实联调（5090 + 本地权重 + 已索引项目）：
+  - Health / ask / SSE live smoke（5090 + 已索引项目）：
     ```bash
     make infra-up && make backend
-    ./scripts/serve_qwen3_vllm.sh   # 另开终端
-    # .env: LLM_ENABLED=true
+    export LLM_MODEL_PATH=/absolute/path/to/Qwen3-8B   # 若用本地权重
+    ./scripts/serve_qwen3_vllm.sh                      # 另开终端
+    # API .env: LLM_ENABLED=true
     RAG_SMOKE_LIVE=1 make rag-smoke-live
     ```
   - 脱敏摘要写入 `docs/acceptance/rag_smoke_*.json`（已 gitignore，不入库原文）

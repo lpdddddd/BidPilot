@@ -506,7 +506,7 @@ def test_ask_api_sse_order(client, monkeypatch):
     assert "event: delta" not in body
 
 
-def test_resolve_llm_load_target_prefers_explicit_path(tmp_path, monkeypatch):
+def test_resolve_llm_load_target_prefers_explicit_path(tmp_path):
     from app.core.config import Settings
     from app.services.llm_model_resolve import resolve_llm_load_target
 
@@ -516,9 +516,29 @@ def test_resolve_llm_load_target_prefers_explicit_path(tmp_path, monkeypatch):
     settings = Settings(
         llm_model_path=str(weights),
         llm_model_source="Qwen/Qwen3-8B",
-        llm_default_local_path=str(tmp_path / "missing"),
     )
     assert resolve_llm_load_target(settings) == str(weights.resolve())
+
+
+def test_resolve_llm_load_target_falls_back_to_source(tmp_path):
+    from app.core.config import Settings
+    from app.services.llm_model_resolve import resolve_llm_load_target
+
+    settings = Settings(llm_model_path="", llm_model_source="Qwen/Qwen3-8B")
+    assert resolve_llm_load_target(settings) == "Qwen/Qwen3-8B"
+
+
+def test_resolve_llm_load_target_rejects_invalid_path(tmp_path):
+    from app.core.config import Settings
+    from app.services.llm_model_resolve import resolve_llm_load_target
+
+    missing = tmp_path / "missing"
+    settings = Settings(llm_model_path=str(missing), llm_model_source="Qwen/Qwen3-8B")
+    try:
+        resolve_llm_load_target(settings)
+        raise AssertionError("expected FileNotFoundError")
+    except FileNotFoundError:
+        pass
 
 
 def test_llm_health_disabled(client, monkeypatch):

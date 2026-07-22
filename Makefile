@@ -78,10 +78,13 @@ rag-smoke-live:
 	cd $(ROOT_DIR) && RAG_SMOKE_LIVE=1 $(PYTHON) scripts/rag_smoke_accept.py
 
 llm-up:
-	@echo "Start local vLLM (uses LLM_MODEL_PATH / LLM_MODEL_SOURCE from .env):"
-	@echo "  ./scripts/serve_qwen3_vllm.sh"
-	@echo "Or compose profile:"
+	@echo "Hub mode (no local mount):"
+	@echo "  unset LLM_MODEL_PATH && ./scripts/serve_qwen3_vllm.sh"
 	@echo "  docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.llm.yml --profile llm up -d"
+	@echo "Local weights mode:"
+	@echo "  export LLM_MODEL_PATH=/absolute/path/to/Qwen3-8B"
+	@echo "  ./scripts/serve_qwen3_vllm.sh"
+	@echo "  docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.llm.yml -f infra/docker-compose.llm.local.yml --profile llm up -d"
 	@echo "Then set LLM_ENABLED=true and run: make rag-smoke-live"
 
 lint:
