@@ -67,50 +67,82 @@ def _from_json_safe(obj: Any) -> Any:
     return obj
 
 
-def serialize_memory_saver(memory: MemorySaver) -> dict[str, Any] | None:
-    """Best-effort compact JSON-safe dump of MemorySaver.
+# Soft cap for full MemorySaver JSONB dumps. Larger graphs fall back to a
+# compact observational summary; ``completed_nodes`` remains the durable resume path.
+_LG_MEMORY_FULL_MAX_BYTES = 512_000
 
-    Full blob payloads can be multi-MB (msgpack bytes as base64) and stall
-    JSONB inserts; we only persist lightweight structural metadata plus a
-    bounded sample so resume relies on ``completed_nodes`` / DB state.
+
+def _compact_memory_summary(memory: MemorySaver) -> dict[str, Any]:
+    storage_keys = list(getattr(memory, "storage", {}) or {})
+    writes_keys = list(getattr(memory, "writes", {}) or {})
+    blob_count = len(getattr(memory, "blobs", {}) or {})
+    sample: dict[str, Any] = {}
+    for tid in storage_keys[:3]:
+        ns_map = memory.storage.get(tid) or {}
+        sample[str(tid)] = {
+            str(ns): list(cps.keys())[:5]
+            for ns, cps in list(ns_map.items())[:3]
+            if isinstance(cps, dict)
+        }
+    return {
+        "version": 1,
+        "mode": "compact",
+        "thread_ids": [str(k) for k in storage_keys[:20]],
+        "writes_keys": [str(k) for k in writes_keys[:20]],
+        "blob_count": blob_count,
+        "storage_sample": sample,
+    }
+
+
+def serialize_memory_saver(memory: MemorySaver) -> dict[str, Any] | None:
+    """Serialize MemorySaver for checkpoint persistence.
+
+    Prefer a full dump (``mode=full``) when JSON-safe size is under
+    ``_LG_MEMORY_FULL_MAX_BYTES`` so resume can ``stream(None)`` from the
+    checkpointer. Oversized / non-serializable blobs fall back to a compact
+    observational summary — durable resume then relies on ``completed_nodes``.
     """
     try:
-        storage_keys = list(getattr(memory, "storage", {}) or {})
-        writes_keys = list(getattr(memory, "writes", {}) or {})
-        blob_count = len(getattr(memory, "blobs", {}) or {})
-        # Keep a tiny optional sample of storage topology (no blob bytes).
-        sample: dict[str, Any] = {}
-        for tid in storage_keys[:3]:
-            ns_map = memory.storage.get(tid) or {}
-            sample[str(tid)] = {
-                str(ns): list(cps.keys())[:5]
-                for ns, cps in list(ns_map.items())[:3]
-                if isinstance(cps, dict)
-            }
-        return {
-            "version": 1,
-            "thread_ids": [str(k) for k in storage_keys[:20]],
-            "writes_keys": [str(k) for k in writes_keys[:20]],
-            "blob_count": blob_count,
-            "storage_sample": sample,
+        full = {
+            "version": 2,
+            "mode": "full",
+            "storage": _json_safe(getattr(memory, "storage", {}) or {}),
+            "writes": _json_safe(dict(getattr(memory, "writes", {}) or {})),
+            "blobs": _json_safe(dict(getattr(memory, "blobs", {}) or {})),
         }
+        encoded = json.dumps(full, ensure_ascii=False, default=str)
+        if len(encoded.encode("utf-8")) <= _LG_MEMORY_FULL_MAX_BYTES:
+            return full
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        return _compact_memory_summary(memory)
     except Exception:  # noqa: BLE001
         return None
+
+
+def lg_memory_is_full(payload: dict[str, Any] | None) -> bool:
+    """True when payload carries restorable MemorySaver channel bytes."""
+    if not payload or not isinstance(payload, dict):
+        return False
+    if payload.get("mode") == "compact":
+        return False
+    if payload.get("version") == 1 and "storage_sample" in payload:
+        return False
+    storage = payload.get("storage")
+    return isinstance(storage, dict) and bool(storage)
 
 
 def restore_memory_saver(payload: dict[str, Any] | None) -> MemorySaver:
     """Restore a MemorySaver when a full dump is present; else empty saver.
 
-    Compact ``serialize_memory_saver`` payloads (version=1 summaries) cannot
-    rebuild channel bytes — callers should rely on ``completed_nodes``.
+    Compact summaries cannot rebuild channel bytes — callers should rely on
+    ``completed_nodes`` skip while streaming from START.
     """
     memory = MemorySaver()
     if not payload or not isinstance(payload, dict):
         return memory
-    # Compact summary format — nothing to restore.
-    if payload.get("version") == 1 and "storage_sample" in payload:
-        return memory
-    if "storage" not in payload:
+    if not lg_memory_is_full(payload):
         return memory
     try:
         storage = _from_json_safe(payload.get("storage") or {})

@@ -39,11 +39,15 @@ initialize_run
 ## Checkpoint / Resume / Retry
 
 - **thread_id**：始终 `str(run.id)`（start / resume / retry 相同，禁止随机）。
-- **completed_nodes**：每个节点成功结束后写入；resume 时已完成节点直接 `skipped_completed`，不再调用下游服务。
-- **DbCheckpointStore**：每节点后持久化 `current_node`、`completed_nodes`、`retry_counts`、业务对象 ID（`compliance_run_id` / `draft_ids` 等），并尽量把 LangGraph `MemorySaver` 序列化为 `lg_memory`（JSON-safe / base64，`checkpoint_seq` 打破同事务 `created_at` 平局）。
-- **resume**：加载最近 DB checkpoint → 清 interrupt 标志 → `status=running` → 同 `thread_id` 继续；以 `completed_nodes` 跳过已完成节点（避免重复调用服务）。进程重启后使用新的 in-process `MemorySaver`，业务恢复依赖 DB checkpoint + `completed_nodes`（`lg_memory` 仍会落库，`restore_memory_saver` 可供将来兼容恢复）。二次 resume 对已完成 run 幂等返回。
+- **completed_nodes**：每个节点成功结束后写入；resume 时已完成节点直接 `skipped_completed`，不再调用下游服务。这是**跨进程可恢复的主机制**。
+- **DbCheckpointStore**：每节点后持久化 `current_node`、`completed_nodes`、`retry_counts`、业务对象 ID（`compliance_run_id` / `draft_ids` 等），并尽量把 LangGraph `MemorySaver` 序列化为 `lg_memory`（`checkpoint_seq` 打破同事务 `created_at` 平局）。
+- **lg_memory**：体积允许时写入 `mode=full` 完整 dump；过大则退化为 `mode=compact` 观测摘要。`completed_nodes` 始终是耐久恢复路径；full dump 仅用于加速真正的 checkpointer continue。
+- **resume**：加载最近 DB checkpoint → 清 interrupt 标志 → `status=running` → 同 `thread_id` 继续。
+  - 若 `lg_memory` 可完整还原：`graph.update_state` 合并清理后的状态后 `stream(None)` 从 checkpointer 位置续跑。
+  - 若仅有 compact / 还原失败：新 `MemorySaver` + 从 START 重放，靠 `completed_nodes` 跳过已完成节点（避免重复调用服务）。
+  - 二次 resume 对已完成 run 幂等返回。
 - **retry（同 run_id）**：`metadata.retry_attempt++`，记录 `retry_of_status`，清 errors，仅从 `completed_nodes` 移除失败节点（`current_node`）后重跑；保留更早 completed 与已有业务对象，避免重复创建。
-- 扩展表 `agent_runs` / `agent_checkpoints`；事件：`AgentStep.step_index`（从 0 递增）+ `ToolCall`（tool_events 摘要，无密钥/全文）。
+- 扩展表 `agent_runs` / `agent_checkpoints`；事件：`AgentStep.step_index`（从 0 递增；`coalesce(max, -1)+1`，避免 `0 or -1` 假值陷阱）+ `ToolCall`（tool_events 摘要，无密钥/全文）。
 - `Idempotency-Key`：同 project 同 key 返回已有 run。
 
 ## API

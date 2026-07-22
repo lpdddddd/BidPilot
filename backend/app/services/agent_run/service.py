@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.agent.checkpoint import (
     DbCheckpointStore,
+    lg_memory_is_full,
+    restore_memory_saver,
     serialize_memory_saver,
 )
 from app.agent.graph import build_graph
@@ -192,9 +194,17 @@ class AgentRunService:
         run.status = AgentRunStatus.running
         self.db.commit()
 
-        # Re-stream from START with completed_nodes skip. Use a fresh
-        # MemorySaver so restored LG blobs cannot stall the graph; still
-        # persist lg_memory on subsequent saves for observability.
+        # Prefer true LangGraph continue when a full MemorySaver dump exists;
+        # otherwise re-stream from START with completed_nodes skip.
+        lg_payload = self.checkpoints.load_lg_memory(str(run.id))
+        if lg_memory_is_full(lg_payload):
+            restored = restore_memory_saver(lg_payload)
+            return self._continue_from_state(
+                run.id,
+                state,
+                memory=restored,
+                continue_from_checkpointer=True,
+            )
         return self._continue_from_state(run.id, state, memory=MemorySaver())
 
     def retry_run(self, run_id: UUID) -> AgentRunRead:
@@ -238,9 +248,8 @@ class AgentRunService:
         run.error_message = None
         self.db.commit()
 
-        # Re-stream from START with completed_nodes skip. Use a fresh
-        # MemorySaver so restored LG blobs cannot stall the graph; still
-        # persist lg_memory on subsequent saves for observability.
+        # Retry always re-injects AgentState from START with completed_nodes skip
+        # (failed node removed). Fresh MemorySaver; lg_memory is observational.
         return self._continue_from_state(run.id, state, memory=MemorySaver())
 
     def _continue_from_state(
@@ -249,11 +258,16 @@ class AgentRunService:
         state: AgentState,
         *,
         memory: MemorySaver | None = None,
+        continue_from_checkpointer: bool = False,
     ) -> AgentRunRead:
         """Stream the graph with stable ``thread_id=str(run.id)``.
 
         Completed nodes short-circuit via ``completed_nodes`` so services are not
         re-invoked on resume / controlled retry.
+
+        When ``continue_from_checkpointer`` is True and ``memory`` holds a restored
+        full dump, stream ``None`` to continue from the LangGraph checkpointer
+        position. On failure, fall back to streaming restored AgentState from START.
         """
         run = self.db.get(AgentRun, run_id)
         assert run is not None
@@ -287,21 +301,64 @@ class AgentRunService:
             self.db.flush()
 
             final_state = state
-            try:
-                for event in graph.stream(state, config=config, stream_mode="updates"):
+            stream_input: AgentState | None = state
+            if continue_from_checkpointer:
+                try:
+                    # Merge cleaned AgentState (cleared interrupt) into the
+                    # restored checkpointer so stream(None) does not re-pause.
+                    graph.update_state(config, state)
+                    stream_input = None
+                except Exception:  # noqa: BLE001
+                    # Incomplete restore — fall back to START + completed_nodes.
+                    continue_from_checkpointer = False
+                    stream_input = state
+                    memory = MemorySaver()
+                    graph = build_graph(checkpointer=memory)
+
+            def _stream_updates(inp: AgentState | None) -> AgentState:
+                out_state = final_state
+                for event in graph.stream(inp, config=config, stream_mode="updates"):
                     for node_name, partial in event.items():
                         if isinstance(partial, dict):
-                            final_state = {**final_state, **partial}  # type: ignore[misc]
-                        self._after_node(run, node_name, final_state, memory=memory)
-                        if final_state.get("interrupt_requested"):
+                            out_state = {**out_state, **partial}  # type: ignore[misc]
+                        self._after_node(run, node_name, out_state, memory=memory)
+                        if out_state.get("interrupt_requested"):
                             raise AgentInterrupt(node_name)
+                return out_state
+
+            try:
+                try:
+                    final_state = _stream_updates(stream_input)
+                except Exception as stream_exc:
+                    # True-continue failed (empty/partial MemorySaver) — fall back.
+                    if (
+                        continue_from_checkpointer
+                        and stream_input is None
+                        and not isinstance(stream_exc, AgentInterrupt)
+                    ):
+                        memory = MemorySaver()
+                        graph = build_graph(checkpointer=memory)
+                        final_state = _stream_updates(state)
+                    else:
+                        raise
             except AgentInterrupt as exc:
                 if runtime.last_state:
                     final_state = {**final_state, **runtime.last_state}  # type: ignore[misc]
                 final_state["status"] = "waiting_for_user"
                 final_state["current_node"] = exc.node
                 final_state["interrupt_requested"] = True
-                self._after_node(run, exc.node, final_state, memory=memory)
+                # Node already persisted via _after_node in the stream loop;
+                # refresh status fields without a duplicate AgentStep.
+                run.current_node = exc.node
+                run.state_json = json.loads(json.dumps(final_state, default=str))
+                run.status = AgentRunStatus.waiting_for_user
+                self.checkpoints.save(
+                    agent_run_id=run.id,
+                    thread_id=thread_id,
+                    node_name=exc.node,
+                    state=dict(final_state),
+                    lg_memory=serialize_memory_saver(memory),
+                )
                 self._persist_run(run, final_state)
                 self.db.commit()
                 self.db.refresh(run)

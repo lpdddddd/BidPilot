@@ -21,7 +21,7 @@ from app.agent.nodes import (
     run_compliance_check,
     validate_draft,
 )
-from app.agent.nodes._helpers import AgentInterrupt, _RUNTIME
+from app.agent.nodes._helpers import _RUNTIME
 from app.agent.state import (
     NODE_COMPLIANCE,
     NODE_DRAFT,
@@ -50,8 +50,9 @@ def build_graph(*, checkpointer: MemorySaver | None = None) -> Any:
             runtime = _RUNTIME.get()
             if runtime is not None:
                 runtime.last_state = dict(out)
-            if out.get("interrupt_requested"):
-                raise AgentInterrupt(str(out.get("current_node") or "unknown"))
+            # Do not raise here: returning lets LangGraph persist the node
+            # checkpoint so resume can stream(None). AgentRunService stops the
+            # stream when it sees interrupt_requested after the update yield.
             return out
 
         return inner

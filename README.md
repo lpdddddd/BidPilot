@@ -270,12 +270,15 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 详见 [`docs/agent_workflow.md`](docs/agent_workflow.md)。
 
 - 图版本 `bidpilot-agent-1.0.0`；节点只编排、调用既有 Services/Tools（合规无 LLM）
+- **草稿校验**：`validate_draft` 正式调用 `check_draft_compliance`（默认 `draft_safety` + `consistency`）；`draft_findings` 入状态；`force_draft_validation` 仅兼容旧单测
+- **Checkpoint**：`thread_id=str(run.id)`；`completed_nodes` 跳过已完成节点；可选还原 `lg_memory` 后 `stream(None)` 续跑，否则 START + skip
+- **事件**：`AgentStep.step_index` 从 0 递增（已修 `0 or -1` 假值 bug）
 - 表：扩展 `agent_runs` + `agent_checkpoints`；事件复用 `AgentStep` / `ToolCall`
 - 关键资格 finding：默认 `block_on_critical_qualification=true` → `blocked`；否则 risk-only 草稿 + `completed_with_warnings`
 - API：`POST/GET .../agent-runs`、`.../latest`、`.../events`、`.../result`、`.../resume`、`.../retry`
 - 前端：项目详情「Agent 闭环」面板（非完整时间线）
 - **尚未实现**：Step 11 实时可视化、Step 12 评测中心、LoRA
-
+- **限制**：非法律意见 / 非人工 gold；证据不足则 warning / blocked；不编造资质
 ## 可追溯响应准备草稿
 
 基于已确认 Match 与可定位证据，生成待人工复核的响应准备草稿（非投标提交文件）。
