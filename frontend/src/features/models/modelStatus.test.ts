@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ModelCatalogItem } from "../../api/client";
 import {
+  CAP_AGENT_PIPELINE,
   CAP_GROUNDED_QA,
   CAP_STRUCTURED_EXTRACTION,
   formatAskGenerationModelLine,
@@ -10,6 +11,8 @@ import {
   modelsForCapability,
   pickBaseModel,
   pickCourseLora,
+  requiredCapabilityForTarget,
+  TARGET_REQUIRED_CAPABILITY_FALLBACK,
 } from "./modelStatus";
 
 function item(partial: Partial<ModelCatalogItem> & Pick<ModelCatalogItem, "model_id" | "model_type">): ModelCatalogItem {
@@ -72,7 +75,7 @@ describe("capabilities", () => {
       model_id: "qwen3-8b-base",
       model_type: "base",
       served: true,
-      capabilities: [CAP_GROUNDED_QA, CAP_STRUCTURED_EXTRACTION],
+      capabilities: [CAP_GROUNDED_QA, CAP_STRUCTURED_EXTRACTION, CAP_AGENT_PIPELINE],
     }),
     item({
       model_id: "qwen3-8b-lora-course",
@@ -90,11 +93,25 @@ describe("capabilities", () => {
     expect(modelHasCapability(catalog[1]!, CAP_GROUNDED_QA)).toBe(false);
   });
 
+  it("filters agent_pipeline to Base only", () => {
+    const agents = modelsForCapability(catalog, CAP_AGENT_PIPELINE);
+    expect(agents.map((m) => m.model_id)).toEqual(["qwen3-8b-base"]);
+    expect(modelHasCapability(catalog[1]!, CAP_AGENT_PIPELINE)).toBe(false);
+  });
+
   it("allows Course LoRA for structured extraction", () => {
     const structs = modelsForCapability(catalog, CAP_STRUCTURED_EXTRACTION);
     expect(structs).toHaveLength(2);
     expect(pickCourseLora(structs)?.model_id).toBe("qwen3-8b-lora-course");
     expect(pickBaseModel(structs)?.model_id).toBe("qwen3-8b-base");
+  });
+
+  it("maps evaluation targets to required capabilities", () => {
+    expect(requiredCapabilityForTarget("rag")).toBe(CAP_GROUNDED_QA);
+    expect(requiredCapabilityForTarget("extraction")).toBe(CAP_STRUCTURED_EXTRACTION);
+    expect(requiredCapabilityForTarget("agent_pipeline")).toBe(CAP_AGENT_PIPELINE);
+    expect(requiredCapabilityForTarget("rag", "grounded_qa")).toBe("grounded_qa");
+    expect(TARGET_REQUIRED_CAPABILITY_FALLBACK.agent_pipeline).toBe(CAP_AGENT_PIPELINE);
   });
 
   it("labels unserved LoRA option", () => {

@@ -26,7 +26,18 @@ const SUITE = {
 
 const CAPS = {
   items: [
-    { target_type: "rag", available: true, label: "RAG" },
+    {
+      target_type: "rag",
+      available: true,
+      label: "RAG",
+      required_capability: "grounded_qa",
+    },
+    {
+      target_type: "extraction",
+      available: true,
+      label: "Extraction",
+      required_capability: "structured_extraction",
+    },
     { target_type: "deterministic_fake", available: true, label: "确定性假目标" },
   ],
   evaluator_version: "bidpilot-eval-1.0.0",
@@ -41,77 +52,99 @@ const CAPS = {
   splits: ["test"],
 };
 
+const MODEL_CATALOG = {
+  llm_enabled: true,
+  default_model_id: "qwen3-8b-base",
+  active_finetune_model_id: "qwen3-8b-lora-course",
+  items: [
+    {
+      model_id: "qwen3-8b-base",
+      display_name: "Qwen3-8B Base",
+      model_type: "base",
+      registered: true,
+      adapter_exists: true,
+      served: true,
+      served_model_name: "bidpilot-qwen3-8b",
+      version: "base",
+      train_track: null,
+      reason_codes: [],
+      notes: null,
+      status_label: "online",
+      capabilities: ["grounded_qa", "structured_extraction", "agent_pipeline"],
+    },
+    {
+      model_id: "qwen3-8b-lora-course",
+      display_name: "BidPilot Course LoRA",
+      model_type: "lora",
+      registered: true,
+      adapter_exists: true,
+      served: false,
+      served_model_name: "bidpilot-qwen3-8b-course-lora",
+      version: "course-1.0",
+      train_track: "course_pilot",
+      reason_codes: [],
+      notes: null,
+      status_label: "adapter_ready",
+      capabilities: ["structured_extraction"],
+    },
+  ],
+};
+
+function renderForm(onSubmit = vi.fn()) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <NewEvaluationForm
+        suites={[SUITE]}
+        capabilities={CAPS}
+        submitting={false}
+        error={null}
+        onSubmit={onSubmit}
+      />
+    </QueryClientProvider>,
+  );
+  return onSubmit;
+}
+
 describe("NewEvaluationForm model select", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it("passes model_id when creating a RAG run and disables unserved LoRA", async () => {
+  it("passes model_id for RAG and does not offer Course LoRA", async () => {
     const user = userEvent.setup();
-    const onSubmit = vi.fn();
-    listModels.mockResolvedValue({
-      llm_enabled: true,
-      default_model_id: "qwen3-8b-base",
-      active_finetune_model_id: "qwen3-8b-lora-course",
-      items: [
-        {
-          model_id: "qwen3-8b-base",
-          display_name: "Qwen3-8B Base",
-          model_type: "base",
-          registered: true,
-          adapter_exists: true,
-          served: true,
-          served_model_name: "bidpilot-qwen3-8b",
-          version: "base",
-          train_track: null,
-          reason_codes: [],
-          notes: null,
-          status_label: "online",
-        },
-        {
-          model_id: "qwen3-8b-lora-course",
-          display_name: "BidPilot Course LoRA",
-          model_type: "lora",
-          registered: true,
-          adapter_exists: true,
-          served: false,
-          served_model_name: "bidpilot-qwen3-8b-course-lora",
-          version: "course-1.0",
-          train_track: "course_pilot",
-          reason_codes: [],
-          notes: null,
-          status_label: "adapter_ready",
-        },
-      ],
-    });
-
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    render(
-      <QueryClientProvider client={client}>
-        <NewEvaluationForm
-          suites={[SUITE]}
-          capabilities={CAPS}
-          submitting={false}
-          error={null}
-          onSubmit={onSubmit}
-        />
-      </QueryClientProvider>,
-    );
+    listModels.mockResolvedValue(MODEL_CATALOG);
+    const onSubmit = renderForm();
 
     const target = screen.getByTestId("eval-target-select");
     await user.click(within(target).getByRole("combobox"));
     await user.click(await screen.findByText(/^RAG$/));
 
     expect(await screen.findByTestId("eval-model-select")).toBeTruthy();
-    expect(await screen.findByTestId("eval-lora-unserved-hint")).toBeTruthy();
+    expect(screen.queryByTestId("eval-lora-unserved-hint")).toBeNull();
+    const modelSelect = screen.getByTestId("eval-model-select");
+    expect(within(modelSelect).queryByText(/Course LoRA/)).toBeNull();
 
     await user.click(await screen.findByTestId("eval-start-btn"));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     const payload = onSubmit.mock.calls[0][0];
     expect(payload.target).toBe("rag");
     expect(payload.target_config).toEqual({ model_id: "qwen3-8b-base" });
+  });
+
+  it("shows Course LoRA for extraction and disables when unserved", async () => {
+    const user = userEvent.setup();
+    listModels.mockResolvedValue(MODEL_CATALOG);
+    renderForm();
+
+    const target = screen.getByTestId("eval-target-select");
+    await user.click(within(target).getByRole("combobox"));
+    await user.click(await screen.findByText(/^Extraction$/));
+
+    expect(await screen.findByTestId("eval-model-select")).toBeTruthy();
+    expect(await screen.findByTestId("eval-lora-unserved-hint")).toBeTruthy();
   });
 });

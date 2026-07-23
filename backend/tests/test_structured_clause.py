@@ -7,11 +7,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from app.services import model_serving as ms
+from app.services.evaluation.target_capabilities import (
+    TARGET_REQUIRED_CAPABILITY,
+    required_capability_for_target,
+)
 from app.services.structured_clause import (
     StructuredClauseService,
     build_messages,
     extract_json_object,
-    validate_required_keys,
+    validate_task_schema,
 )
 from fastapi import HTTPException
 
@@ -49,10 +53,44 @@ def test_json_parse_and_schema() -> None:
         '{"category":"technical","mandatory":true,"risk_level":"medium","confidence":0.5}'
     )
     assert err is None and obj is not None
-    ok, cov, missing = validate_required_keys(obj, "requirement_classify")
-    assert ok and cov == 1.0 and missing == []
+    ok, cov, missing, parsed, schema_err = validate_task_schema(obj, "requirement_classify")
+    assert ok and cov == 1.0 and missing == [] and parsed is not None and schema_err is None
     bad, err2 = extract_json_object("not json")
     assert bad is None and err2
+
+
+def test_validate_task_schema_strict_failures() -> None:
+    # Wrong type (confidence must be float, not a nested object)
+    ok, _, missing, _, err = validate_task_schema(
+        {
+            "category": "technical",
+            "mandatory": True,
+            "risk_level": "medium",
+            "confidence": {"bad": True},
+        },
+        "requirement_classify",
+    )
+    assert ok is False and err and "schema_error" in err
+
+    # Missing field
+    ok2, cov2, missing2, _, err2 = validate_task_schema(
+        {"category": "technical", "mandatory": True, "risk_level": "medium"},
+        "requirement_classify",
+    )
+    assert ok2 is False and "confidence" in missing2 and cov2 < 1.0
+
+    # Extra key forbidden
+    ok3, _, _, _, err3 = validate_task_schema(
+        {
+            "category": "technical",
+            "mandatory": True,
+            "risk_level": "medium",
+            "confidence": 0.5,
+            "extra_field": "nope",
+        },
+        "requirement_classify",
+    )
+    assert ok3 is False and err3 and "extra" in err3
 
 
 def test_structured_base_and_lora_routes(monkeypatch) -> None:
@@ -102,6 +140,7 @@ def test_structured_base_and_lora_routes(monkeypatch) -> None:
             clause_text=clause,
             task_type="requirement_classify",
             model_id=mid,
+            persist=False,
         )
         assert result.served_model_name == served
         assert result.requested_model_id == mid
@@ -133,6 +172,7 @@ def test_structured_unavailable_and_no_silent_fallback(monkeypatch) -> None:
             clause_text="x",
             model_id=ms.COURSE_LORA_MODEL_ID,
             allow_base_fallback=False,
+            persist=False,
         )
     assert exc.value.status_code == 422
 
@@ -193,17 +233,49 @@ def test_capability_blocks_lora_from_grounded_qa(monkeypatch, tmp_path: Path) ->
         assert allowed.available is True
 
 
-def test_compose_entrypoint_enforces_preflight() -> None:
+def test_target_capabilities_mapping() -> None:
+    assert required_capability_for_target("rag") == ms.CAP_GROUNDED_QA
+    assert required_capability_for_target("extraction") == ms.CAP_STRUCTURED_EXTRACTION
+    assert required_capability_for_target("agent_pipeline") == ms.CAP_AGENT_PIPELINE
+    assert required_capability_for_target("compliance") == ms.CAP_COMPLIANCE_ANALYSIS
+    assert required_capability_for_target("matching") is None
+    assert required_capability_for_target("drafting") is None
+    assert TARGET_REQUIRED_CAPABILITY["deterministic_fake"] is None
+
+
+def test_compose_base_and_lora_overlay() -> None:
     root = Path(__file__).resolve().parents[2]
-    compose = (root / "infra" / "docker-compose.llm.yml").read_text(encoding="utf-8")
-    assert "vllm_compose_entrypoint.sh" in compose
-    assert "LLM_LORA_ADAPTER_PATH: /models/bidpilot-course-lora" in compose
-    assert "LLM_LORA_HOST_PATH" in compose
-    assert "target: /models/bidpilot-course-lora" in compose
+    base = (root / "infra" / "docker-compose.llm.yml").read_text(encoding="utf-8")
+    lora = (root / "infra" / "docker-compose.llm.lora.yml").read_text(encoding="utf-8")
+    local = (root / "infra" / "docker-compose.llm.local.yml").read_text(encoding="utf-8")
     entry = (root / "scripts" / "vllm_compose_entrypoint.sh").read_text(encoding="utf-8")
+
+    assert "vllm_compose_entrypoint.sh" in base
+    # Literal false so host .env cannot force LoRA onto Base-only compose.
+    assert 'LLM_ENABLE_LORA: "false"' in base
+    # Command/volumes must be Base-only (ignore comment mentions).
+    assert "\n      - --lora-modules\n" not in base
+    assert "\n      - --enable-lora\n" not in base
+    assert "target: /models/bidpilot-course-lora" not in base
+
+    assert 'LLM_ENABLE_LORA: "true"' in lora
+    assert "LLM_LORA_ADAPTER_PATH: /models/bidpilot-course-lora" in lora
+    assert "target: /models/bidpilot-course-lora" in lora
+    assert "\n      - --lora-modules\n" in lora
+    assert "\n      - --enable-lora\n" in lora
+    assert "LLM_LORA_HOST_PATH" in lora
+
+    assert "\n      - --lora-modules\n" not in local
+    assert "\n      - --enable-lora\n" not in local
+    assert "llm.lora.yml" in local
+
     assert "validate_adapter_for_serving" in entry
-    # Must not let host ADAPTER_PATH leak into container target via substitution alone.
-    assert "target: ${LLM_LORA_ADAPTER_PATH" not in compose
+    assert "--enable-lora" in entry
+    assert "LLM_ENABLE_LORA=false" in entry
+    # Strip path when disabled; re-append when enabled (local+lora merge safety).
+    assert "KEPT" in entry
+    assert "target: ${LLM_LORA_ADAPTER_PATH" not in base
+    assert "target: ${LLM_LORA_ADAPTER_PATH" not in lora
 
 
 def test_public_payload_includes_capabilities(monkeypatch) -> None:
@@ -212,5 +284,6 @@ def test_public_payload_includes_capabilities(monkeypatch) -> None:
     base = next(i for i in payload["items"] if i["model_id"] == ms.BASE_MODEL_ID)
     assert ms.CAP_GROUNDED_QA in base["capabilities"]
     assert ms.CAP_STRUCTURED_EXTRACTION in base["capabilities"]
+    assert ms.CAP_AGENT_PIPELINE in base["capabilities"]
     blob = str(payload)
     assert "/root/" not in blob and "autodl-tmp" not in blob
