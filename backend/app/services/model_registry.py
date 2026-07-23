@@ -53,7 +53,10 @@ def load_registry() -> dict[str, Any]:
     path = registry_path()
     if not path.exists():
         return {"active_model_id": None, "models": []}
-    return json.loads(path.read_text(encoding="utf-8"))
+    raw: Any = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        return {"active_model_id": None, "models": []}
+    return raw
 
 
 def save_registry(data: dict[str, Any]) -> None:
@@ -102,7 +105,7 @@ def get_active_model() -> dict[str, Any] | None:
     data = load_registry()
     active = data.get("active_model_id")
     for m in data.get("models") or []:
-        if m.get("model_id") == active:
+        if isinstance(m, dict) and m.get("model_id") == active:
             return m
     return None
 
