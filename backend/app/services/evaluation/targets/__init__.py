@@ -93,12 +93,15 @@ def list_capabilities(*, allow_fake: bool | None = None) -> list[TargetCapabilit
             reason_code=None if rag_ok else (rag_code or "project_dependency_missing"),
         )
     )
+    caps.append(
+        TargetCapability(
+            target_type=EvaluationTargetType.extraction.value,
+            available=llm_ok,
+            reason=None if llm_ok else "LLM provider not configured",
+            reason_code=None if llm_ok else (llm_code or "provider_not_configured"),
+        )
+    )
     for t, reason, code in (
-        (
-            EvaluationTargetType.extraction.value,
-            "extraction case-level evaluation adapter is not wired to formal service",
-            "service_not_wired",
-        ),
         (
             EvaluationTargetType.matching.value,
             "matching case-level evaluation adapter is not wired to formal service",

@@ -31,6 +31,25 @@ REASON_BASE_MISMATCH = "base_model_mismatch"
 REASON_BASE_UNVERIFIED = "base_model_unverified"
 REASON_RANK_EXCEEDED = "lora_rank_exceeded"
 REASON_UNKNOWN_MODEL = "unknown_model_id"
+REASON_CAPABILITY = "capability_unsupported"
+
+# Model capability ids (only register what is implemented and truthful).
+CAP_GROUNDED_QA = "grounded_qa"
+CAP_STRUCTURED_EXTRACTION = "structured_extraction"
+CAP_COMPLIANCE_ANALYSIS = "compliance_analysis"
+
+BASE_CAPABILITIES: tuple[str, ...] = (CAP_GROUNDED_QA, CAP_STRUCTURED_EXTRACTION)
+# Course LoRA SFT is clause JSON — not grounded [S1] Ask, not rule Compliance.
+COURSE_LORA_CAPABILITIES: tuple[str, ...] = (CAP_STRUCTURED_EXTRACTION,)
+
+
+def model_capabilities(model_id: str, model_type: ModelType | None) -> list[str]:
+    if model_id == BASE_MODEL_ID or model_type == "base":
+        return list(BASE_CAPABILITIES)
+    if model_id == COURSE_LORA_MODEL_ID or model_type == "lora":
+        # Smoke LoRA shares structured_extraction only.
+        return list(COURSE_LORA_CAPABILITIES)
+    return []
 
 
 def repo_root() -> Path:
@@ -262,6 +281,7 @@ class ModelStatusView:
     configured_base_model: str | None = None
     adapter_base_model: str | None = None
     last_probe_at: str | None = None
+    capabilities: list[str] | None = None
 
 
 @dataclass
@@ -276,6 +296,7 @@ class ModelResolution:
     fallback_used: bool
     reason_codes: list[str]
     display_name: str | None = None
+    capabilities: list[str] | None = None
 
     def public_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -308,6 +329,7 @@ def _base_status(
         configured_base_model=public_model_label(configured_base_for_compare()),
         adapter_base_model=None,
         last_probe_at=probed_at,
+        capabilities=model_capabilities(BASE_MODEL_ID, "base"),
     )
 
 
@@ -358,6 +380,7 @@ def _lora_status_from_record(
         configured_base_model=validation["configured_base_model"],
         adapter_base_model=validation["adapter_base_model"],
         last_probe_at=probed_at,
+        capabilities=model_capabilities(model_id, "lora"),
     )
 
 
@@ -388,9 +411,14 @@ def resolve_model_selection(
     *,
     allow_fallback: bool = False,
     probe: bool = True,
+    required_capability: str | None = None,
 ) -> ModelResolution:
     """Map public model_id → served name. Never silently substitutes LoRA with Base
-    unless allow_fallback=True (and then records fallback_used)."""
+    unless allow_fallback=True (and then records fallback_used).
+
+    When ``required_capability`` is set, reject models that do not advertise it
+    (e.g. Course LoRA must not be used for grounded_qa).
+    """
     requested = (model_id or BASE_MODEL_ID).strip() or BASE_MODEL_ID
 
     statuses = {m.model_id: m for m in list_model_statuses(probe=probe)}
@@ -408,6 +436,23 @@ def resolve_model_selection(
             train_track=None,
             fallback_used=False,
             reason_codes=[REASON_UNKNOWN_MODEL],
+            capabilities=[],
+        )
+
+    caps = list(status.capabilities or model_capabilities(status.model_id, status.model_type))
+    if required_capability and required_capability not in caps:
+        return ModelResolution(
+            available=False,
+            requested_model_id=requested,
+            resolved_model_id=status.model_id,
+            served_model_name=status.served_model_name,
+            model_type=status.model_type,
+            adapter_version=status.version,
+            train_track=status.train_track,
+            fallback_used=False,
+            reason_codes=[REASON_CAPABILITY],
+            display_name=status.display_name,
+            capabilities=caps,
         )
 
     if status.served and status.served_model_name:
@@ -422,12 +467,30 @@ def resolve_model_selection(
             fallback_used=False,
             reason_codes=[],
             display_name=status.display_name,
+            capabilities=caps,
         )
 
     reasons = list(status.reason_codes) or [REASON_NOT_SERVED]
     if allow_fallback and status.model_type == "lora":
         base = statuses.get(BASE_MODEL_ID)
         if base and base.served and base.served_model_name:
+            base_caps = list(
+                base.capabilities or model_capabilities(base.model_id, base.model_type)
+            )
+            if required_capability and required_capability not in base_caps:
+                return ModelResolution(
+                    available=False,
+                    requested_model_id=requested,
+                    resolved_model_id=status.model_id,
+                    served_model_name=status.served_model_name,
+                    model_type=status.model_type,
+                    adapter_version=status.version,
+                    train_track=status.train_track,
+                    fallback_used=False,
+                    reason_codes=[REASON_CAPABILITY, *reasons],
+                    display_name=status.display_name,
+                    capabilities=caps,
+                )
             return ModelResolution(
                 available=True,
                 requested_model_id=requested,
@@ -439,6 +502,7 @@ def resolve_model_selection(
                 fallback_used=True,
                 reason_codes=reasons,
                 display_name=base.display_name,
+                capabilities=base_caps,
             )
 
     return ModelResolution(
@@ -452,6 +516,7 @@ def resolve_model_selection(
         fallback_used=False,
         reason_codes=reasons,
         display_name=status.display_name,
+        capabilities=caps,
     )
 
 
@@ -478,6 +543,7 @@ def public_models_payload(*, probe: bool = True) -> dict[str, Any]:
                 "configured_base_model": m.configured_base_model,
                 "adapter_base_model": m.adapter_base_model,
                 "last_probe_at": m.last_probe_at,
+                "capabilities": m.capabilities or model_capabilities(m.model_id, m.model_type),
                 "notes": m.notes,
                 "status_label": (
                     "online"

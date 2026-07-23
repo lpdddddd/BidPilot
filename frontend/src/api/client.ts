@@ -76,6 +76,7 @@ export type ModelCatalogItem = {
   configured_base_model?: string | null;
   adapter_base_model?: string | null;
   last_probe_at?: string | null;
+  capabilities?: string[];
   notes: string | null;
   status_label: ModelCatalogStatusLabel;
 };
@@ -286,6 +287,54 @@ export async function startRequirementExtraction(
     `/api/v1/projects/${projectId}/requirements/extractions`,
     payload,
     { timeout: 60000 },
+  );
+  return data;
+}
+
+export type StructuredClauseTaskType =
+  | "requirement_classify"
+  | "qualification_extract"
+  | "scoring_extract"
+  | "risk_detect"
+  | "project_info_extract";
+
+export type StructuredClauseRequest = {
+  clause_text: string;
+  task_type?: StructuredClauseTaskType;
+  model_id?: string;
+  allow_base_fallback?: boolean;
+  temperature?: number;
+  max_tokens?: number;
+};
+
+export type StructuredClauseResponse = {
+  task_type: string;
+  clause_text: string;
+  raw_output: string;
+  parsed: Record<string, unknown> | null;
+  schema_valid: boolean;
+  required_field_coverage: number;
+  missing_fields: string[];
+  parse_error: string | null;
+  requested_model_id: string;
+  resolved_model_id: string | null;
+  served_model_name: string | null;
+  model_type: string | null;
+  adapter_version: string | null;
+  dataset_version: string;
+  fallback_used: boolean;
+  latency_ms: number;
+  capability: string;
+};
+
+export async function analyzeStructuredClause(
+  projectId: string,
+  payload: StructuredClauseRequest,
+): Promise<StructuredClauseResponse> {
+  const { data } = await http.post<StructuredClauseResponse>(
+    `/api/v1/projects/${projectId}/requirements/structured-analyses`,
+    payload,
+    { timeout: 180000 },
   );
   return data;
 }

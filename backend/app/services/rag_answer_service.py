@@ -35,7 +35,7 @@ from app.services.llm_client import (
     LlmUnavailableError,
     get_llm_client,
 )
-from app.services.model_serving import resolve_model_selection
+from app.services.model_serving import CAP_GROUNDED_QA, resolve_model_selection
 from app.services.retrieval import RetrievalService
 
 logger = logging.getLogger("bidpilot.rag")
@@ -270,9 +270,21 @@ class RagAnswerService:
             request.model_id,
             allow_fallback=bool(request.allow_base_fallback),
             probe=True,
+            required_capability=CAP_GROUNDED_QA,
         )
         if not resolution.available or not resolution.served_model_name:
-            codes = ",".join(resolution.reason_codes) or "model_not_served"
+            codes = resolution.reason_codes or ["model_not_served"]
+            if "capability_unsupported" in codes:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={
+                        "message": "该模型用于结构化需求抽取，不支持带来源问答",
+                        "reason_code": "capability_unsupported",
+                        "reason_codes": codes,
+                        "requested_model_id": resolution.requested_model_id,
+                        "hint": "请改用 Base，或在「要求」页使用条款结构化分析",
+                    },
+                )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail={
@@ -282,7 +294,7 @@ class RagAnswerService:
                     "hint": (
                         "模型尚未启动在线服务"
                         if "model_not_served" in resolution.reason_codes
-                        else codes
+                        else ",".join(codes)
                     ),
                 },
             )

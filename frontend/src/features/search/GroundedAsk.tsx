@@ -19,10 +19,11 @@ import { ApiError } from "../../api/http";
 import type { AskResponse, CitationItem, RagRetrievalTrace } from "../../types/api";
 import {
   BASE_MODEL_ID,
+  CAP_GROUNDED_QA,
   formatAskGenerationModelLine,
+  modelHasCapability,
   modelSelectLabel,
   pickBaseModel,
-  pickCourseLora,
 } from "../models/modelStatus";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -215,36 +216,36 @@ export default function GroundedAsk({
   );
 
   const baseModel = modelsQuery.data ? pickBaseModel(modelsQuery.data.items) : undefined;
-  const loraModel = modelsQuery.data ? pickCourseLora(modelsQuery.data.items) : undefined;
+  const groundedModels = (modelsQuery.data?.items ?? []).filter((m) =>
+    modelHasCapability(m, CAP_GROUNDED_QA),
+  );
   const selectedModel =
-    modelsQuery.data?.items.find((m) => m.model_id === modelId) ?? baseModel;
-  const loraServed = Boolean(loraModel?.served);
+    groundedModels.find((m) => m.model_id === modelId) ?? baseModel;
   const modelOptions = useMemo(() => {
-    const opts: { value: string; label: string; disabled?: boolean }[] = [];
-    if (baseModel) {
-      opts.push({
-        value: baseModel.model_id,
-        label: modelSelectLabel(baseModel),
-        disabled: !baseModel.served,
-      });
-    } else {
-      opts.push({ value: BASE_MODEL_ID, label: "Qwen3-8B Base" });
+    if (!groundedModels.length) {
+      return [{ value: BASE_MODEL_ID, label: "Qwen3-8B Base", disabled: false }];
     }
-    if (loraModel) {
-      opts.push({
-        value: loraModel.model_id,
-        label: modelSelectLabel(loraModel),
-        disabled: !loraModel.served,
-      });
-    }
-    return opts;
-  }, [baseModel, loraModel]);
+    return groundedModels.map((m) => ({
+      value: m.model_id,
+      label: modelSelectLabel(m),
+      disabled: !m.served,
+    }));
+  }, [groundedModels]);
 
   useEffect(() => {
-    if (loraModel && modelId === loraModel.model_id && !loraModel.served) {
+    if (selectedModel && !modelHasCapability(selectedModel, CAP_GROUNDED_QA)) {
       setModelId(baseModel?.model_id || modelsQuery.data?.default_model_id || BASE_MODEL_ID);
     }
-  }, [loraModel, baseModel, modelId, modelsQuery.data?.default_model_id]);
+  }, [selectedModel, baseModel, modelsQuery.data?.default_model_id]);
+
+  useEffect(() => {
+    const incompatible = modelsQuery.data?.items.find(
+      (m) => m.model_id === modelId && !modelHasCapability(m, CAP_GROUNDED_QA),
+    );
+    if (incompatible) {
+      setModelId(baseModel?.model_id || modelsQuery.data?.default_model_id || BASE_MODEL_ID);
+    }
+  }, [modelId, modelsQuery.data, baseModel]);
 
   useEffect(() => {
     return () => {
@@ -474,11 +475,9 @@ export default function GroundedAsk({
           <span className="bp-pill">Citations Required</span>
         </div>
       </div>
-      {loraModel && !loraServed && (
-        <Typography.Text type="secondary" data-testid="ask-lora-unserved-hint" style={{ display: "block", marginBottom: 8 }}>
-          Course LoRA 已注册但未在线；请用 Base，或启动带 --enable-lora 的 vLLM。禁用选项说明：模型尚未启动在线服务。
-        </Typography.Text>
-      )}
+      <Typography.Text type="secondary" data-testid="ask-capability-hint" style={{ display: "block", marginBottom: 8 }}>
+        带来源问答仅支持具备 grounded_qa 能力的模型（当前为 Base）。Course LoRA 用于「要求」页的条款结构化分析，不在此可选。
+      </Typography.Text>
       {selectedModel && !selectedModel.served && selectedModel.model_type === "base" && (
         <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
           基座模型当前未在线；请先启动 ./scripts/serve_qwen3_vllm.sh。

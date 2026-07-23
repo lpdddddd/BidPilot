@@ -404,6 +404,153 @@ class AgentPipelineAdapter:
             return TargetResult(ok=False, error_summary=f"agent_failed:{type(exc).__name__}")
 
 
+class StructuredExtractionAdapter:
+    """Case-level structured clause analysis using Course LoRA SFT protocol.
+
+    Uses the same system/user prompts and required JSON keys as training.
+    """
+
+    target_type = "extraction"
+
+    def __init__(self, *, db=None, config: dict[str, Any] | None = None):
+        self.db = db
+        self.config = config or {}
+
+    def capability(self) -> TargetCapability:
+        from app.services.model_serving import CAP_STRUCTURED_EXTRACTION, resolve_model_selection
+
+        model_id = self.config.get("model_id")
+        try:
+            from app.core.config import get_settings
+
+            if not get_settings().llm_enabled:
+                return TargetCapability(
+                    target_type=self.target_type,
+                    available=False,
+                    reason="LLM provider not configured",
+                    reason_code="provider_not_configured",
+                )
+        except Exception:  # noqa: BLE001
+            return TargetCapability(
+                target_type=self.target_type,
+                available=False,
+                reason="settings unavailable",
+                reason_code="settings_unavailable",
+            )
+        if model_id:
+            resolution = resolve_model_selection(
+                str(model_id),
+                allow_fallback=False,
+                probe=True,
+                required_capability=CAP_STRUCTURED_EXTRACTION,
+            )
+            if not resolution.available:
+                return TargetCapability(
+                    target_type=self.target_type,
+                    available=False,
+                    reason="模型尚未启动在线服务",
+                    reason_code=(
+                        resolution.reason_codes[0]
+                        if resolution.reason_codes
+                        else "model_not_served"
+                    ),
+                )
+        return TargetCapability(target_type=self.target_type, available=True)
+
+    def run_case(
+        self, target_input: TargetCaseInput, context: TargetExecutionContext
+    ) -> TargetResult:
+        assert_no_private_reference(target_input, context)
+        from app.services.structured_clause import TASK_SPECS, StructuredClauseService
+
+        task_input = target_input.task_input or {}
+        clause = str(
+            task_input.get("clause_text")
+            or task_input.get("text")
+            or task_input.get("original_text")
+            or ""
+        ).strip()
+        if not clause:
+            return TargetResult(ok=False, error_summary="missing_clause_text")
+
+        task_type = str(
+            self.config.get("task_type")
+            or task_input.get("task_type")
+            or task_input.get("sft_task_type")
+            or "requirement_classify"
+        )
+        if task_type not in TASK_SPECS:
+            # Map legacy evaluation "extraction" samples to qualification_extract
+            # when category hints qualification; else classify.
+            cat = str(task_input.get("category") or "").lower()
+            if "qualif" in cat:
+                task_type = "qualification_extract"
+            elif "risk" in cat:
+                task_type = "risk_detect"
+            else:
+                task_type = "requirement_classify"
+
+        model_id = self.config.get("model_id") or context.target_config.get("model_id")
+        try:
+            result = StructuredClauseService().analyze(
+                clause_text=clause,
+                task_type=task_type,
+                model_id=str(model_id) if model_id else None,
+                allow_base_fallback=False,
+                temperature=float(self.config.get("temperature") or 0.1),
+                max_tokens=int(self.config.get("max_tokens") or 512),
+            )
+        except Exception as exc:  # noqa: BLE001
+            detail = getattr(exc, "detail", None)
+            if isinstance(detail, dict) and detail.get("reason_code") in {
+                "model_not_served",
+                "capability_unsupported",
+                "adapter_missing",
+                "base_model_mismatch",
+            }:
+                return TargetResult(
+                    ok=False,
+                    unavailable=True,
+                    error_summary=str(detail.get("message") or detail.get("reason_code")),
+                )
+            return TargetResult(ok=False, error_summary=f"structured_failed:{type(exc).__name__}")
+
+        output = {
+            **(result.parsed or {}),
+            "schema_valid": result.schema_valid,
+            "required_field_coverage": result.required_field_coverage,
+            "parse_error": result.parse_error,
+            "task_type": result.task_type,
+            "requested_model_id": result.requested_model_id,
+            "resolved_model_id": result.resolved_model_id,
+            "served_model_name": result.served_model_name,
+            "model_type": result.model_type,
+            "adapter_version": result.adapter_version,
+            "dataset_version": result.dataset_version,
+            "fallback_used": result.fallback_used,
+            "capability": result.capability,
+            "raw_output_preview": (result.raw_output or "")[:500],
+        }
+        return TargetResult(
+            ok=result.schema_valid,
+            output=output,
+            citations=[],
+            retrieved_chunk_ids=[],
+            duration_ms=int(result.latency_ms),
+            metadata={
+                "model": {
+                    "requested_model_id": result.requested_model_id,
+                    "resolved_model_id": result.resolved_model_id,
+                    "served_model_name": result.served_model_name,
+                    "model_type": result.model_type,
+                    "adapter_version": result.adapter_version,
+                    "capability": result.capability,
+                    "fallback_used": result.fallback_used,
+                }
+            },
+        )
+
+
 def build_adapter(target_type: str, *, config: dict[str, Any] | None = None, db=None):
     config = config or {}
     if target_type == "compliance":
@@ -412,9 +559,9 @@ def build_adapter(target_type: str, *, config: dict[str, Any] | None = None, db=
         return RagServiceAdapter(db=db, config=config)
     if target_type == "agent_pipeline":
         return AgentPipelineAdapter(db=db, config=config)
-    if target_type in {"extraction", "matching", "drafting"}:
-        # Formal services operate on project documents / match runs, not standalone
-        # evaluation case text. Keep unavailable until a case-level entry exists.
+    if target_type == "extraction":
+        return StructuredExtractionAdapter(db=db, config=config)
+    if target_type in {"matching", "drafting"}:
         return UnwiredLlmTarget(
             target_type,
             reason=f"{target_type} case-level evaluation adapter is not wired to formal service",

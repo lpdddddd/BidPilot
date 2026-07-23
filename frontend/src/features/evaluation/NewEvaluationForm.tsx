@@ -45,7 +45,7 @@ const DEFAULT_FAMILIES = [
   "agent",
 ];
 
-const MODEL_SELECT_TARGETS = new Set(["rag", "agent_pipeline"]);
+const MODEL_SELECT_TARGETS = new Set(["rag", "agent_pipeline", "extraction"]);
 
 export default function NewEvaluationForm({
   suites,

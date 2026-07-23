@@ -4,6 +4,7 @@ import {
   Button,
   Drawer,
   Empty,
+  Input,
   Modal,
   Select,
   Skeleton,
@@ -20,10 +21,13 @@ import {
 } from "@ant-design/icons";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  analyzeStructuredClause,
   getRequirement,
   getRequirementExtractionRun,
+  listModels,
   listRequirements,
   startRequirementExtraction,
+  type StructuredClauseResponse,
 } from "../../api/client";
 import type {
   ExtractionRun,
@@ -32,6 +36,14 @@ import type {
   ReviewStatus,
   RiskLevel,
 } from "../../types/api";
+import {
+  BASE_MODEL_ID,
+  CAP_STRUCTURED_EXTRACTION,
+  modelOnlineStatusLabel,
+  modelSelectLabel,
+  modelsForCapability,
+  pickCourseLora,
+} from "../models/modelStatus";
 
 const EXTRACTION_DOC_TYPES = ["tender", "announcement", "amendment", "contract"] as const;
 
@@ -358,6 +370,44 @@ export default function RequirementsWorkspace({
   const [filters, setFilters] = useState<Filters>({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [clauseText, setClauseText] = useState(
+    "（3）采购需求中标注“▲”号条款为重要技术参数，但不作为无效响应条款。",
+  );
+  const [structTask, setStructTask] = useState<string>("requirement_classify");
+  const [structModelId, setStructModelId] = useState<string>(BASE_MODEL_ID);
+  const [structResult, setStructResult] = useState<StructuredClauseResponse | null>(null);
+
+  const modelsQuery = useQuery({
+    queryKey: ["models"],
+    queryFn: listModels,
+    retry: 0,
+  });
+  const structuredModels = modelsForCapability(
+    modelsQuery.data?.items ?? [],
+    CAP_STRUCTURED_EXTRACTION,
+  );
+  const structLora = pickCourseLora(structuredModels);
+  const structModelOptions = structuredModels.map((m) => ({
+    value: m.model_id,
+    label: `${modelSelectLabel(m)} · ${modelOnlineStatusLabel(m)}`,
+    disabled: !m.served,
+  }));
+
+  const structMutation = useMutation({
+    mutationFn: () =>
+      analyzeStructuredClause(projectId, {
+        clause_text: clauseText,
+        task_type: structTask as
+          | "requirement_classify"
+          | "qualification_extract"
+          | "scoring_extract"
+          | "risk_detect"
+          | "project_info_extract",
+        model_id: structModelId,
+        allow_base_fallback: false,
+      }),
+    onSuccess: (data) => setStructResult(data),
+  });
 
   const runQuery = useQuery({
     queryKey: ["requirement-extraction-run", projectId, runId],
@@ -648,6 +698,97 @@ export default function RequirementsWorkspace({
 
   return (
     <div className="bp-req-workspace">
+      <div
+        className="bp-panel"
+        data-testid="structured-clause-panel"
+        style={{ padding: 16, marginBottom: 16 }}
+      >
+        <Typography.Title level={5} style={{ marginTop: 0 }}>
+          条款结构化分析（Course LoRA 协议）
+        </Typography.Title>
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          复用训练时的 system/user prompt 与 JSON schema（非带来源问答、无 [S1]）。可选 Base 或
+          Course LoRA；未 served 的模型不可选。
+        </Typography.Paragraph>
+        <Space wrap style={{ marginBottom: 8 }}>
+          <Select
+            data-testid="struct-model-select"
+            style={{ minWidth: 280 }}
+            value={structModelId}
+            options={structModelOptions}
+            onChange={setStructModelId}
+            loading={modelsQuery.isLoading}
+          />
+          <Select
+            data-testid="struct-task-select"
+            style={{ minWidth: 200 }}
+            value={structTask}
+            onChange={setStructTask}
+            options={[
+              { value: "requirement_classify", label: "requirement_classify" },
+              { value: "qualification_extract", label: "qualification_extract" },
+              { value: "risk_detect", label: "risk_detect" },
+              { value: "scoring_extract", label: "scoring_extract" },
+              { value: "project_info_extract", label: "project_info_extract" },
+            ]}
+          />
+          <Button
+            type="primary"
+            data-testid="struct-analyze-btn"
+            loading={structMutation.isPending}
+            disabled={!clauseText.trim() || !structuredModels.find((m) => m.model_id === structModelId)?.served}
+            onClick={() => structMutation.mutate()}
+          >
+            分析条款
+          </Button>
+        </Space>
+        {structLora && !structLora.served && (
+          <Typography.Text type="secondary" data-testid="struct-lora-unserved" style={{ display: "block", marginBottom: 8 }}>
+            Course LoRA 当前未在线（{modelOnlineStatusLabel(structLora)}）。请先启动带 --enable-lora 的
+            vLLM。
+          </Typography.Text>
+        )}
+        {structLora?.reason_codes?.includes("base_model_mismatch") && (
+          <Alert
+            type="error"
+            showIcon
+            style={{ marginBottom: 8 }}
+            message="微调权重与基座模型不匹配"
+          />
+        )}
+        <Input.TextArea
+          data-testid="struct-clause-input"
+          rows={3}
+          value={clauseText}
+          onChange={(e) => setClauseText(e.target.value)}
+          placeholder="粘贴招标条款原文"
+        />
+        {structMutation.isError && (
+          <Alert
+            style={{ marginTop: 8 }}
+            type="error"
+            showIcon
+            message="结构化分析失败"
+            description={(structMutation.error as Error).message}
+          />
+        )}
+        {structResult && (
+          <div data-testid="struct-result" style={{ marginTop: 12 }}>
+            <Typography.Text data-testid="struct-model-meta">
+              requested={structResult.requested_model_id} · resolved=
+              {structResult.resolved_model_id} · served={structResult.served_model_name} · type=
+              {structResult.model_type} · adapter={structResult.adapter_version} · fallback=
+              {String(structResult.fallback_used)} · latency=
+              {structResult.latency_ms.toFixed(0)}ms · schema_valid=
+              {String(structResult.schema_valid)}
+            </Typography.Text>
+            <pre className="bp-code-block" style={{ marginTop: 8, maxHeight: 240, overflow: "auto" }}>
+              {JSON.stringify(structResult.parsed ?? { parse_error: structResult.parse_error }, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
+
       <div className="bp-req-toolbar">
         <div>
           <h2 className="bp-section-title" style={{ marginBottom: 4 }}>

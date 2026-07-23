@@ -159,6 +159,7 @@ export function parseEvaluationTab(raw: string | null): EvaluationTab {
 export const EVAL_REASON_CODE_LABELS: Record<string, string> = {
   service_not_wired: "当前版本暂未开放",
   model_not_served: "模型尚未启动在线服务",
+  capability_unsupported: "该模型不支持当前功能",
   adapter_missing: "微调权重尚未就绪",
   adapter_incomplete: "微调权重不完整",
   base_model_mismatch: "微调权重与基座模型不匹配",
@@ -173,7 +174,7 @@ export const EVAL_REASON_CODE_LABELS: Record<string, string> = {
 };
 
 const RAW_REASON_CODE_RE =
-  /^(service_not_wired|provider_not_configured|project_dependency_missing|fake_disabled|settings_unavailable|unknown_target|unavailable|model_not_served|adapter_missing|adapter_incomplete|base_model_mismatch|base_model_unverified|lora_rank_exceeded)\b/i;
+  /^(service_not_wired|provider_not_configured|project_dependency_missing|fake_disabled|settings_unavailable|unknown_target|unavailable|model_not_served|adapter_missing|adapter_incomplete|base_model_mismatch|base_model_unverified|lora_rank_exceeded|capability_unsupported)\b/i;
 
 /** Exception-looking fragments that must never appear in UI copy. */
 const EXCEPTION_CLASS_RE =

@@ -5,9 +5,18 @@ import type { ModelCatalogItem } from "../../api/client";
 export const BASE_MODEL_ID = "qwen3-8b-base";
 export const COURSE_LORA_MODEL_ID = "qwen3-8b-lora-course";
 
+export const CAP_GROUNDED_QA = "grounded_qa";
+export const CAP_STRUCTURED_EXTRACTION = "structured_extraction";
+
 export type ModelStatusFields = Pick<
   ModelCatalogItem,
-  "served" | "adapter_exists" | "model_type" | "registered" | "display_name" | "reason_codes"
+  | "served"
+  | "adapter_exists"
+  | "model_type"
+  | "registered"
+  | "display_name"
+  | "reason_codes"
+  | "capabilities"
 >;
 
 /**
@@ -32,6 +41,11 @@ export function modelOnlineStatusLabel(item: ModelStatusFields): string {
   return "当前未启动在线服务";
 }
 
+export function modelHasCapability(item: ModelCatalogItem, capability: string): boolean {
+  const caps = item.capabilities || [];
+  return caps.includes(capability);
+}
+
 export function pickBaseModel(items: ModelCatalogItem[]): ModelCatalogItem | undefined {
   return items.find((m) => m.model_type === "base") ?? items.find((m) => m.model_id === BASE_MODEL_ID);
 }
@@ -42,6 +56,13 @@ export function pickCourseLora(items: ModelCatalogItem[]): ModelCatalogItem | un
     items.find((m) => m.model_type === "lora" && m.train_track === "course_pilot") ??
     items.find((m) => m.model_type === "lora")
   );
+}
+
+export function modelsForCapability(
+  items: ModelCatalogItem[],
+  capability: string,
+): ModelCatalogItem[] {
+  return items.filter((m) => modelHasCapability(m, capability));
 }
 
 export function modelSelectLabel(item: ModelCatalogItem): string {
