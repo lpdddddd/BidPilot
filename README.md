@@ -196,13 +196,21 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
     export LLM_MODEL_PATH=/absolute/path/to/Qwen3-8B
     ./scripts/serve_qwen3_vllm.sh
     ```
-  - **Compose · Hub**：
+  - **Compose · Hub Base-only**（无 LoRA volume / flags）：
     ```bash
     docker compose --env-file .env \
       -f infra/docker-compose.yml -f infra/docker-compose.llm.yml \
       --profile llm up -d
     ```
-  - **Compose · 本地挂载**（`LLM_MODEL_PATH` 必须非空）：
+  - **Compose · Hub + Course LoRA**（叠加 overlay）：
+    ```bash
+    bash scripts/check_lora_adapter.sh
+    docker compose --env-file .env \
+      -f infra/docker-compose.yml -f infra/docker-compose.llm.yml \
+      -f infra/docker-compose.llm.lora.yml \
+      --profile llm up -d
+    ```
+  - **Compose · 本地挂载**（`LLM_MODEL_PATH` 必须非空；LoRA 仍加 `llm.lora.yml`）：
     ```bash
     export LLM_MODEL_PATH=/absolute/path/to/Qwen3-8B
     docker compose --env-file .env \
