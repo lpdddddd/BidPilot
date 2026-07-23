@@ -191,5 +191,6 @@ course-lora-eval:
 	$(PYTHON) $(ROOT_DIR)/training/llamafactory/scripts/eval_course_lora.py \
 		--adapter-path $(ROOT_DIR)/training/llamafactory/outputs/qwen3_8b_lora_course \
 		--device $${COURSE_EVAL_DEVICE:-cuda:0} \
-		--limit $${COURSE_EVAL_LIMIT:-12}
+		--limit $${COURSE_EVAL_LIMIT:-40} \
+		--seed $${COURSE_EVAL_SEED:-14}
 

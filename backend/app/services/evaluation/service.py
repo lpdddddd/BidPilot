@@ -266,6 +266,42 @@ class EvaluationService:
         if allow_fake and payload.get("fail_case_keys"):
             safe_config["fail_case_keys"] = list(payload["fail_case_keys"])
 
+        model_id = safe_config.get("model_id")
+        if model_id:
+            from app.services.evaluation.targets import get_target
+            from app.services.model_serving import resolve_model_selection
+
+            resolution = resolve_model_selection(str(model_id), allow_fallback=False, probe=True)
+            if not resolution.available:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "message": "模型尚未启动在线服务",
+                        "reason_code": (
+                            resolution.reason_codes[0]
+                            if resolution.reason_codes
+                            else "model_not_served"
+                        ),
+                        "requested_model_id": resolution.requested_model_id,
+                    },
+                )
+            safe_config["model_display_name"] = resolution.display_name
+            safe_config["model_type"] = resolution.model_type
+            safe_config["adapter_version"] = resolution.adapter_version
+            safe_config["served_model_name"] = resolution.served_model_name
+            safe_config["dataset_version"] = suite.dataset_hash
+            # Re-check adapter-level capability with model_id in config.
+            probe = get_target(tt.value, config=safe_config, db=self.db)
+            probe_cap = probe.capability()
+            if not probe_cap.available:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "message": probe_cap.reason or "模型尚未启动在线服务",
+                        "reason_code": probe_cap.reason_code or "model_not_served",
+                    },
+                )
+
         case_limit = payload.get("case_limit")
         if case_limit is None:
             case_limit = payload.get("limit")

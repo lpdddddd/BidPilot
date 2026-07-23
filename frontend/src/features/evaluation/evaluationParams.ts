@@ -158,6 +158,9 @@ export function parseEvaluationTab(raw: string | null): EvaluationTab {
 /** Map backend reason_code → user-facing Chinese. Never surface raw codes. */
 export const EVAL_REASON_CODE_LABELS: Record<string, string> = {
   service_not_wired: "当前版本暂未开放",
+  model_not_served: "模型尚未启动在线服务",
+  adapter_missing: "微调权重尚未就绪",
+  adapter_incomplete: "微调权重不完整",
   provider_not_configured: "模型服务未配置",
   project_dependency_missing: "检索依赖未就绪",
   fake_disabled: "当前版本暂未开放",
@@ -167,7 +170,7 @@ export const EVAL_REASON_CODE_LABELS: Record<string, string> = {
 };
 
 const RAW_REASON_CODE_RE =
-  /^(service_not_wired|provider_not_configured|project_dependency_missing|fake_disabled|settings_unavailable|unknown_target|unavailable)\b/i;
+  /^(service_not_wired|provider_not_configured|project_dependency_missing|fake_disabled|settings_unavailable|unknown_target|unavailable|model_not_served|adapter_missing|adapter_incomplete)\b/i;
 
 /** Exception-looking fragments that must never appear in UI copy. */
 const EXCEPTION_CLASS_RE =

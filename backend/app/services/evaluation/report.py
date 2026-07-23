@@ -23,6 +23,7 @@ def serialize_json(report: dict[str, Any]) -> str:
 
 
 def serialize_markdown(report: dict[str, Any]) -> str:
+    model = report.get("model") or {}
     lines = [
         "# Evaluation Report",
         "",
@@ -34,6 +35,12 @@ def serialize_markdown(report: dict[str, Any]) -> str:
         f"- pass_rate: {report.get('pass_rate')}",
         f"- error_rate: {report.get('error_rate')}",
         f"- reference_coverage: {report.get('reference_coverage')}",
+        f"- model_id: `{model.get('model_id')}`",
+        f"- model_display_name: {model.get('model_display_name')}",
+        f"- model_type: {model.get('model_type')}",
+        f"- adapter_version: {model.get('adapter_version')}",
+        f"- served_model_name: `{model.get('served_model_name')}`",
+        f"- git_commit: `{model.get('git_commit')}`",
         "",
         "## Task family scores",
     ]
@@ -106,6 +113,16 @@ def build_report_dict(
             }
         )
     summary = dict(run.summary_json or {})
+    cfg = dict(run.target_config_snapshot or {})
+    model_meta = {
+        "model_id": cfg.get("model_id"),
+        "model_display_name": cfg.get("model_display_name"),
+        "model_type": cfg.get("model_type"),
+        "adapter_version": cfg.get("adapter_version"),
+        "dataset_version": cfg.get("dataset_version") or run.dataset_hash,
+        "git_commit": run.source_commit_sha,
+        "served_model_name": cfg.get("served_model_name"),
+    }
     return {
         "run_id": str(run.id),
         "status": run.status.value if hasattr(run.status, "value") else str(run.status),
@@ -115,6 +132,7 @@ def build_report_dict(
         if hasattr(run.target_type, "value")
         else str(run.target_type),
         "target_config_snapshot": run.target_config_snapshot,
+        "model": model_meta,
         "seed": run.seed,
         "source_commit_sha": run.source_commit_sha,
         "overall_score": run.overall_score,

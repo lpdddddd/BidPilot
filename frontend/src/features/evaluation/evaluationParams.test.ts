@@ -27,6 +27,13 @@ describe("evaluationParams", () => {
     expect(
       friendlyCapabilityReason({
         available: false,
+        reason_code: "model_not_served",
+        reason: "LoRA module not in /v1/models",
+      }),
+    ).toBe("模型尚未启动在线服务");
+    expect(
+      friendlyCapabilityReason({
+        available: false,
         reason_code: "provider_not_configured",
         reason: "LLM provider not configured",
       }),
@@ -45,6 +52,22 @@ describe("evaluationParams", () => {
         reason: "deterministic_fake is not available",
       }),
     ).toBe("当前版本暂未开放");
+    expect(
+      friendlyCapabilityReason({
+        available: false,
+        reason_code: "model_not_served",
+        reason: "model_not_served",
+      }),
+    ).toBe("模型尚未启动在线服务");
+    expect(
+      capabilityOptionLabel({
+        target_type: "rag",
+        available: false,
+        label: "RAG",
+        reason_code: "model_not_served",
+        reason: "model_not_served",
+      }),
+    ).toMatch(/不可用：模型尚未启动在线服务/);
     expect(
       capabilityOptionLabel({
         target_type: "extraction",

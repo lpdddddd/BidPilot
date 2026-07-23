@@ -76,6 +76,7 @@ datasets/fixtures/**
 !datasets/reports/training_readiness_report.json
 !datasets/reports/course_pilot_sft_report.json
 !datasets/reports/course_lora_eval_summary.json
+!datasets/reports/course_lora_eval_report.md
 !datasets/reports/artifact_consistency_report.json
 !datasets/reports/compliance_rule_offline_eval.json
 # Course-pilot review queue (CSV only)

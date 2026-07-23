@@ -83,7 +83,11 @@ class ComplianceServiceAdapter:
 
 
 class RagServiceAdapter:
-    """Calls formal RetrievalService using run project_id (never case source project)."""
+    """Calls formal RetrievalService using run project_id (never case source project).
+
+    When ``model_id`` is set in target_config, also runs grounded LLM answer via
+    RagAnswerService so Base vs Course LoRA can be compared.
+    """
 
     target_type = "rag"
 
@@ -96,14 +100,30 @@ class RagServiceAdapter:
             from app.services.embeddings import get_embedding_service
 
             get_embedding_service()
-            return TargetCapability(target_type=self.target_type, available=True)
         except Exception as exc:  # noqa: BLE001
             return TargetCapability(
                 target_type=self.target_type,
                 available=False,
-                reason=f"Embedding/retrieval stack not available: {type(exc).__name__}",
-                reason_code="project_dependency_missing",
+                reason="Embedding/retrieval stack not available",
+                reason_code=f"project_dependency_missing:{type(exc).__name__}",
             )
+        model_id = self.config.get("model_id")
+        if model_id:
+            from app.services.model_serving import resolve_model_selection
+
+            resolution = resolve_model_selection(str(model_id), allow_fallback=False, probe=True)
+            if not resolution.available:
+                return TargetCapability(
+                    target_type=self.target_type,
+                    available=False,
+                    reason="模型尚未启动在线服务",
+                    reason_code=(
+                        resolution.reason_codes[0]
+                        if resolution.reason_codes
+                        else "model_not_served"
+                    ),
+                )
+        return TargetCapability(target_type=self.target_type, available=True)
 
     def run_case(
         self, target_input: TargetCaseInput, context: TargetExecutionContext
@@ -122,6 +142,11 @@ class RagServiceAdapter:
         ).strip()
         if not question:
             return TargetResult(ok=False, error_summary="RAG case missing question")
+
+        model_id = self.config.get("model_id") or context.target_config.get("model_id")
+        if model_id:
+            return self._run_grounded_ask(question, context, str(model_id))
+
         try:
             from app.schemas.search import SearchRequest
             from app.services.retrieval import RetrievalService
@@ -177,6 +202,71 @@ class RagServiceAdapter:
             metadata={"project_id": str(context.project_id)},
         )
 
+    def _run_grounded_ask(
+        self, question: str, context: TargetExecutionContext, model_id: str
+    ) -> TargetResult:
+        from app.schemas.ask import AskRequest
+        from app.services.model_serving import resolve_model_selection
+        from app.services.rag_answer_service import RagAnswerService
+
+        resolution = resolve_model_selection(model_id, allow_fallback=False, probe=True)
+        if not resolution.available:
+            return TargetResult(
+                ok=False,
+                unavailable=True,
+                error_summary="模型尚未启动在线服务",
+                metadata={"reason_codes": resolution.reason_codes},
+            )
+        try:
+            top_k = int(self.config.get("top_k") or context.target_config.get("top_k") or 5)
+            resp = RagAnswerService(self.db).answer(
+                context.project_id,
+                AskRequest(question=question[:512], top_k=top_k, model_id=model_id, stream=False),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return TargetResult(ok=False, error_summary=f"rag_ask_failed:{type(exc).__name__}")
+
+        gt = resp.generation_trace
+        citations = [
+            {
+                "chunk_id": c.chunk_id,
+                "document_id": c.document_id,
+                "page": c.page_start,
+                "file_name": c.file_name,
+                "section": c.section,
+            }
+            for c in (resp.citations or [])
+        ]
+        chunk_ids = [str(c.chunk_id) for c in (resp.citations or []) if c.chunk_id]
+        output = {
+            "answer": resp.answer,
+            "answerable": resp.status == "answered",
+            "citations": citations,
+            "retrieved_chunk_ids": chunk_ids,
+            "status": resp.status,
+            "model": {
+                "requested_model_id": getattr(gt, "requested_model_id", None),
+                "resolved_model_id": getattr(gt, "resolved_model_id", None),
+                "served_model_name": (
+                    getattr(gt, "served_model_name", None) or (gt.model if gt else None)
+                ),
+                "model_type": getattr(gt, "model_type", None),
+                "adapter_version": getattr(gt, "adapter_version", None),
+                "fallback_used": bool(getattr(gt, "fallback_used", False)),
+                "display_name": resolution.display_name,
+            },
+        }
+        return TargetResult(
+            ok=True,
+            output=output,
+            citations=citations,
+            retrieved_chunk_ids=chunk_ids,
+            metadata={
+                "project_id": str(context.project_id),
+                "model": output["model"],
+            },
+        )
+
 
 class UnwiredLlmTarget:
     """LLM-family targets that are not yet case-level wired to formal services."""
@@ -221,6 +311,22 @@ class AgentPipelineAdapter:
                 reason="LLM provider not configured",
                 reason_code=code or "provider_not_configured",
             )
+        model_id = self.config.get("model_id")
+        if model_id:
+            from app.services.model_serving import resolve_model_selection
+
+            resolution = resolve_model_selection(str(model_id), allow_fallback=False, probe=True)
+            if not resolution.available:
+                return TargetCapability(
+                    target_type=self.target_type,
+                    available=False,
+                    reason="模型尚未启动在线服务",
+                    reason_code=(
+                        resolution.reason_codes[0]
+                        if resolution.reason_codes
+                        else "model_not_served"
+                    ),
+                )
         return TargetCapability(target_type=self.target_type, available=True)
 
     def run_case(
@@ -237,6 +343,32 @@ class AgentPipelineAdapter:
         try:
             from app.schemas.agent_run import AgentRunStartRequest
             from app.services.agent_run.service import AgentRunService
+            from app.services.llm_client import LlmClient
+            from app.services.model_serving import resolve_model_selection
+
+            model_id = self.config.get("model_id") or context.target_config.get("model_id")
+            llm = None
+            model_meta: dict[str, Any] = {}
+            if model_id:
+                resolution = resolve_model_selection(
+                    str(model_id), allow_fallback=False, probe=True
+                )
+                if not resolution.available or not resolution.served_model_name:
+                    return TargetResult(
+                        ok=False,
+                        unavailable=True,
+                        error_summary="模型尚未启动在线服务",
+                    )
+                llm = LlmClient(model=resolution.served_model_name)
+                model_meta = {
+                    "requested_model_id": resolution.requested_model_id,
+                    "resolved_model_id": resolution.resolved_model_id,
+                    "served_model_name": resolution.served_model_name,
+                    "model_type": resolution.model_type,
+                    "adapter_version": resolution.adapter_version,
+                    "fallback_used": False,
+                    "display_name": resolution.display_name,
+                }
 
             question = str(
                 (target_input.task_input or {}).get("question")
@@ -244,11 +376,14 @@ class AgentPipelineAdapter:
                 or (target_input.task_input or {}).get("text")
                 or target_input.case_key
             )
-            read = AgentRunService(self.db).start_run(
+            read = AgentRunService(self.db, llm=llm).start_run(
                 context.project_id,
                 AgentRunStartRequest(
                     user_request=question[:2000],
-                    metadata={"evaluation_case_key": target_input.case_key},
+                    metadata={
+                        "evaluation_case_key": target_input.case_key,
+                        **({"model": model_meta} if model_meta else {}),
+                    },
                 ),
                 execute=True,
             )
@@ -259,10 +394,11 @@ class AgentPipelineAdapter:
                     "agent_run_id": str(read.id),
                     "status": status,
                     "answer": getattr(read, "result_summary", None) or "",
+                    "model": model_meta or None,
                 },
                 citations=[],
                 retrieved_chunk_ids=[],
-                metadata={"agent_run_id": str(read.id)},
+                metadata={"agent_run_id": str(read.id), "model": model_meta or None},
             )
         except Exception as exc:  # noqa: BLE001
             return TargetResult(ok=False, error_summary=f"agent_failed:{type(exc).__name__}")

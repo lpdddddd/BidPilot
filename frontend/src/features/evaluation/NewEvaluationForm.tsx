@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -8,11 +8,19 @@ import {
   Space,
   Typography,
 } from "antd";
+import { useQuery } from "@tanstack/react-query";
+import { listModels } from "../../api/client";
 import type {
   EvaluationCapabilitiesResponse,
   EvaluationRunCreatePayload,
   EvaluationSuite,
 } from "../../types/api";
+import {
+  BASE_MODEL_ID,
+  modelSelectLabel,
+  pickBaseModel,
+  pickCourseLora,
+} from "../models/modelStatus";
 import {
   capabilityOptionLabel,
   evaluationTargetLabel,
@@ -37,6 +45,8 @@ const DEFAULT_FAMILIES = [
   "agent",
 ];
 
+const MODEL_SELECT_TARGETS = new Set(["rag", "agent_pipeline"]);
+
 export default function NewEvaluationForm({
   suites,
   capabilities,
@@ -53,7 +63,15 @@ export default function NewEvaluationForm({
   );
   const [seed, setSeed] = useState(42);
   const [caseLimit, setCaseLimit] = useState<number | null>(null);
+  const [modelId, setModelId] = useState<string>(BASE_MODEL_ID);
   const lockRef = useRef(false);
+
+  const modelsQuery = useQuery({
+    queryKey: ["models"],
+    queryFn: listModels,
+    retry: 0,
+    enabled: MODEL_SELECT_TARGETS.has(String(targetType ?? "")),
+  });
 
   useEffect(() => {
     if (!suiteId && suites[0]?.id) {
@@ -75,12 +93,56 @@ export default function NewEvaluationForm({
     : DEFAULT_FAMILIES;
   const profiles = capabilities?.profiles ?? [];
 
+  const showModelSelect = MODEL_SELECT_TARGETS.has(String(targetType ?? ""));
+  const baseModel = modelsQuery.data ? pickBaseModel(modelsQuery.data.items) : undefined;
+  const loraModel = modelsQuery.data ? pickCourseLora(modelsQuery.data.items) : undefined;
+  const selectedModel = useMemo(() => {
+    const items = modelsQuery.data?.items ?? [];
+    return items.find((m) => m.model_id === modelId) ?? baseModel;
+  }, [modelsQuery.data, modelId, baseModel]);
+
+  const modelOptions = useMemo(() => {
+    const opts: { value: string; label: string; disabled?: boolean }[] = [];
+    if (baseModel) {
+      opts.push({
+        value: baseModel.model_id,
+        label: modelSelectLabel(baseModel),
+        disabled: !baseModel.served,
+      });
+    } else {
+      opts.push({ value: BASE_MODEL_ID, label: "Qwen3-8B Base", disabled: true });
+    }
+    if (loraModel) {
+      opts.push({
+        value: loraModel.model_id,
+        label: modelSelectLabel(loraModel),
+        disabled: !loraModel.served,
+      });
+    }
+    return opts;
+  }, [baseModel, loraModel]);
+
+  useEffect(() => {
+    if (!showModelSelect) return;
+    if (selectedModel && !selectedModel.served) {
+      const fallback = baseModel?.served
+        ? baseModel.model_id
+        : modelsQuery.data?.default_model_id || BASE_MODEL_ID;
+      if (fallback !== modelId) setModelId(fallback);
+    }
+  }, [showModelSelect, selectedModel, baseModel, modelId, modelsQuery.data?.default_model_id]);
+
   const selectedCap = caps.find((c) => String(c.target_type) === targetType);
+  const modelReady = !showModelSelect || Boolean(selectedModel?.served);
   const canSubmit =
-    Boolean(suiteId && targetType && selectedCap?.available) && !submitting && !lockRef.current;
+    Boolean(suiteId && targetType && selectedCap?.available) &&
+    modelReady &&
+    !submitting &&
+    !lockRef.current;
 
   const handleSubmit = () => {
     if (!suiteId || !targetType || !selectedCap?.available) return;
+    if (showModelSelect && !selectedModel?.served) return;
     if (lockRef.current || submitting) return;
     lockRef.current = true;
     const key =
@@ -95,6 +157,9 @@ export default function NewEvaluationForm({
       evaluator_profile: profile || null,
       seed,
       case_limit: caseLimit,
+      ...(showModelSelect
+        ? { target_config: { model_id: modelId } }
+        : {}),
     };
     onSubmit(payload, key);
     // Unlock after a short debounce window; parent also gates on submitting.
@@ -107,7 +172,7 @@ export default function NewEvaluationForm({
     <div data-testid="eval-new-form" style={{ maxWidth: 640 }}>
       <Typography.Paragraph type="secondary">
         选择套件与目标后启动评测。暂未开放的目标会保持禁用并给出简要说明；不会在此展示 test
-        reference。
+        reference。RAG / Agent 可选择 Base 或 Course LoRA（须已在线）。
       </Typography.Paragraph>
 
       {error && (
@@ -185,6 +250,33 @@ export default function NewEvaluationForm({
           )}
         </Form.Item>
 
+        {showModelSelect && (
+          <Form.Item label="评测模型" required>
+            <Select
+              data-testid="eval-model-select"
+              value={modelId}
+              loading={modelsQuery.isLoading}
+              options={modelOptions}
+              onChange={setModelId}
+            />
+            {loraModel && !loraModel.served && (
+              <Typography.Text
+                type="secondary"
+                data-testid="eval-lora-unserved-hint"
+                style={{ display: "block", marginTop: 8 }}
+              >
+                模型尚未启动在线服务。请先用 Base，或启动带 --enable-lora 的 vLLM 后再选 Course
+                LoRA。
+              </Typography.Text>
+            )}
+            {showModelSelect && selectedModel && !selectedModel.served && (
+              <Typography.Text type="danger" style={{ display: "block", marginTop: 8 }}>
+                所选模型未在线，无法启动评测。
+              </Typography.Text>
+            )}
+          </Form.Item>
+        )}
+
         <Form.Item label="Evaluator Profile">
           <Select
             allowClear
@@ -243,6 +335,7 @@ export default function NewEvaluationForm({
           {targetType && (
             <Typography.Text type="secondary">
               目标：{evaluationTargetLabel(targetType)}
+              {showModelSelect && modelId ? ` · 模型 ${modelId}` : ""}
             </Typography.Text>
           )}
         </Space>
