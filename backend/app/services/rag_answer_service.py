@@ -290,9 +290,7 @@ class RagAnswerService:
             base_url=self.llm.base_url if isinstance(self.llm, LlmClient) else None,
             api_key=self.llm.api_key if isinstance(self.llm, LlmClient) else None,
             model=resolution.served_model_name,
-            timeout_seconds=(
-                self.llm.timeout_seconds if isinstance(self.llm, LlmClient) else None
-            ),
+            timeout_seconds=(self.llm.timeout_seconds if isinstance(self.llm, LlmClient) else None),
             enabled=self.llm.enabled if isinstance(self.llm, LlmClient) else None,
         )
         return client, resolution
