@@ -135,6 +135,8 @@ def engine(monkeypatch):
     monkeypatch.setattr("app.services.agent_run.sse.SESSION_FACTORY", TestSession)
     monkeypatch.setattr("app.services.agent_run.tasks.SESSION_FACTORY", TestSession)
     monkeypatch.setattr("app.services.evaluation.tasks.SESSION_FACTORY", TestSession)
+    # Evaluation runner workers open SessionLocal() per case — bind to test engine.
+    monkeypatch.setattr("app.services.evaluation.runner.SessionLocal", TestSession)
     yield eng
     eng.pool.dispose()
     with eng.begin() as conn:

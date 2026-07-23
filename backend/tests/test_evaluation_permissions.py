@@ -23,11 +23,19 @@ def test_cross_project_blocked(client: TestClient, db: Session):
     db.commit()
 
     created = client.post(
-        f"/api/v1/projects/{p1.id}/evaluation-runs?sync=true",
+        f"/api/v1/projects/{p1.id}/evaluation-runs",
         json={"target_type": "deterministic_fake", "fixture_path": FIXTURE, "seed": 1},
     )
-    assert created.status_code == 201
-    run_id = created.json()["id"]
+    # Public API must reject fixture_path
+    assert created.status_code == 422
+    from app.services.evaluation.service import EvaluationService
+
+    run, _ = EvaluationService(db).create_run(
+        p1.id,
+        {"target_type": "deterministic_fake", "fixture_path": FIXTURE, "seed": 1},
+        execute=True,
+    )
+    run_id = str(run.id)
     results = client.get(f"/api/v1/projects/{p1.id}/evaluation-runs/{run_id}/results").json()
     result_id = results["items"][0]["id"]
 

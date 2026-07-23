@@ -82,3 +82,6 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "postgres: integration tests requiring PostgreSQL",
+]
