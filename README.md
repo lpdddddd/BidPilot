@@ -11,7 +11,7 @@ BidPilot 面向招投标场景：帮助团队管理招标/企业文档，基于 
 | 需求抽取 / 材料匹配 / 人工审核 / 响应草稿 | 业务路径可用；**评测 target 未 case 级接线** |
 | 合规规则引擎 + Agent（Step/ToolCall 状态、SSE 时间线） | 可用 |
 | 评测中心（suite / run / case、对比、导出 JSON·CSV·MD） | 可用；reference 为 auto_reference，**human Gold=0** |
-| 领域微调 / LoRA（Step 13–14） | **course_pilot 可用**：QC→训练→评测→注册；**在线服务**须 vLLM `--enable-lora` 且 `served=true`（注册≠在线）；**非 human_gold** → [`docs/step13_lora.md`](docs/step13_lora.md)、[`docs/step14_lora.md`](docs/step14_lora.md) |
+| 领域微调 / LoRA（Step 13–14） | **course_pilot 可用**：QC→训练→评测→注册；**在线服务**须 vLLM `--enable-lora` 且 `served=true`（注册≠在线）；Compose LoRA 默认路径相对 `infra/` 解析到仓库 `training/llamafactory/outputs/qwen3_8b_lora_course`；Base↔Adapter 强校验；**非 human_gold** → [`docs/step13_lora.md`](docs/step13_lora.md)、[`docs/step14_lora.md`](docs/step14_lora.md) |
 
 **课程演示走查**（创建项目 → 上传样例 → 解析索引 → RAG → 合规/Agent → 评测对比导出）：[`docs/course_demo.md`](docs/course_demo.md)。
 
