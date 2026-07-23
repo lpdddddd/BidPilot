@@ -86,7 +86,14 @@ def claim_evaluation_run(
     return EvalClaimResult(outcome=EvalClaimOutcome.claimed, run=run, claim_token=token)
 
 
-def release_evaluation_claim(db: Session, run_id: UUID, *, claim_token: UUID | None = None) -> None:
+def release_evaluation_claim(
+    db: Session,
+    run_id: UUID,
+    *,
+    claim_token: UUID | None = None,
+    restore_status: EvaluationRunStatus | None = None,
+    safe_error_summary: str | None = None,
+) -> None:
     run = db.execute(
         select(EvaluationRun).where(EvaluationRun.id == run_id).with_for_update()
     ).scalar_one_or_none()
@@ -96,4 +103,8 @@ def release_evaluation_claim(db: Session, run_id: UUID, *, claim_token: UUID | N
         db.rollback()
         return
     run.execution_claim_token = None
+    if restore_status is not None:
+        run.status = restore_status
+    if safe_error_summary:
+        run.safe_error_summary = safe_error_summary[:500]
     db.commit()

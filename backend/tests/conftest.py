@@ -19,6 +19,10 @@ DEFAULT_PG = "postgresql+psycopg://bidpilot@127.0.0.1:5432/bidpilot_test"
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL") or os.getenv("DATABASE_URL_TEST") or DEFAULT_PG
 USE_POSTGRES = TEST_DATABASE_URL.startswith("postgresql")
 
+# Allow deterministic_fake in pytest / CI evaluation paths.
+os.environ.setdefault("EVALUATION_ALLOW_FAKE", "1")
+os.environ.setdefault("APP_ENV", "test")
+
 ENUM_TYPE_NAMES = [
     "project_status",
     "member_role",
@@ -127,9 +131,10 @@ def engine(monkeypatch):
     )
     _reset_schema(eng)
     TestSession = sessionmaker(bind=eng, autoflush=False, autocommit=False, expire_on_commit=False)
-    # SSE / background agent tasks must use the same test DB.
+    # SSE / background agent & evaluation tasks must use the same test DB.
     monkeypatch.setattr("app.services.agent_run.sse.SESSION_FACTORY", TestSession)
     monkeypatch.setattr("app.services.agent_run.tasks.SESSION_FACTORY", TestSession)
+    monkeypatch.setattr("app.services.evaluation.tasks.SESSION_FACTORY", TestSession)
     yield eng
     eng.pool.dispose()
     with eng.begin() as conn:

@@ -10,6 +10,31 @@ from typing import Any
 
 from app.services.evaluation.suite_loader import map_label_source_to_reference_kind
 
+# Keys that must never appear in target payloads (any nesting level).
+FORBIDDEN_TARGET_KEYS = frozenset(
+    {
+        "reference_output",
+        "expected_output",
+        "expected",
+        "gold_answer",
+        "gold",
+        "human_gold",
+        "rule_verdict",
+        "verdict_expected",
+        "citation_metadata",
+        "citation_chunk_ids",
+        "citation_page",
+        "citation_document_ids",
+        "has_evidence",
+        "scorer",
+        "scorer_fields",
+        "reference_kind",
+        "label_source",
+        "reference",
+        "references",
+    }
+)
+
 
 @dataclass
 class EvaluationCase:
@@ -32,19 +57,30 @@ class EvaluationCase:
     raw_meta: dict[str, Any] = field(default_factory=dict)
 
     def target_input(self) -> dict[str, Any]:
-        """Input payload for generation targets (reference stripped)."""
+        """Input payload for generation targets (private reference stripped).
+
+        Targets may receive case identity, task family, split, and the case
+        ``input`` blob plus non-gold project/document scope hints only.
+        """
         return {
             "case_key": self.case_key,
             "task_family": self.task_family,
             "split": self.split,
             "input": deepcopy(self.input_data),
-            # Document / chunk ids may appear in input; still no reference_output.
             "context_hints": {
                 "project_id": self.project_id,
                 "document_id": self.document_id,
-                "has_evidence": bool(self.evidence),
-                "citation_chunk_ids": list((self.citation_metadata or {}).get("chunk_ids") or []),
             },
+        }
+
+    def private_reference(self) -> dict[str, Any]:
+        """Evaluator-only reference bundle — never pass to targets."""
+        return {
+            "reference_kind": self.reference_kind,
+            "label_source": self.label_source,
+            "reference_output": deepcopy(self.reference_output),
+            "citation_metadata": deepcopy(self.citation_metadata),
+            "evidence": deepcopy(self.evidence),
         }
 
     def reference_summary(self, *, include_output: bool = False) -> dict[str, Any]:
@@ -53,6 +89,7 @@ class EvaluationCase:
             "reference_kind": self.reference_kind,
             "label_source": self.label_source,
             "has_reference_output": self.reference_output is not None,
+            "has_reference": self.reference_output is not None,
             "source_description": (
                 "auto_reference from Step 1 builder — not human_gold"
                 if self.reference_kind == "auto_reference"
@@ -164,19 +201,49 @@ def filter_cases(
     return cases
 
 
+def _walk_forbidden(obj: Any, *, path: str = "") -> str | None:
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            key_l = str(key).lower()
+            if key_l in FORBIDDEN_TARGET_KEYS or any(
+                tok in key_l
+                for tok in (
+                    "reference_output",
+                    "expected_output",
+                    "gold_answer",
+                    "human_gold",
+                    "rule_verdict",
+                    "citation_metadata",
+                    "citation_chunk",
+                )
+            ):
+                return f"{path}.{key}" if path else str(key)
+            found = _walk_forbidden(value, path=f"{path}.{key}" if path else str(key))
+            if found:
+                return found
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            found = _walk_forbidden(item, path=f"{path}[{i}]")
+            if found:
+                return found
+    return None
+
+
 def assert_no_reference_in_target_input(payload: dict[str, Any]) -> None:
-    """Raise if reference fields leaked into a target payload."""
-    forbidden = (
+    """Raise if private reference / gold fields leaked into a target payload."""
+    found = _walk_forbidden(payload)
+    if found:
+        raise ValueError(f"private reference field leaked to target at '{found}'")
+    # Also scan serialized form for sneaky string keys
+    blob = json.dumps(payload, ensure_ascii=False)
+    for key in (
         "reference_output",
         "expected_output",
         "gold_answer",
         "human_gold",
         "rule_verdict",
-    )
-    blob = json.dumps(payload, ensure_ascii=False)
-    for key in forbidden:
-        if key in payload:
-            raise ValueError(f"reference field '{key}' must not be passed to target")
-        # nested
+        "citation_metadata",
+        "citation_chunk_ids",
+    ):
         if f'"{key}"' in blob:
             raise ValueError(f"reference field '{key}' must not appear in target input JSON")

@@ -2,35 +2,63 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Response
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.models.enums import EvaluationRunStatus
 from app.schemas.evaluation import (
     EvaluationCapabilitiesResponse,
     EvaluationCaseResultRead,
+    EvaluationCompareResponse,
     EvaluationRunCreate,
     EvaluationRunRead,
     EvaluationSuiteRead,
+    PaginatedCaseResults,
+    PaginatedRuns,
+    PaginatedSuites,
 )
+from app.services.evaluation import tasks as evaluation_tasks
+from app.services.evaluation.claims import EvalClaimOutcome, release_evaluation_claim
 from app.services.evaluation.service import EvaluationService
 
 router = APIRouter()
 
 
-def _run_read(run) -> EvaluationRunRead:
-    data = EvaluationRunRead.model_validate(run)
-    # coerce enums to str already via from_attributes if needed
-    return data.model_copy(
-        update={
-            "status": run.status.value if hasattr(run.status, "value") else str(run.status),
-            "target_type": run.target_type.value
-            if hasattr(run.target_type, "value")
-            else str(run.target_type),
-        }
-    )
+def _schedule_or_release(
+    background_tasks: BackgroundTasks,
+    db: Session,
+    *,
+    run_id: UUID,
+    claim_token: UUID | None,
+    restore_status: EvaluationRunStatus,
+) -> None:
+    if claim_token is None:
+        return
+    try:
+        background_tasks.add_task(evaluation_tasks.run_evaluation, run_id, claim_token)
+    except Exception:
+        release_evaluation_claim(
+            db,
+            run_id,
+            claim_token=claim_token,
+            restore_status=restore_status,
+            safe_error_summary="failed to schedule evaluation background task",
+        )
+        raise
+
+
+def _page_from_limit_offset(
+    limit: int | None, offset: int | None, page: int, page_size: int
+) -> tuple[int, int]:
+    if limit is not None:
+        page_size = limit
+    if offset is not None and page_size > 0:
+        page = (offset // page_size) + 1
+    return max(1, page), max(1, min(page_size, 200))
 
 
 @router.get("/{project_id}/evaluation-capabilities", response_model=EvaluationCapabilitiesResponse)
@@ -38,9 +66,20 @@ def evaluation_capabilities(project_id: UUID, db: Session = Depends(get_db)):
     return EvaluationService(db).capabilities(project_id)
 
 
-@router.get("/{project_id}/evaluation-suites", response_model=list[EvaluationSuiteRead])
-def list_suites(project_id: UUID, db: Session = Depends(get_db)):
-    return EvaluationService(db).list_suites(project_id)
+@router.get("/{project_id}/evaluation-suites", response_model=PaginatedSuites)
+def list_suites(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+):
+    rows, total = EvaluationService(db).list_suites(project_id, page=page, page_size=page_size)
+    return PaginatedSuites(
+        items=[EvaluationSuiteRead.model_validate(r) for r in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/{project_id}/evaluation-suites/{suite_id}", response_model=EvaluationSuiteRead)
@@ -52,36 +91,70 @@ def get_suite(project_id: UUID, suite_id: UUID, db: Session = Depends(get_db)):
 def create_run(
     project_id: UUID,
     payload: EvaluationRunCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    sync: bool = Query(default=True, description="Execute in-request (default true for tests)"),
+    sync: bool = Query(
+        default=False,
+        description="Test-only: execute in-request. Production default is background.",
+    ),
 ):
-    run = EvaluationService(db).create_run(
-        project_id,
-        payload.model_dump(),
-        idempotency_key=idempotency_key,
-        execute=sync,
-    )
-    return _run_read(run)
+    svc = EvaluationService(db)
+    body = payload.model_dump()
+    key = idempotency_key or body.get("idempotency_key")
+    run, claim = svc.create_run(project_id, body, idempotency_key=key, execute=sync)
+    if not sync and claim is not None and claim.outcome == EvalClaimOutcome.claimed:
+        _schedule_or_release(
+            background_tasks,
+            db,
+            run_id=run.id,
+            claim_token=claim.claim_token,
+            restore_status=EvaluationRunStatus.queued,
+        )
+        db.refresh(run)
+    return EvaluationRunRead.model_validate(svc.run_to_read(run))
 
 
-@router.get("/{project_id}/evaluation-runs", response_model=list[EvaluationRunRead])
+@router.get("/{project_id}/evaluation-runs", response_model=PaginatedRuns)
 def list_runs(
     project_id: UUID,
     db: Session = Depends(get_db),
     status: str | None = None,
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
+    suite_id: UUID | None = None,
+    target_type: str | None = None,
+    task_family: str | None = None,
+    started_after: datetime | None = None,
+    started_before: datetime | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    limit: int | None = Query(None, ge=1, le=200),
+    offset: int | None = Query(None, ge=0),
 ):
-    return [
-        _run_read(r)
-        for r in EvaluationService(db).list_runs(
-            project_id, status=status, limit=limit, offset=offset
-        )
-    ]
+    page, page_size = _page_from_limit_offset(limit, offset, page, page_size)
+    svc = EvaluationService(db)
+    rows, total = svc.list_runs(
+        project_id,
+        status=status,
+        suite_id=suite_id,
+        target_type=target_type,
+        task_family=task_family,
+        started_after=started_after,
+        started_before=started_before,
+        page=page,
+        page_size=page_size,
+    )
+    return PaginatedRuns(
+        items=[EvaluationRunRead.model_validate(svc.run_to_read(r)) for r in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
-@router.get("/{project_id}/evaluation-runs/compare")
+@router.get(
+    "/{project_id}/evaluation-runs/compare",
+    response_model=EvaluationCompareResponse,
+)
 def compare_runs(
     project_id: UUID,
     left: UUID = Query(...),
@@ -93,11 +166,13 @@ def compare_runs(
 
 @router.get("/{project_id}/evaluation-runs/{run_id}", response_model=EvaluationRunRead)
 def get_run(project_id: UUID, run_id: UUID, db: Session = Depends(get_db)):
-    return _run_read(EvaluationService(db).get_run(project_id, run_id))
+    svc = EvaluationService(db)
+    return EvaluationRunRead.model_validate(svc.run_to_read(svc.get_run(project_id, run_id)))
 
 
 @router.get(
-    "/{project_id}/evaluation-runs/{run_id}/results", response_model=list[EvaluationCaseResultRead]
+    "/{project_id}/evaluation-runs/{run_id}/results",
+    response_model=PaginatedCaseResults,
 )
 def list_results(
     project_id: UUID,
@@ -106,24 +181,34 @@ def list_results(
     status: str | None = None,
     task_family: str | None = None,
     passed: bool | None = None,
+    failed: bool | None = None,
+    error: bool | None = None,
+    hard_gate: bool | None = None,
+    metric: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=500),
+    limit: int | None = Query(None, ge=1, le=500),
+    offset: int | None = Query(None, ge=0),
 ):
-    rows = EvaluationService(db).get_results(
-        project_id, run_id, status=status, task_family=task_family, passed=passed
+    page, page_size = _page_from_limit_offset(limit, offset, page, page_size)
+    svc = EvaluationService(db)
+    rows, total = svc.get_results(
+        project_id,
+        run_id,
+        status=status,
+        task_family=task_family,
+        passed=passed,
+        failed=failed,
+        error=error,
+        hard_gate=hard_gate,
+        metric=metric,
+        page=page,
+        page_size=page_size,
     )
-    out = []
-    for r in rows:
-        item = EvaluationCaseResultRead.model_validate(r)
-        out.append(
-            item.model_copy(
-                update={
-                    "status": r.status.value,
-                    "reference_kind": r.reference_kind.value,
-                    # Never leak full test reference_output
-                    "reference_summary": r.reference_summary,
-                }
-            )
-        )
-    return out
+    items = [
+        EvaluationCaseResultRead.model_validate(svc.serialize_result(project_id, r)) for r in rows
+    ]
+    return PaginatedCaseResults(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.get(
@@ -131,44 +216,39 @@ def list_results(
     response_model=EvaluationCaseResultRead,
 )
 def get_result(project_id: UUID, run_id: UUID, result_id: UUID, db: Session = Depends(get_db)):
-    r = EvaluationService(db).get_result(project_id, run_id, result_id)
-    metrics = [
-        {
-            "metric_name": m.metric_name,
-            "metric_version": m.metric_version,
-            "value": m.value,
-            "applicable": m.applicable,
-            "weight": m.weight,
-            "threshold": m.threshold,
-            "passed": m.passed,
-            "evidence_summary": m.evidence_summary,
-            "reference_kind": m.reference_kind.value,
-        }
-        for m in (r.metric_results or [])
-    ]
-    base = EvaluationCaseResultRead.model_validate(r)
-    return base.model_copy(
-        update={
-            "status": r.status.value,
-            "reference_kind": r.reference_kind.value,
-            "metric_results": metrics,
-        }
+    svc = EvaluationService(db)
+    r = svc.get_result(project_id, run_id, result_id)
+    return EvaluationCaseResultRead.model_validate(
+        svc.serialize_result(project_id, r, include_metrics=True)
     )
 
 
 @router.post("/{project_id}/evaluation-runs/{run_id}/cancel", response_model=EvaluationRunRead)
 def cancel_run(project_id: UUID, run_id: UUID, db: Session = Depends(get_db)):
-    return _run_read(EvaluationService(db).cancel(project_id, run_id))
+    svc = EvaluationService(db)
+    return EvaluationRunRead.model_validate(svc.run_to_read(svc.cancel(project_id, run_id)))
 
 
 @router.post("/{project_id}/evaluation-runs/{run_id}/resume", response_model=EvaluationRunRead)
 def resume_run(
     project_id: UUID,
     run_id: UUID,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    sync: bool = Query(default=True),
+    sync: bool = Query(default=False, description="Test-only sync resume"),
 ):
-    return _run_read(EvaluationService(db).resume(project_id, run_id, execute=sync))
+    svc = EvaluationService(db)
+    run, claim = svc.resume(project_id, run_id, execute=sync)
+    if not sync and claim is not None and claim.outcome == EvalClaimOutcome.claimed:
+        _schedule_or_release(
+            background_tasks,
+            db,
+            run_id=run.id,
+            claim_token=claim.claim_token,
+            restore_status=EvaluationRunStatus.partial,
+        )
+        db.refresh(run)
+    return EvaluationRunRead.model_validate(svc.run_to_read(run))
 
 
 @router.get("/{project_id}/evaluation-runs/{run_id}/export")

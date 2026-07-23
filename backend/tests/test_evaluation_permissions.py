@@ -23,14 +23,13 @@ def test_cross_project_blocked(client: TestClient, db: Session):
     db.commit()
 
     created = client.post(
-        f"/api/v1/projects/{p1.id}/evaluation-runs",
+        f"/api/v1/projects/{p1.id}/evaluation-runs?sync=true",
         json={"target_type": "deterministic_fake", "fixture_path": FIXTURE, "seed": 1},
     )
     assert created.status_code == 201
     run_id = created.json()["id"]
-    result_id = client.get(f"/api/v1/projects/{p1.id}/evaluation-runs/{run_id}/results").json()[0][
-        "id"
-    ]
+    results = client.get(f"/api/v1/projects/{p1.id}/evaluation-runs/{run_id}/results").json()
+    result_id = results["items"][0]["id"]
 
     assert client.get(f"/api/v1/projects/{p2.id}/evaluation-runs/{run_id}").status_code == 404
     assert (

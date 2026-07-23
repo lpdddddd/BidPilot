@@ -31,8 +31,8 @@ def test_runner_twice_deterministic(db: Session):
         "fixture_path": FIXTURE,
         "seed": 7,
     }
-    r1 = svc.create_run(project.id, payload, idempotency_key="k1", execute=True)
-    r2 = svc.create_run(project.id, {**payload}, idempotency_key="k2", execute=True)
+    r1, _ = svc.create_run(project.id, payload, idempotency_key="k1", execute=True)
+    r2, _ = svc.create_run(project.id, {**payload}, idempotency_key="k2", execute=True)
     assert r1.status == EvaluationRunStatus.completed
     assert r2.status == EvaluationRunStatus.completed
     assert r1.overall_score == r2.overall_score
@@ -47,8 +47,8 @@ def test_idempotent_create(db: Session):
     project = _project(db)
     svc = EvaluationService(db)
     payload = {"target_type": "deterministic_fake", "fixture_path": FIXTURE, "seed": 1}
-    a = svc.create_run(project.id, payload, idempotency_key="same", execute=True)
-    b = svc.create_run(project.id, payload, idempotency_key="same", execute=True)
+    a, _ = svc.create_run(project.id, payload, idempotency_key="same", execute=True)
+    b, _ = svc.create_run(project.id, payload, idempotency_key="same", execute=True)
     assert a.id == b.id
 
 
@@ -57,7 +57,7 @@ def test_batch_continues_on_case_error(db: Session):
     svc = EvaluationService(db)
     samples = load_jsonl(Path(FIXTURE))
     fail_key = samples[0]["sample_id"]
-    run = svc.create_run(
+    run, _ = svc.create_run(
         project.id,
         {
             "target_type": "deterministic_fake",
@@ -79,7 +79,7 @@ def test_batch_continues_on_case_error(db: Session):
 def test_resume_skips_completed(db: Session):
     project = _project(db)
     svc = EvaluationService(db)
-    run = svc.create_run(
+    run, _ = svc.create_run(
         project.id,
         {"target_type": "deterministic_fake", "fixture_path": FIXTURE, "seed": 3},
         execute=True,
@@ -93,7 +93,7 @@ def test_resume_skips_completed(db: Session):
     key = victim.case_key
     db.delete(victim)
     db.commit()
-    resumed = svc.resume(project.id, run.id, execute=True)
+    resumed, _ = svc.resume(project.id, run.id, execute=True)
     keys = {c.case_key for c in resumed.case_results}
     assert key in keys
     # other case ids preserved

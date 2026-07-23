@@ -1,4 +1,4 @@
-"""Deterministic fake target for CI — never reads reference_output."""
+"""Deterministic fake target for CI — never reads reference_output or citation gold."""
 
 from __future__ import annotations
 
@@ -20,7 +20,12 @@ class DeterministicFakeTarget:
         self.fail_case_keys = fail_case_keys or set()
 
     def capability(self) -> TargetCapability:
-        return TargetCapability(target_type=self.target_type, available=True, reason=None)
+        return TargetCapability(
+            target_type=self.target_type,
+            available=True,
+            reason=None,
+            reason_code=None,
+        )
 
     def run_case(self, case: EvaluationCase) -> TargetResult:
         started = time.perf_counter()
@@ -38,21 +43,17 @@ class DeterministicFakeTarget:
     def _predict(self, case: EvaluationCase, digest: str) -> dict[str, Any]:
         family = case.task_family
         inp = case.input_data
-        # Use only input / citation_metadata chunk ids as "retrieved" — never reference answers.
-        chunk_ids = list(
-            (case.citation_metadata or {}).get("chunk_ids") or inp.get("context_chunk_ids") or []
-        )
-        doc_ids = list((case.citation_metadata or {}).get("document_ids") or [])
-        if case.document_id:
-            doc_ids = doc_ids or [case.document_id]
+        # Only non-gold context ids that already live in the case input blob.
+        chunk_ids = list(inp.get("context_chunk_ids") or [])
+        doc_ids = list(inp.get("document_ids") or [])
+        if case.document_id and case.document_id not in doc_ids:
+            # document scope hint is not a gold citation target list.
+            pass
         if family == "rag":
             return {
                 "answer": f"fake-answer:{digest[:8]}",
                 "answerable": True,
-                "citations": [
-                    {"chunk_id": c, "document_id": (doc_ids[0] if doc_ids else None)}
-                    for c in chunk_ids[:3]
-                ],
+                "citations": [{"chunk_id": c} for c in chunk_ids[:3]],
                 "retrieved_chunk_ids": chunk_ids[:5],
                 "document_ids": doc_ids[:3],
                 "top_k": 5,
@@ -74,15 +75,17 @@ class DeterministicFakeTarget:
         if family == "matching":
             return {
                 "status": "insufficient_evidence",
-                "reason": "deterministic fake lacks bilateral evidence",
+                "reason": "deterministic fake lacks bilateral supplier evidence",
                 "evidence_chunk_ids": chunk_ids[:2],
+                "match_decision": "insufficient_evidence",
             }
         if family == "compliance":
+            # Deterministic offline verdict from input fields only — not gold metadata.
             return {
-                "verdict": "fail",
-                "severity": "critical",
+                "verdict": "unknown",
+                "severity": "info",
                 "rule_type": inp.get("rule_type") or "coverage",
-                "finding": "deterministic fake finding",
+                "finding": "deterministic fake offline finding",
                 "rule_ids": [str(inp.get("rule_id") or "A001")],
                 "citations": chunk_ids[:1],
             }

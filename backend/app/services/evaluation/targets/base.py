@@ -22,6 +22,7 @@ class TargetCapability:
     target_type: str
     available: bool
     reason: str | None = None
+    reason_code: str | None = None
 
 
 class EvaluationTarget(Protocol):
