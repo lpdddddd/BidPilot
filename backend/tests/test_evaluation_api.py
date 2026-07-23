@@ -60,8 +60,10 @@ def test_evaluation_api_contract_and_flow(client: TestClient, db: Session):
     assert isinstance(body["profiles"], list) and body["profiles"]
     assert any(t["target_type"] == "deterministic_fake" and t["available"] for t in body["items"])
     unwired = {t["target_type"]: t for t in body["items"]}
-    assert unwired["extraction"]["available"] is False
-    assert unwired["extraction"]["reason_code"] == "service_not_wired"
+    # Extraction is now wired to structured clause analysis (LLM-gated).
+    assert unwired["extraction"]["reason_code"] != "service_not_wired"
+    if not unwired["extraction"]["available"]:
+        assert unwired["extraction"]["reason_code"] == "provider_not_configured"
 
     suites = client.get(f"/api/v1/projects/{p1.id}/evaluation-suites")
     assert suites.status_code == 200
