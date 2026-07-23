@@ -1,0 +1,40 @@
+{
+  "active_model_id": "qwen3-8b-lora-course",
+  "models": [
+    {
+      "model_id": "qwen3-8b-lora-course-smoke",
+      "display_name": "BidPilot Qwen3-8B Course Smoke LoRA",
+      "base_model": "Qwen3-8B",
+      "adapter_path": "training/llamafactory/outputs/qwen3_8b_lora_course_smoke",
+      "served_name": "bidpilot-qwen3-8b",
+      "train_track": "course_pilot",
+      "version": "smoke-0.1",
+      "created_at": "2026-07-23T04:38:51.028422+00:00",
+      "notes": "Smoke LoRA (20 steps) for pipeline verification; not human_gold.",
+      "metrics": {
+        "train_loss": 2.2079,
+        "max_steps": 20
+      }
+    },
+    {
+      "model_id": "qwen3-8b-lora-course",
+      "display_name": "BidPilot Qwen3-8B Course LoRA",
+      "base_model": "Qwen3-8B",
+      "adapter_path": "training/llamafactory/outputs/qwen3_8b_lora_course",
+      "served_name": "bidpilot-qwen3-8b",
+      "train_track": "course_pilot",
+      "version": "course-1.0",
+      "created_at": "2026-07-23T04:45:43.365076+00:00",
+      "notes": "Course-pilot LoRA (1 epoch). Automatic QC track — not human_gold.",
+      "metrics": {
+        "train_loss": 0.798895173072815,
+        "eval_loss": 0.3979527950286865,
+        "train_runtime": 208.6766,
+        "epoch": 1.0,
+        "eval_json_ok_rate": 0.9167,
+        "eval_mean_key_overlap": 1.0,
+        "eval_n": 12
+      }
+    }
+  ]
+}

@@ -1,0 +1,1586 @@
+[
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责对条款进行分类并判断是否强制。"
+      },
+      {
+        "role": "user",
+        "content": "判断以下条款的类别与是否强制：\n报价，任何有选择的或可调整的响应方案和报价将被视为无效响应。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"category\":\"mandatory_rejection\",\"mandatory\":true,\"risk_level\":\"critical\",\"confidence\":0.9}"
+      }
+    ],
+    "record_id": "581fbfa5-f453-5a4a-8adf-fe6e461ecb0e",
+    "task_type": "requirement_classify",
+    "project_id": "a8a42050-ff30-538f-8d88-5e052018d273",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标项目助手。需要时调用工具，工具结果以 tool 角色返回。可用工具：search_chunks、get_project、list_requirements、extract_scoring、get_disclosed_supplier、ask_user。最终回答必须是 JSON：{\"answer\":...,\"citations\":[chunk_id,...]}。"
+      },
+      {
+        "role": "user",
+        "content": "汇总项目 GZGCCG-2026042 概况；若工具失败请重试。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"search_chunks\",\"arguments\":{\"project_id\":\"ddff323e-15ad-5c77-b0bf-0683e02f5a2d\",\"query\":\"中国人民警察大学（广州）无人机设备及挂载设备保险采购项目\",\"top_k\":5}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"error\":\"timeout\",\"message\":\"检索服务超时\"}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"search_chunks\",\"arguments\":{\"project_id\":\"ddff323e-15ad-5c77-b0bf-0683e02f5a2d\",\"query\":\"中国人民警察大学（广州）无人机设备及挂载设备保险采购项目\",\"top_k\":5}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"chunks\":[{\"chunk_id\":\"3530ee34-bf19-5d5e-80e4-9830c79ef9fd\",\"document_id\":\"02ae27d1-813a-5731-985e-bc0092df4fa9\",\"page_start\":1,\"text\":\"竞 价 文 件\\n项 目名称：中国人民警察大学（广州）无人机设备及\\n挂载设备保险采购项目\\n项目编号：GZGCCG-2026042\\n采 购 人：中国人民警察大学（广州）\\n采购代理机构：广州市广采招标有限公司\\n第一部分 竞价公告\\n一、项目基本情况\\n1. 项目编号：GZGCCG-2026042\\n2. 项目名称：中国人民警察大学（广州）无人机设备及挂载设备保险采购项目\\n3. 采购方式：竞价\\n4. 预算金额（最高限价）：人民币16万元/年。\\n5. 采购需求：详见竞价文件“第五部分 采购需求”。\\n6. 合同履约：服务期2年，合同一年一签，自签订合同之日起算起。\\n二、申请人的资格要求（须同时满足）\\n投标人基本资质：\\n1、满足《中华人民共和国政府采购法》第二十二条规定；\\n2、落实政府采购政策需满足的资格要求：本项目为非专门面向中小微企业采购的项目\\n本项目的特定资格要求：\\n3、供应商具有独立承担民事责任能力的\"},{\"chunk_id\":\"be43321f-b0b9-589d-bfec-ff68c9285b00\",\"document_id\":\"02ae27d1-813a-5731-985e-bc0092df4fa9\",\"page_start\":1,\"text\":\"解决\\n合同执行过程中发生的任何争议，如双方不能通过友好协商解决，按相关法律法规处理。\\n不可抗力\\n任何一方由于不可抗力原因不能履行合同时，应在不可抗力事件结束后1日内向对方通报，以减轻可能给对方造成的损失，在取得有关机构的不可抗力证明或双方谅解确认后，允许延期履行或修订合同，并根据情况可部分或全部免于承担违约责任。\\n税费在中国境内、外发生的与本合同执行有关的一切税费均由乙方负担。\\n其它\\n1) 本合同所有附件、磋商文件、响应文件、成交通知书均为合同的有效组成部分，与本合同具有同等法律效力。\\n2) 在执行本合同的过程中，所有经双方签署确认的文件（包括会议纪要、补充协议、往来信函）即成为本合同的有效组成部分。\\n3) 如一方地址、电话、传真号码有变更，应在变更当日内书面通知对方，否则，应承担相应责任。\\n4) 除甲方事先书面同意外，乙方不得部分或全部转让其应履行的合同项下的义务。\\n合同生效\\n1）本合同\"},{\"chunk_id\":\"c9d7d19a-a84a-5eb4-abc3-5e5db30d67cb\",\"document_id\":\"02ae27d1-813a-5731-985e-bc0092df4fa9\",\"page_start\":1,\"text\":\"项目内容及要求及其他有关文件后，我方愿以人民币大写 元 ( ¥ 元 ） 的总价作为竞价报价，项目履约时间： 并按上述合同条款、项目内容及要求的条 件要求承担本项目的采购活动。\\n二、提供竞价文件规定的全部竞价文件。\\n三、我方同意在本项目竞价文件中规定的竞价之日起 天内遵守本竞价文件中的承诺且在此期限届满之前均具有约束力。四、我方将按竞价文件的规定履行合同责任和义务，并对竞价活动中的一切行为承担法律责任。\\n五、我方同意提供按照贵方可能要求的与其竞价有关的一切数据和资料，理解贵方不一定接受最低的竞价。\\n六、如果在竞价截止日后规定的竞价有效期内撤回竞价，我方的竞价保证金可被贵方没收。\\n七、我方愿意向贵方提供任何与本项竞价有关的数据、情况和技术资料。若贵方需要，我方愿意提供我方做出的一切承诺的证明材料。\\n八、我方已经详细审核全部竞价文件 ，包括竞价文件修改书（如有的话）、参考资料及有关附件 ，确认无\"},{\"chunk_id\":\"54750c40-a579-5105-aa51-8063bb49d9cb\",\"document_id\":\"02ae27d1-813a-5731-985e-bc0092df4fa9\",\"page_start\":1,\"text\":\"认真研究了贵单位 中国人民警察大学（广州）无人机设备及挂载设备保险采购项目（项目编号：GZGCCG-2026042）竞价文件，完全同意全部规定，现予以确认，若我公司成交，我们承诺将忠实的履行竞价书中的全部内容，在规定的时间内与贵单位签订合同，承担我方的全部责任与义务。\\n单位名称： （盖章）\\n法定代表人： （签字或盖章）竞价日期： 年 月 日\\n5、商务条款偏离表\\n商务条款偏离表\\n项目名称：中国人民警察大学（广州）无人机设备及挂载设备保险采购项目\\n项目编号：GZGCCG-2026042\\n注：不管竞价文件商务条款要求的是否相同，响应人都必须详细填写本表。\\n商务条款包含不限于以下几项：第五部分 采购需求中的第一项所有内容，请响应人根据竞价文件相关要求及自身具体情况予以填制。\\n单位名称： （盖章）\\n法定代表人： （签字或盖章）\\n竞价日期： 年 月 日\\n6、技术指标与服务要求偏离表\\n技术指标与服务要求\"},{\"chunk_id\":\"4953ff87-dc19-5a35-b84b-e2f98284b996\",\"document_id\":\"02ae27d1-813a-5731-985e-bc0092df4fa9\",\"page_start\":1,\"text\":\"应商必须是经国家保险监督管理机构批准在中华人民共和国境内设立和营业的保险机构，提供保险许可证（如为分支机构参加投标的，则提供分支机构的保险许可证）许可证的业务范围须涵盖本次保险险种\\n7-12、本项目不允许分包或转包。\\n7-13、本项目不接受联合体响应。（提供声明函，格式自拟）\\n资格文件声明函\\n致：广州市广采招标有限公司关于贵公司 年 月 日发布 中国人民警察大学（广州）无人机设备及挂载设备保险采购项目（项目编号：GZGCCG-2026042）的采购竞价公告，本公司（企业）愿意参加响应，并声明：\\n一、本公司（企业）具备《中华人民共和国政府采购法》第二十二条规定的条件：\\n1、具有独立承担民事责任的能力；\\n2、有依法缴纳税收和社会保障资金的良好记录；\\n3、具有良好的商业信誉和健全的财务会计制度；\\n4、具有履行合同所必需的设备和专业技术能力；\\n5、参加政府采购活动前三年内，在经营活动中没有重大违法\"}]}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"get_project\",\"arguments\":{\"project_id\":\"ddff323e-15ad-5c77-b0bf-0683e02f5a2d\"}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"project\":{\"project_id\":\"ddff323e-15ad-5c77-b0bf-0683e02f5a2d\",\"project_code\":\"GZGCCG-2026042\",\"project_name\":\"中国人民警察大学（广州）无人机设备及挂载设备保险采购项目\",\"purchaser\":\"中国人民警察大学\",\"budget_cny\":null,\"bundle_level\":\"level_b\",\"official_project_url\":\"https://download.ccgp.gov.cn/oss/download?uuid=6B4725171D10421EEF208DB60554A7\"}}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"在重试后取得项目 GZGCCG-2026042 信息。\",\"citations\":[\"3530ee34-bf19-5d5e-80e4-9830c79ef9fd\",\"be43321f-b0b9-589d-bfec-ff68c9285b00\",\"c9d7d19a-a84a-5eb4-abc3-5e5db30d67cb\"],\"retry\":true}"
+      }
+    ],
+    "record_id": "a8c3194e-477d-5fe0-ab34-cebc7065ada2",
+    "task_type": "tool_call",
+    "project_id": "ddff323e-15ad-5c77-b0bf-0683e02f5a2d",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标合规风险识别助手。"
+      },
+      {
+        "role": "user",
+        "content": "识别风险：\n内的，本项不得分，否则得满分。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"risk_level\":\"high\",\"risk_type\":\"other\",\"reason\":\"内的，本项不得分，否则得满分。\",\"is_rejection_clause\":false}"
+      }
+    ],
+    "record_id": "04622744-00fc-5e9e-a832-8440532cc671",
+    "task_type": "risk_detect",
+    "project_id": "1eb966e0-a91a-5a59-a319-2c44efeddf2a",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责对条款进行分类并判断是否强制。"
+      },
+      {
+        "role": "user",
+        "content": "判断以下条款的类别与是否强制：\n4.1.1 供应商递交的所有投标文件均应密封，封口处应骑缝加盖公章或法定代表人（授权代表）签字/盖章。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"category\":\"submission\",\"mandatory\":true,\"risk_level\":\"high\",\"confidence\":0.65}"
+      }
+    ],
+    "record_id": "680bf4c2-673e-5534-af79-2ee92edfb3ef",
+    "task_type": "requirement_classify",
+    "project_id": "a8a42050-ff30-538f-8d88-5e052018d273",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取资格要求。"
+      },
+      {
+        "role": "user",
+        "content": "抽取资格要求：\n理委员会批准的认证机构颁发的认证证书："
+      },
+      {
+        "role": "assistant",
+        "content": "{\"requirements\":[\"理委员会批准的认证机构颁发的认证证书：\"],\"mandatory\":false,\"evidence_required\":[]}"
+      }
+    ],
+    "record_id": "6ddc38f7-6826-5918-8dad-3b6ca5ddada0",
+    "task_type": "qualification_extract",
+    "project_id": "17562952-a8b1-5be5-bdac-c6aed5babc2a",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取项目基本信息。"
+      },
+      {
+        "role": "user",
+        "content": "从以下官方项目材料中抽取项目要素：\n1.项目编号：YCZB-2026-GZ-02055"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"project_name\":\"中国人民警察大学（广州）培训住宿用品服务保障采购（二次）\",\"purchaser\":\"中国人民警察大学\",\"budget_cny\":null,\"deadline\":null,\"region\":\"广东\",\"project_code\":\"YCZB-2026-GZ-02055\"}"
+      }
+    ],
+    "record_id": "8c26f820-6ccd-585a-b34a-c4d6afa1c67b",
+    "task_type": "project_info_extract",
+    "project_id": "de18da6a-f1c8-56d8-ba1a-4d9288cb11c4",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取评分办法条目。"
+      },
+      {
+        "role": "user",
+        "content": "抽取评分条目：\n各项评分分值计算保留小数点后两位，第三位四舍五入。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"item\":\"各项评分分值计算保留小数点后两位，第三位四舍五入。\",\"score\":null,\"method\":\"综合评分法\"}"
+      }
+    ],
+    "record_id": "a062b869-ed1e-58ba-873f-467401498fdf",
+    "task_type": "scoring_extract",
+    "project_id": "3a301dc8-7b16-5c69-82be-9bc2648aae42",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取资格要求。"
+      },
+      {
+        "role": "user",
+        "content": "抽取资格要求：\n面截图或提供由国家认可有资质的第三方检测机构出具"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"requirements\":[\"面截图或提供由国家认可有资质的第三方检测机构出具\"],\"mandatory\":false,\"evidence_required\":[\"资质证书\"]}"
+      }
+    ],
+    "record_id": "fb733cb5-585f-56e5-9833-c0e86d21ad9e",
+    "task_type": "qualification_extract",
+    "project_id": "9d3c2112-d8de-5505-b6fd-5accc23af170",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取项目基本信息。"
+      },
+      {
+        "role": "user",
+        "content": "从以下官方项目材料中抽取项目要素：\n项目名称：广东省深圳市消防救援支队水上大队2026年消防船坞修维护保养采购项目"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"project_name\":\"广东省深圳市消防救援支队水上大队2026年消防船坞修维护保养采购项目\",\"purchaser\":\"深圳市消防救援支队水上大队\",\"budget_cny\":null,\"deadline\":null,\"region\":\"广东\",\"project_code\":\"0724-2630SZ964226\"}"
+      }
+    ],
+    "record_id": "fc872fdf-8ad6-5786-82f4-a9d9960b0ff5",
+    "task_type": "project_info_extract",
+    "project_id": "1eb966e0-a91a-5a59-a319-2c44efeddf2a",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取评分办法条目。"
+      },
+      {
+        "role": "user",
+        "content": "抽取评分条目：\n6.4 评分因素及分值范围"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"item\":\"6.4 评分因素及分值范围\",\"score\":null,\"method\":\"综合评分法\"}"
+      }
+    ],
+    "record_id": "b5f279ba-e501-5ba8-8d00-565ca5d3978e",
+    "task_type": "scoring_extract",
+    "project_id": "a8a42050-ff30-538f-8d88-5e052018d273",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标问答助手，回答必须引用证据页码或 chunk。"
+      },
+      {
+        "role": "user",
+        "content": "「中国人民警察大学（广州）培训住宿用品服务」的基本采购信息有哪些？"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"（响应人全称）授权（竞价代表人姓名）为我方代表，参加贵方组织的（项目名称、项目编号）竞价的有关活动，并对此项目进行竞价。\",\"citations\":[\"6d0dba70-5097-5d77-a56e-ad500a174812\"],\"answerable\":true}"
+      }
+    ],
+    "record_id": "f6f10bde-7867-54aa-aea9-65040209a850",
+    "task_type": "citation_qa",
+    "project_id": "de18da6a-f1c8-56d8-ba1a-4d9288cb11c4",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取项目基本信息。"
+      },
+      {
+        "role": "user",
+        "content": "从以下官方项目材料中抽取项目要素：\n（项目编号：SSZX2026-236）"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"project_name\":\"广东省深圳市消防救援支队2026年1辆100米以上登高平台消防车购置项目可行性研究报告及初步概算编制服务采购项目\",\"purchaser\":\"深圳市消防救援支队\",\"budget_cny\":null,\"deadline\":null,\"region\":\"广东\",\"project_code\":\"SSZX2026-236\"}"
+      }
+    ],
+    "record_id": "582e96a9-1221-5a90-8c39-b261e120bf94",
+    "task_type": "project_info_extract",
+    "project_id": "fa432488-7da3-5b5c-93ff-7297e1eada9f",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标项目助手。需要时调用工具，工具结果以 tool 角色返回。可用工具：search_chunks、get_project、list_requirements、extract_scoring、get_disclosed_supplier、ask_user。最终回答必须是 JSON：{\"answer\":...,\"citations\":[chunk_id,...]}。"
+      },
+      {
+        "role": "user",
+        "content": "从项目 SSZX2026-191 文件中提取评分办法要点。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"search_chunks\",\"arguments\":{\"project_id\":\"ce28d910-5387-53c4-8aca-e0d17f53e35e\",\"query\":\"综合评分法 评分标准\",\"top_k\":8}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"chunks\":[{\"chunk_id\":\"1efe69fe-f279-5111-9a44-3d1dd40a602f\",\"document_id\":\"8715bdbe-0530-546f-a17b-f1bf49ce5fcc\",\"page_start\":10,\"text\":\"第三章\\n评审办法\\n一、评审与定评\\n1．当通过资格、符合性审查的参评人不少于三家时，按照评审程序的规定和依据评分标准、计\\n算方法，各评委单独封闭对每个参评人进行评审和比较。\\n2．成交人资格的确定，由评审小组推荐，并由采购人确认。\\n3．比较与评价。评审小组按遴选文件中规定的评审方法和标准，对资格审查和符合性审查合格\\n的参评文件进行商务和技术评估，综合比较与评价。技术、商务、价格部分分值分配如下：\\n评分项目\\n技术评分\\n商务评分\\n价格评分\\n合计\\n分值\\n45\\n10\\n100分\\n4．技术评分\\n（1）由评审小组对所有参评文件的技术部分的响应进行审核和分析；\\n（2）评委独立进行评分，填写“技术评分表”；\\n（3）评分标准：按“技术评分表”中的分值进行评分；\\n（4）将每一个评委的评分汇集，取算术平均值（精确到小数点后两位）为该参评人的技术得分。\\n5．商务评分\\n（1）由评审小组对所有参评文件的商务部分的响应进行审\"},{\"chunk_id\":\"1a830b4d-9b15-5baf-a2f2-1d82021f478d\",\"document_id\":\"8715bdbe-0530-546f-a17b-f1bf49ce5fcc\",\"page_start\":11,\"text\":\"10\\n（2.5）总价金额与按单价汇总金额不一致的，以单价金额计算结果为准；\\n（2.6）对不同文字文本参评文件的解释发生异议的，以中文文本为准。\\n（3）上述修正错误的原则及方法调整或修正参评文件的参评报价，参评人同意后，调整后的参\\n评报价对参评人起约束作用。如果参评人不接受修正后的报价，则其参评将被拒绝。\\n二、综合得分的计算\\n本项目的评审方法采用综合评分法，综合评分法评审步骤：先进行资格、符合性审查，再进行\\n技术、商务及价格的详细评审。只有通过资格、符合性审查的参评人才能进入详细的评审。\\n综合得分（精确到小数点后两位）=技术得分+商务得分+价格得分。综合得分相同的，名次按技\\n术评分由高到低顺序排列；综合得分相同且技术评分相同的，名次按商务评分由高到低顺序排列；\\n综合得分相同、技术评分和商务评分均相同的，名次由评审价由低到高顺序排列。综合得分相同、\\n技术评分、商务评分和评审价均相同的评审小组抽\"},{\"chunk_id\":\"68123901-23a6-53f3-9f5e-29fd29bf55d8\",\"document_id\":\"8715bdbe-0530-546f-a17b-f1bf49ce5fcc\",\"page_start\":5,\"text\":\"112 号罗湖投资控股大厦裙楼401 采购代理部，庄晓琴。\\n5\\n评选\\n采购人根据工作安排确定评选时间，不晚于2026 年7 月24 日14 时30 分。\\n6\\n评审小组\\n全部评审过程由采购人组建的评审小组负责完成，评审小组由3 人单数成\\n员组成。\\n7\\n评审方法\\n综合评分法\\n8\\n评审步骤\\n先进行资格、符合性评审，再进行技术、商务及价格的详细评审。只有通\\n过资格、符合性评审的参评人才能进入详细的评审，即为入围参评人。\\n9\\n成交候选人的\\n推荐\\n评审小组结合商务文件部分、技术文件部分和价格部分进行综合评估，将\\n商务得分、技术得分和价格得分相加得出各入围参评人的综合得分。评审\\n小组按综合得分高低次序排出名次，推荐排名第一的参评人为第一候选成\\n交人，排名第二的参评人为第二候选成交人，排名第三的参评人为第三候\\n选成交人。\\n成交人放弃成交资格的或成交资格被依法确认无效的，因情况紧急，重新\\n组织采购不能满足采\"},{\"chunk_id\":\"0b15a2ce-654d-516a-98a6-128096385539\",\"document_id\":\"8715bdbe-0530-546f-a17b-f1bf49ce5fcc\",\"page_start\":14,\"text\":\"13\\n不能诚信履约的其他情形。\\n评审小组启动异常低价参评审查后，属于前述第1 项至第4 项情形的，应当\\n要求相关供应商在评审现场合理的时间内对参评价格作出解释，提供项目具\\n体成本测算等与报价合理性相关的书面说明及必要的证明材料，包括但不限\\n于原材料成本、人工成本、制造费用等，给予相关供应商的合理时间一般不\\n少于30 分钟。其中，属于第3 项情形，供应商已随参评文件一并提交相关书\\n面说明及必要的证明材料的，在评审现场可不再重复提交。\\n评审小组依据专业经验，参考同类项目成交（成交）价格、类似产品市场价\\n格水平、行业人工费用标准、国家有关部门指导行业协会发布的行业平均成\\n本等情况，对报价合理性进行判断。参评供应商不能提供书面说明、证明材\\n料，或者提供的书面说明、证明材料不能证明其报价合理性的，评审小组应\\n当将其作为无效参评处理（若评审小组成员对是否须由参评人作出报价合理\\n性说明，以及书面说明是否\"},{\"chunk_id\":\"051101d3-cda4-5bf6-8c14-d7acc3a222c0\",\"document_id\":\"8715bdbe-0530-546f-a17b-f1bf49ce5fcc\",\"page_start\":15,\"text\":\"（二）评分标准：\\n1.每满足以上任意一项内容得4 分，最高得16 分，未满足\\n不得分。\\n2.在此基础上，评标委员会根据各参评供应商的具体响应\\n内容进一步评审：\\n（1）方案整体科学合理、针对性强、可操作性强，评审为\\n优得4 分；\\n（2）方案较合理、有一定针对性、一定可操作性，评审为\\n良得3 分；\"},{\"chunk_id\":\"7867e559-9b92-5279-aa62-5861b007398f\",\"document_id\":\"8715bdbe-0530-546f-a17b-f1bf49ce5fcc\",\"page_start\":32,\"text\":\"31\\n评审小组依据专业经验，参考同类项目成交（成交）价\\n格、类似产品市场价格水平、行业人工费用标准、国家\\n有关部门指导行业协会发布的行业平均成本等情况，对\\n报价合理性进行判断。参评供应商不能提供书面说明、\\n证明材料，或者提供的书面说明、证明材料不能证明其\\n报价合理性的，评审小组应当将其作为无效参评处理（若\\n评审小组成员对是否须由参评人作出报价合理性说明，\\n以及书面说明是否采纳等判断不一致的，按照“少数服\\n从多数”的原则确定评审小组的意见）。\\n7\\n参评文件载明的采购项目完成或服务期限不满足遴选文\\n件规定的。\\n8\\n未按遴选文件附件所提供的样式和要求完整填写“资格\\n声明函及参评函”的。\\n9\\n未按遴选文件要求填写《采购需求响应一览表》。\\n10\\n实质性响应指标（综合遴选文件成交注★的条款）未满\\n足采购人要求。\\n11\\n参评报价有严重缺漏项目。\\n12\\n按有关法律、法规、规章或遴选文件属于参评无效的。\\n三\"},{\"chunk_id\":\"0a2458f0-5d6a-587c-a62d-0ed5eaa159e9\",\"document_id\":\"36514201-0b87-55aa-8f34-bd203b33284d\",\"page_start\":1,\"text\":\"合采购文件要求的情形，按资格审查不通过处理）为本项目提供整体设计、规范编制或者项目管理、监理、检测等服务的供应商，不得参评。（由供应商在《资格声明函》中作出声明，加盖公章）；\\n7.为本项目提供整体设计、规范编制或者项目管理、监理、检测等服务的供应商，不得参加本项目参评。（由供应商在《资格声明函》中作出声明，加盖公章）；8.本项目不接受联合体参评，不接受进口产品参评，不允许转包、分包（由供应商在《资格声明函》中作出声明，加盖公章）；\\n9.本项目是否专门面向中小企业采购：本项目属于专门面向中小微企业采购的项目（提供符合要求的《中小企业声明函》，参评供应商必须属于中型企业或小型企业或微型企业；如供应商为残疾人福利性单位或监狱企业，视同小型、微型企业，提供《残疾人福利性单位声明函》或《监狱企业声明函》及监狱企业证明文件亦视为符合；\\n本项目对应的中小企业划分标准所属行业：（十六）其他未列明行业；\\n1\"},{\"chunk_id\":\"7602b8d0-adc1-546d-a6d8-ad7b22aa7d5f\",\"document_id\":\"8715bdbe-0530-546f-a17b-f1bf49ce5fcc\",\"page_start\":2,\"text\":\"1\\n的遴选公告\\n一、项目基本情况\\n项目名称：广东省深圳市消防救援支队2026 年直升机训练与救援服务项目\\n项目编号：SSZX2026-191\\n预算金额：人民币26.000000 万元\\n采购需求：确定一家供应商，为采购人提供2026 年直升机训练与救援服务。\\n合同履行期限：本项目服务合同签订生效之日起至2026 年12 月31 日止，服务期限届满后，未\\n使用的航时不再继续使用，以实际产生的航时结算。\\n二、参评人的资格要求\\n1.参评人必须是具有独立法人资格或是具有独立承担民事责任能力的其它组织（提供营业执照\\n或事业单位法人证书或其他证明材料复印件加盖公章，如果参评的供应商为分公司则须提供分公司\\n营业执照、其所属集团(或总公司)等具有独立法人资格的组织出具愿为其参评以及履约行为承担民\\n事责任的授权书，但只接受直接授权，不接受逐级授权，并同时提供总公司营业执照。不接受同一\\n集团(或总公司)授权两家\"}]}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"extract_scoring\",\"arguments\":{\"project_id\":\"ce28d910-5387-53c4-8aca-e0d17f53e35e\"}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"scoring_items\":[{\"requirement_id\":\"7a9d3b16-b554-51f4-9288-f1b40c04e08e\",\"title\":\"（3）评分标准：按“技术评分表”中的分值进行评分；\",\"score\":null},{\"requirement_id\":\"c824e06a-ad53-56f0-8302-acd660d1e7ca\",\"title\":\"（3）参评人的价格得分=评审基准价÷参评报价×价格分值（精确到小数点后两位）。\",\"score\":null},{\"requirement_id\":\"2c14d827-0b4d-553f-93df-a1b882d4070c\",\"title\":\"本项目的评审方法采用综合评分法，综合评分法评审步骤：先进行资格、符合性审查，再进行\",\"score\":null},{\"requirement_id\":\"4c12bf89-93ba-5fab-b965-d6bf59f5c3dd\",\"title\":\"2.对于“综合评分指引”请参评人按照第三章的《项目评分表》的评分要求，根据各\",\"score\":null}]}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"提取到 4 个评分相关条款。\",\"citations\":[\"1efe69fe-f279-5111-9a44-3d1dd40a602f\",\"1efe69fe-f279-5111-9a44-3d1dd40a602f\",\"1a830b4d-9b15-5baf-a2f2-1d82021f478d\",\"7867e559-9b92-5279-aa62-5861b007398f\"]}"
+      }
+    ],
+    "record_id": "146c925d-1402-50f8-a7a5-445ab2b5536e",
+    "task_type": "tool_call",
+    "project_id": "ce28d910-5387-53c4-8aca-e0d17f53e35e",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标合规风险识别助手。"
+      },
+      {
+        "role": "user",
+        "content": "识别风险：\n本项目如需成交后收取履约保证金，履约保证金数额参见响应人须知前附表第22条要求，响应人可以用支票、汇票、本票等非现金形式交纳。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"risk_level\":\"high\",\"risk_type\":\"commercial\",\"reason\":\"本项目如需成交后收取履约保证金，履约保证金数额参见响应人须知前附表第22条要求，响应人可以用支票、汇票、本票等非现金形式交纳。\",\"is_rejection_clause\":false}"
+      }
+    ],
+    "record_id": "01dafacb-0547-5406-bcb7-0306f679469e",
+    "task_type": "risk_detect",
+    "project_id": "de18da6a-f1c8-56d8-ba1a-4d9288cb11c4",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标项目助手。需要时调用工具，工具结果以 tool 角色返回。可用工具：search_chunks、get_project、list_requirements、extract_scoring、get_disclosed_supplier、ask_user。最终回答必须是 JSON：{\"answer\":...,\"citations\":[chunk_id,...]}。"
+      },
+      {
+        "role": "user",
+        "content": "请给出项目 0724-2611SZ144110 的精确中标金额与评标得分明细。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"search_chunks\",\"arguments\":{\"project_id\":\"a86bec0e-7bc3-5656-a94d-d2b9e53ffb19\",\"query\":\"中标金额 评审得分\",\"top_k\":5}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"chunks\":[{\"chunk_id\":\"6ae2c1a6-9d6d-5a37-9311-5e90a93127d3\",\"document_id\":\"5654cf07-8952-5eba-8fc3-6cb68677c6e5\",\"page_start\":32,\"text\":\"第三章\\n评审办法\\n一、评审与定评\\n1．当通过资格、符合性审查的参评人不少于三家时，按照评审程序的规定和依据评分标准、计算方\\n法，各评委单独封闭对每个参评人进行评审和比较。\\n2．成交人资格的确定，由评审小组推荐，并由采购人确认。\\n3．比较与评价。评审小组按遴选文件中规定的评审方法和标准，对资格审查和符合性审查合格的参\\n评文件进行商务和技术评估，综合比较与评价。资格及符合性、价格、技术、商务部分分值分配如下：\\n评分项目\\n技术评分\\n商务评分\\n价格评分\\n合计\\n分值\\n20分\\n60分\\n20分\\n100分\\n4．技术评分\\n（1）由评审小组对所有参评文件的技术部分的响应进行审核和分析；\\n（2）评委独立进行评分，填写“技术评分表”；\\n（3）评分标准：按“技术评分表”中的分值进行评分；\\n（4）将每一个评委的评分汇集，取算术平均值（精确到小数点后两位）为该参评人的技术得分。\\n5．商务评分\\n（1）由评审小组对所有参评\"},{\"chunk_id\":\"221d174d-2d1f-5264-974c-d4497974ab1f\",\"document_id\":\"5654cf07-8952-5eba-8fc3-6cb68677c6e5\",\"page_start\":33,\"text\":\"— 33 —\\n（2.5）总价金额与按单价汇总金额不一致的，以单价金额计算结果为准；\\n（2.6）对不同文字文本参评文件的解释发生异议的，以中文文本为准。\\n（3）上述修正错误的原则及方法调整或修正参评文件的投标报价，参评人同意后，调整后的投标报\\n价对参评人起约束作用。如果参评人不接受修正后的报价，则其投标将被拒绝。\\n二、综合得分的计算\\n本项目的评审方法采用综合评分法，综合评分法评审步骤：先进行资格、符合性审查，再进行价格、\\n技术及商务的详细评审。只有通过资格、符合性审查的参评人才能进入详细的评审。\\n综合得分（精确到小数点后两位）=价格得分+技术得分+商务得分。综合得分相同的，名次按技术评\\n分由高到低顺序排列；综合得分相同且技术评分相同的，名次按商务评分由高到低顺序排列；综合得分相\\n同、技术评分和商务评分均相同的，名次由评审价由低到高顺序排列。综合得分相同、技术评分、商务评\\n分和评审价均相同的评\"},{\"chunk_id\":\"7a6a84f9-89dd-50c7-b678-6e3aee720a29\",\"document_id\":\"5654cf07-8952-5eba-8fc3-6cb68677c6e5\",\"page_start\":44,\"text\":\"— 44 —\\n六、双方的权利义务\\n1. 乙方应在签订本合同当日，细分工作内容并和甲方严格确定项目的实施范围，如有变动需征求甲\\n方的意见，并获得甲方的书面许可。\\n2. 甲方审核乙方提出的服务年度计划，由甲方进行监督实施并验收。\\n3. 甲方有权对不履行合同或违反甲方管理规定的乙方人员提出警告，并要求乙方更换服务态度差、\\n仪表差、工作差的管理人员、服务人员，乙方保证无条件予以更换，并承担一切责任及赔偿甲方损失。\\n4. 乙方须每季度向甲方提交服务记录、情况汇报等材料，以供甲方审阅，并作为对乙方服务质量评\\n估的依据。\\n5. 甲方有权对乙方服务进行中期评估及末期评估，评估结果作为结算依据。\\n6. 乙方承诺根据本项目遴选文件、响应文件、本合同约定内容及按照甲方要求修改、完善的实施方\\n案的要求提供服务。\\n七、付款方式\\n（1）零星工程费用：服务期内全年零星工程改造费用不超过本项目费用总额55000 元。\\n（\"},{\"chunk_id\":\"4f345e8c-2000-55bb-9c87-b42cbdf95ad5\",\"document_id\":\"5654cf07-8952-5eba-8fc3-6cb68677c6e5\",\"page_start\":2,\"text\":\"2026 年弱电、营区监控系统运行维护服务采购项目遴选公告\\n项目概况\\n根据《深圳市消防救援支队采购管理暂行规定（2024 年版）》广东省深圳市龙岗区消防救\\n援大队2026 年弱电、营区监控系统运行维护服务采购项目采用内部评选遴选方式择优选择参评\\n人。项目情况如下：\\n一、项目基本情况\\n项目名称：广东省深圳市龙岗区消防救援大队2026 年弱电、营区监控系统运行维护服务采购项目\\n项目编号：0724-2611SZ144110\\n预算金额：537,685.72 元\\n采购需求（包括但不限于采购的名称、数量、简要技术需求或服务要求等）：确定一家参评人，为采\\n购人提供服务。\\n合同履行期限：两年（合同一年一签，第一年为本次招标的中标服务期限，合同最多续签一次。如采\\n购人对履约情况不满意，采购人不再续约）。具体以合同签订之日起算，协议期内所有合同实质性条款不\\n得改变。\\n二、参评人的资格要求\\n1.参评人必须是具有\"},{\"chunk_id\":\"e68f8e61-0d40-56c8-a96d-3310efa62209\",\"document_id\":\"5654cf07-8952-5eba-8fc3-6cb68677c6e5\",\"page_start\":35,\"text\":\"— 35 —\\n评审内容\\n要求\\n2.参评文件及参评报价表未按规定密封、签字、盖章。\\n3.遴选文件未规定允许有替代方案时，对同一项目参评时，同时提供两套或两套以上的参\\n评方案。\\n4.分项报价或参评总价高于预算金额（最高参评限价）的。\\n5.同一项目出现两个及以上报价，按规定又无法确定哪个是有效报价。\\n6. 评审小组认为参评人的报价明显低于其他通过符合性审查参评人的报价，有可能影响\\n产品质量或者不能诚信履约的，参评人不能在合理的时间内提供书面说明，或无法提交相\\n关证明材料，参评人不能证明其报价合理性的（若评审小组成员对是否须由参评人作出报\\n价合理性说明，以及书面说明是否采纳等判断不一致的，按照“少数服从多数”的原则确\\n定评审小组的意见）。\\n备注：\\n采购评审中出现下列情形之一的，评审委员会应当启动异常低价投标（响应）审查程序：\"}]}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"ask_user\",\"arguments\":{\"question\":\"公开文件未披露完整评分明细与中标金额字段，请确认需要的字段范围。\"}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"status\":\"need_user_input\"}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"公开材料信息不足，需用户澄清所需字段后再查。\",\"citations\":[\"dd167643-3831-56d4-b0e4-0618175c1800\"],\"clarify\":true}"
+      }
+    ],
+    "record_id": "e2099eb5-3fee-50ad-823f-46f0fc575c5f",
+    "task_type": "tool_call",
+    "project_id": "a86bec0e-7bc3-5656-a94d-d2b9e53ffb19",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取项目基本信息。"
+      },
+      {
+        "role": "user",
+        "content": "从以下官方项目材料中抽取项目要素：\n广东省深圳市光明区消防救援大队2026年家具采购项目（项目编号：0724-2631SZ964238）公开招标公告"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"project_name\":\"广东省深圳市光明区消防救援大队2026年家具采购项目\",\"purchaser\":\"深圳市光明区消防救援大队\",\"budget_cny\":null,\"deadline\":null,\"region\":\"广东\",\"project_code\":\"0724-2631SZ964238)公开招标公告\"}"
+      }
+    ],
+    "record_id": "6afa0b05-4a18-556b-842b-54a1d0ae9663",
+    "task_type": "project_info_extract",
+    "project_id": "e4fbfbd4-1124-53ca-9d25-54b3c7da01bc",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责对条款进行分类并判断是否强制。"
+      },
+      {
+        "role": "user",
+        "content": "判断以下条款的类别与是否强制：\n请人的资格要求”，其中未列示的资格要求不得导致废标。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"category\":\"mandatory_rejection\",\"mandatory\":true,\"risk_level\":\"critical\",\"confidence\":0.9}"
+      }
+    ],
+    "record_id": "01e4e0a4-538b-5569-a61b-4d19104bde0f",
+    "task_type": "requirement_classify",
+    "project_id": "17562952-a8b1-5be5-bdac-c6aed5babc2a",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取资格要求。"
+      },
+      {
+        "role": "user",
+        "content": "抽取资格要求：\n18.1.3 投标人不符合国家或者招标文件规定的资格条件，投标人资质存在明显瑕"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"requirements\":[\"18.1.3 投标人不符合国家或者招标文件规定的资格条件，投标人资质存在明显瑕\"],\"mandatory\":false,\"evidence_required\":[\"资质证书\"]}"
+      }
+    ],
+    "record_id": "f94105f3-b7d3-591a-a82e-188a430ab48a",
+    "task_type": "qualification_extract",
+    "project_id": "c4474ca8-d9ac-5201-be70-da34217c73bc",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取资格要求。"
+      },
+      {
+        "role": "user",
+        "content": "抽取资格要求：\n7-2、落实政府采购政策需满足的资格要求：本项目为专门面向中小微企业采购的项目"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"requirements\":[\"7-2、落实政府采购政策需满足的资格要求：本项目为专门面向中小微企业采购的项目\"],\"mandatory\":false,\"evidence_required\":[]}"
+      }
+    ],
+    "record_id": "cf32c515-cb46-5b6e-8e50-3f27f71d0abc",
+    "task_type": "qualification_extract",
+    "project_id": "a75536b2-47d3-54b2-bff4-faf6a56a49dc",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责对条款进行分类并判断是否强制。"
+      },
+      {
+        "role": "user",
+        "content": "判断以下条款的类别与是否强制：\n致投标无效，请投标人谨慎响应，根据"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"category\":\"mandatory_rejection\",\"mandatory\":true,\"risk_level\":\"critical\",\"confidence\":0.9}"
+      }
+    ],
+    "record_id": "867d303c-d3cf-53a5-ba89-47c51c1860e3",
+    "task_type": "requirement_classify",
+    "project_id": "fe74ac2a-c1b8-592b-a6d0-f5a5e13198e2",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取项目基本信息。"
+      },
+      {
+        "role": "user",
+        "content": "从以下官方项目材料中抽取项目要素：\n项目编号：SSZX2026-235"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"project_name\":\"广东省深圳市光明区消防救援大队2026年物业管理服务采购项目\",\"purchaser\":\"深圳市光明区消防救援大队\",\"budget_cny\":null,\"deadline\":null,\"region\":\"广东\",\"project_code\":\"SSZX2026-235\"}"
+      }
+    ],
+    "record_id": "a3032523-253f-58b9-a206-30d3b5cd9628",
+    "task_type": "project_info_extract",
+    "project_id": "17562952-a8b1-5be5-bdac-c6aed5babc2a",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责对条款进行分类并判断是否强制。"
+      },
+      {
+        "role": "user",
+        "content": "判断以下条款的类别与是否强制：\n履行义务不符合本合同约定，甲方仍享有要求乙方承担违约责任的权利。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"category\":\"contract\",\"mandatory\":false,\"risk_level\":\"medium\",\"confidence\":0.55}"
+      }
+    ],
+    "record_id": "163f166a-2e87-5429-abf1-58ad20d6b72c",
+    "task_type": "requirement_classify",
+    "project_id": "fe74ac2a-c1b8-592b-a6d0-f5a5e13198e2",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取资格要求。"
+      },
+      {
+        "role": "user",
+        "content": "抽取资格要求：\n具有相应资质的检验机构出具符合标准及要求的检验报"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"requirements\":[\"具有相应资质的检验机构出具符合标准及要求的检验报\"],\"mandatory\":true,\"evidence_required\":[\"资质证书\"]}"
+      }
+    ],
+    "record_id": "2a0263fa-ea3f-5143-9bf4-4cb34f84d528",
+    "task_type": "qualification_extract",
+    "project_id": "6266cba7-1260-5932-8e3c-6eef0f512739",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标问答助手，回答必须引用证据页码或 chunk。"
+      },
+      {
+        "role": "user",
+        "content": "技术部分关于「成所投产品技术参数相比厂家产品彩页说」需要满足哪些要求？"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"成所投产品技术参数相比厂家产品彩页说明或厂家官方网站资料确有改进或不同的，须\",\"citations\":[\"127c7dee-1d04-5244-aeec-130bc465bf2c\"],\"answerable\":true}"
+      }
+    ],
+    "record_id": "025abc78-b2ca-5b2e-b646-8887b88abb53",
+    "task_type": "citation_qa",
+    "project_id": "c4474ca8-d9ac-5201-be70-da34217c73bc",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标问答助手，回答必须引用证据页码或 chunk。"
+      },
+      {
+        "role": "user",
+        "content": "技术部分关于「乙方对货物技术参数响应情况为“符合”」需要满足哪些要求？"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"乙方对货物技术参数响应情况为“符合”的，甲方按“响应要求\",\"citations\":[\"f6e65471-af37-5176-8df5-22ac929b9144\"],\"answerable\":true}"
+      }
+    ],
+    "record_id": "5bd6d998-047a-5ee8-8eb1-8c13d6bfa9a3",
+    "task_type": "citation_qa",
+    "project_id": "fe74ac2a-c1b8-592b-a6d0-f5a5e13198e2",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取评分办法条目。"
+      },
+      {
+        "role": "user",
+        "content": "抽取评分条目：\n4. 客观评分项，所有评审专家应当统一打分分值；"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"item\":\"4. 客观评分项，所有评审专家应当统一打分分值；\",\"score\":null,\"method\":\"综合评分法\"}"
+      }
+    ],
+    "record_id": "857d46d6-894b-531b-9ddc-0e4ea6ab5fb9",
+    "task_type": "scoring_extract",
+    "project_id": "17562952-a8b1-5be5-bdac-c6aed5babc2a",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取资格要求。"
+      },
+      {
+        "role": "user",
+        "content": "抽取资格要求：\n2、具有有效的环境管理体系认证，得0.5分；"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"requirements\":[\"2、具有有效的环境管理体系认证，得0.5分；\"],\"mandatory\":false,\"evidence_required\":[]}"
+      }
+    ],
+    "record_id": "890579bd-8db4-528d-81e2-c564d6bc2b68",
+    "task_type": "qualification_extract",
+    "project_id": "3a301dc8-7b16-5c69-82be-9bc2648aae42",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责对条款进行分类并判断是否强制。"
+      },
+      {
+        "role": "user",
+        "content": "判断以下条款的类别与是否强制：\n1.2供应商具有良好的商业信誉和健全的财务会计制度，须提供相关证明材料，内容可为以下四者之一：1）2023年度至今任意一年度经审计的审计报告及财务报表，财务报表包括“四表一注”，即资产负债表、利润表、现金流量表、所有者权益变动表及其附注，根据《关于加强审计报告查验工作的通知》（财会〔2023〕15号）规定，在2022年10月以后出具的审计报告须在注册会计师行业统一监管平台（网址：http://acc.mof.gov.cn）取得赋码，未取得赋码的财务报告视为无效（注：非营利性单位或者社会团体或者其他机关事业单位以符合财务会计制度为准）；"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"category\":\"mandatory_rejection\",\"mandatory\":true,\"risk_level\":\"critical\",\"confidence\":0.9}"
+      }
+    ],
+    "record_id": "41705c85-e3ed-5aeb-918c-d5a31ad0d8fd",
+    "task_type": "requirement_classify",
+    "project_id": "a8a42050-ff30-538f-8d88-5e052018d273",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标合规风险识别助手。"
+      },
+      {
+        "role": "user",
+        "content": "识别风险：\n第三章项目需求（实质性条款除外）的全部内容”、“投标文件响应”栏填写“完全满足招"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"risk_level\":\"high\",\"risk_type\":\"other\",\"reason\":\"第三章项目需求（实质性条款除外）的全部内容”、“投标文件响应”栏填写“完全满足招\",\"is_rejection_clause\":false}"
+      }
+    ],
+    "record_id": "101dd4ac-35f2-5305-aa96-1cd79f1fad4a",
+    "task_type": "risk_detect",
+    "project_id": "17562952-a8b1-5be5-bdac-c6aed5babc2a",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取评分办法条目。"
+      },
+      {
+        "role": "user",
+        "content": "抽取评分条目：\n1.评标方法和标准：采用综合评分法。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"item\":\"1.评标方法和标准：采用综合评分法。\",\"score\":null,\"method\":\"综合评分法\"}"
+      }
+    ],
+    "record_id": "2d4e2403-5f6b-55e3-8447-ae1037112296",
+    "task_type": "scoring_extract",
+    "project_id": "a8a42050-ff30-538f-8d88-5e052018d273",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标项目助手。需要时调用工具，工具结果以 tool 角色返回。可用工具：search_chunks、get_project、list_requirements、extract_scoring、get_disclosed_supplier、ask_user。最终回答必须是 JSON：{\"answer\":...,\"citations\":[chunk_id,...]}。"
+      },
+      {
+        "role": "user",
+        "content": "请检索并汇总项目「中国人民警察大学（广州）委托审计服务」（编号 GZGCCG-2026053）的关键信息。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"search_chunks\",\"arguments\":{\"project_id\":\"a75536b2-47d3-54b2-bff4-faf6a56a49dc\",\"query\":\"中国人民警察大学（广州）委托审计服务\",\"top_k\":5}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"chunks\":[{\"chunk_id\":\"2f727a16-cd64-5d6d-be9f-2b545d24b2ef\",\"document_id\":\"247211b7-d308-526e-a6a8-377e7da9e707\",\"page_start\":1,\"text\":\"中国人民警察大学（广州）委托审计服务预公告\\n\\n财政部唯一指定政府采购信息网络发布媒体 国家级政府采购专业网站\\n服务热线：400-810-1996 | 服务投诉：010-63819289\\n\\n首页\\n\\n政采法规\\n\\n购买服务\\n\\n监督检查\\n\\n信息公告\\n\\n国际专栏\\n\\n当前位置：\\n首页\\n»\\n\\n政采公告\\n»\\n中央公告\\n»\\n其他公告\\n\\n中国人民警察大学（广州）委托审计服务预公告\\n\\n2026年07月15日 12:03\\n来源：\\n【\\n打印\\n】\\n\\n公告概要：\\n公告信息：\\n采购项目名称\\n中国人民警察大学（广州）委托审计服务\\n品目\\n服务/鉴证咨询服务/鉴证服务/工程造价鉴定服务,服务/商务服务/审计服务\\n采购单位\\n中国人民警察大学\\n行政区域\\n广州市\\n公告时间\\n2026年07月15日 12:03\\n开标时间\\n预算金额\\n￥0.000000万元（人民币）\\n联系人及联系方式：\\n项目联系人\\n邹工\\n项目联系电话\\n020-372018\"},{\"chunk_id\":\"6285aa5e-dd13-5472-a5af-c1753d8ed712\",\"document_id\":\"247211b7-d308-526e-a6a8-377e7da9e707\",\"page_start\":1,\"text\":\"街30号人为峰大厦A1栋601室\\n\\n一、采购项目内容\\n1、项目名称：中国人民警察大学（广州）委托审计服务\\n2、项目编号：GZGCCG-2026053\\n3. 项目预算金额（即最高限价）：\\n无\\n4、征求意见内容具体详见附件1\\n5、回复意见的供应商资格：\\n能够提供本项目相关货物服务的供应商或承包商。\\n6、文件获取时间及办法：即日起至回复意见截止时间止，符合资格条件的供应商可在广采电子招标采购平台（http://zbs.gzsgczb.com/）、中国政府采购网（https://www.ccgp.gov.cn/）、广州市广采招标有限公司官网（https://www.gzsgczb.com/）免费下载\\n7、回复意见截止时间：\\n2026年7月18日17:00（北京时间）\\n8、回复意见格式：\\n请按照修改建议书（附件2）的参考格式提出对本项目限制性条款及要求的修改理由和修改建议\\n9、回复意见方式\\n将修改建\"},{\"chunk_id\":\"895c7959-ed71-5c95-96de-a734ebd95adf\",\"document_id\":\"a0b7ebe4-5ac4-5af1-8d45-0b26a8a6200c\",\"page_start\":1,\"text\":\"竞 价 文 件\\n项 目名称：中国人民警察大学（广州）委托审计服务\\n项目编号：GZGCCG-2026053\\n采 购 人：中国人民警察大学（广州）\\n采购代理机构：广州市广采招标有限公司\\n第一部分 竞价公告\\n一、项目基本情况\\n1. 项目编号：GZGCCG-2026053\\n2. 项目名称：中国人民警察大学（广州）委托审计服务\\n3. 采购方式：竞价\\n4. 预算金额（最高限价）：/。\\n5. 采购需求：采购包1：工程类审计。采购包2：物资类、服务类、信息化类审计，具体详见竞价文件“第五部分 采购需求”。\\n6. 合同履约：服务期限三年，合同一年一签。\\n二、申请人的资格要求（须同时满足）\\n投标人基本资质：\\n1、满足《中华人民共和国政府采购法》第二十二条规定；\\n2、落实政府采购政策需满足的资格要求：本项目为专门面向中小微企业采购的项目，采购标的对应的中小企业划分标准所属行业：其他未列明行业。\\n本项目的特定资格\"},{\"chunk_id\":\"134b4b19-8f21-5a11-814a-df59f8156bc2\",\"document_id\":\"a0b7ebe4-5ac4-5af1-8d45-0b26a8a6200c\",\"page_start\":1,\"text\":\"失由乙方承担。\\n3) 甲方无正当理由拒收接受服务，到期拒付服务款项的，甲方向乙方偿付本合同总的5%的违约金。甲方人逾期付款，则每日按本合同总价的3‰向乙方偿付违约金。\\n4) 其它违约责任按《中华人民共和国合同法》处理。\\n争端的解决\\n合同执行过程中发生的任何争议，如双方不能通过友好协商解决，按相关法律法规处理。\\n不可抗力任何一方由于不可抗力原因不能履行合同时，应在不可抗力事件结束后1日内向对方通报，以减轻可能给对方造成的损失，在取得有关机构的不可抗力证明或双方谅解确认后，允许延期履行或修订合同，并根据情况可部分或全部免于承担违约责任。\\n税费\\n在中国境内、外发生的与本合同执行有关的一切税费均由乙方负担。\\n其它\\n1) 本合同所有附件、磋商文件、响应文件、成交通知书均为合同的有效组成部分，与本合同具有同等法律效力。\\n2) 在执行本合同的过程中，所有经双方签署确认的文件（包括会议纪要、补充协议、往来\"},{\"chunk_id\":\"90a88a4f-0785-591e-8560-a30915bcab2a\",\"document_id\":\"a0b7ebe4-5ac4-5af1-8d45-0b26a8a6200c\",\"page_start\":1,\"text\":\"计服务（项目编号：GZGCCG-2026053）采购包： 竞价的有关活动 ，并对此项目进行竞价。为此：\\n一、遵照学校有关规定，经认真研究竞价文件的竞价须知、合同条款、项目内容及要求及其他有关文件后，我方愿以下浮率 % 的报价作为竞价报价，项目履约时间： 并按上述合同条款、项目内容及要求的条 件要求承担本项目的采购活动。二、提供竞价文件规定的全部竞价文件。\\n三、我方同意在本项目竞价文件中规定的竞价之日起 天内遵守本竞价文件中的承诺且在此期限届满之前均具有约束力。\\n四、我方将按竞价文件的规定履行合同责任和义务，并对竞价活动中的一切行为承担法律责任。\\n五、我方同意提供按照贵方可能要求的与其竞价有关的一切数据和资料，理解贵方不一定接受最低的竞价。\\n六、如果在竞价截止日后规定的竞价有效期内撤回竞价，我方的竞价保证金可被贵方没收。\\n七、我方愿意向贵方提供任何与本项竞价有关的数据、情况和技术资料。若贵方\"}]}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"get_project\",\"arguments\":{\"project_id\":\"a75536b2-47d3-54b2-bff4-faf6a56a49dc\"}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"project\":{\"project_id\":\"a75536b2-47d3-54b2-bff4-faf6a56a49dc\",\"project_code\":\"GZGCCG-2026053\",\"project_name\":\"中国人民警察大学（广州）委托审计服务\",\"purchaser\":\"中国人民警察大学\",\"budget_cny\":null,\"bundle_level\":\"level_c\",\"official_project_url\":\"https://download.ccgp.gov.cn/oss/download?uuid=3C0B3E5A7ACE8BF2F81600954F90B1\"}}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"项目编号 GZGCCG-2026053，名称 中国人民警察大学（广州）委托审计服务，采购人 中国人民警察大学。预算在公开材料中未披露。\",\"citations\":[\"2f727a16-cd64-5d6d-be9f-2b545d24b2ef\",\"6285aa5e-dd13-5472-a5af-c1753d8ed712\",\"895c7959-ed71-5c95-96de-a734ebd95adf\"]}"
+      }
+    ],
+    "record_id": "e1e2a639-6943-5de7-a7db-f1a5b5837d8d",
+    "task_type": "tool_call",
+    "project_id": "a75536b2-47d3-54b2-bff4-faf6a56a49dc",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标问答助手，回答必须引用证据页码或 chunk。"
+      },
+      {
+        "role": "user",
+        "content": "投标人就「1供应商具有独立承担民事责任能力的在」需要提交哪些证明材料？"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"1 供应商具有独立承担民事责任能力的在中华人民共和国境内注册的法人或其他组织（提供企业法人或者其他组织营业执照（或事业法人登记证或身份证等相关证明）副本复印件，分支机构投标，须取得具有法人资格的总公司（总所）出具给分支机构的授权书，并提供总公司（总所）和分支机构的营业执照（执业许可证）复印件。\",\"citations\":[\"2f2724f6-1b88-5738-b8ae-3d2918289efa\"],\"answerable\":true}"
+      }
+    ],
+    "record_id": "f5304219-f5c5-5c95-9e4e-ae493e2e9d88",
+    "task_type": "citation_qa",
+    "project_id": "ddff323e-15ad-5c77-b0bf-0683e02f5a2d",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取项目基本信息。"
+      },
+      {
+        "role": "user",
+        "content": "从以下官方项目材料中抽取项目要素：\n采购人：中华人民共和国珠海出入境边防检查总站"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"project_name\":\"中华人民共和国珠海出入境边防检查总站2026年度民警被装采购项目\",\"purchaser\":\"中华人民共和国珠海出入境边防检查总站\",\"budget_cny\":null,\"deadline\":null,\"region\":\"广东\",\"project_code\":\"07-08-04A-2026-D-F-E18540\"}"
+      }
+    ],
+    "record_id": "7e166112-b0ad-5ba8-b478-1455ffd4bc32",
+    "task_type": "project_info_extract",
+    "project_id": "3a301dc8-7b16-5c69-82be-9bc2648aae42",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标合规风险识别助手。"
+      },
+      {
+        "role": "user",
+        "content": "识别风险：\n供整体设计、规范编制或者项目管理、监理、检测等服务的供应商，不得再参加该采购"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"risk_level\":\"high\",\"risk_type\":\"other\",\"reason\":\"供整体设计、规范编制或者项目管理、监理、检测等服务的供应商，不得再参加该采购\",\"is_rejection_clause\":false}"
+      }
+    ],
+    "record_id": "0675b945-2884-5f21-be87-b15c5c3abdd0",
+    "task_type": "risk_detect",
+    "project_id": "a8a42050-ff30-538f-8d88-5e052018d273",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取评分办法条目。"
+      },
+      {
+        "role": "user",
+        "content": "抽取评分条目：\n38.3.1 综合评分法"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"item\":\"38.3.1 综合评分法\",\"score\":null,\"method\":\"综合评分法\"}"
+      }
+    ],
+    "record_id": "fb3e724e-ea29-57fe-8df3-3b8b7a221086",
+    "task_type": "scoring_extract",
+    "project_id": "17562952-a8b1-5be5-bdac-c6aed5babc2a",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标项目助手。需要时调用工具，工具结果以 tool 角色返回。可用工具：search_chunks、get_project、list_requirements、extract_scoring、get_disclosed_supplier、ask_user。最终回答必须是 JSON：{\"answer\":...,\"citations\":[chunk_id,...]}。"
+      },
+      {
+        "role": "user",
+        "content": "根据公开中标/成交材料，核对供应商「上海民航新时代机场设计研究院」在项目 0724-2630S1123294 中已被披露的信息，不得推断其满足全部资格条件。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"search_chunks\",\"arguments\":{\"project_id\":\"ab8d6a0c-4f83-551f-b06e-8a256e8fcebe\",\"query\":\"上海民航新时代机场设计研究院\",\"top_k\":5}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"chunks\":[{\"chunk_id\":\"5aa54ad9-c33d-5fbd-a803-07bf328dde1b\",\"document_id\":\"dcf7b025-9563-5f1f-90e5-8b12c505b1dc\",\"page_start\":1,\"text\":\"0S1123294\\n（招标文件编号：0724-2630S1123294）\\n\\n二、项目名称：广州新机场工程空管工程工艺设计\\n\\n三、中标（成交）信息\\n\\n供应商名称：上海民航新时代机场设计研究院有限公司\\n供应商地址：中国（上海）自由贸易试验区基隆路6号外高桥大厦722室\\n中标（成交）金额：1725.0000000（万元）\\n四、主要标的信息\\n\\n序号\\n\\n供应商名称\\n\\n服务名称\\n\\n服务范围\\n\\n服务要求\\n\\n服务时间\\n\\n服务标准\\n\\n1\\n\\n上海民航新时代机场设计研究院有限公司\\n\\n广州新机场工程空管工程工艺设计\\n\\n详见招标文件\\n\\n满足国家及民航现行的建筑工程设计标准、设计规范（规程）及设计文件编制深度\"},{\"chunk_id\":\"8859618a-d274-582f-b78a-dd9320b57ba7\",\"document_id\":\"dcf7b025-9563-5f1f-90e5-8b12c505b1dc\",\"page_start\":1,\"text\":\"代理人支付中标服务费。\\n\\n本项目代理费总金额：8.324375 万元（人民币）\\n\\n七、公告期限\\n\\n自本公告发布之日起1个工作日。\\n\\n八、其它补充事宜\\n\\n中标人：上海民航新时代机场设计研究院有限公司\\n评标得分：93.27\\n本项目为民航专业工程项目，本中标公告仅为同步发布，具体详见：\\n中国招标投标公共服务平台（\\nhttp://cebpubservice.cn/\\n）、民航专业工程建设项目招标投标管理系统（\\nhttps://zbtb.caac.gov.cn/\\n）、\\n广州公共资源交易中心\\n（\\nhttp://www.gzggzy.cn\\n）等\\n平台\\n\\n九、凡对本次公告内容提出询问，请按以下方式联\"}]}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"get_disclosed_supplier\",\"arguments\":{\"project_id\":\"ab8d6a0c-4f83-551f-b06e-8a256e8fcebe\",\"supplier_id\":\"4873134d-070f-5b8e-bd80-17f7d2b1e57a\"}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"supplier\":{\"supplier_id\":\"4873134d-070f-5b8e-bd80-17f7d2b1e57a\",\"name\":\"上海民航新时代机场设计研究院\",\"source_document_ids\":[\"dcf7b025-9563-5f1f-90e5-8b12c505b1dc\"],\"source_urls\":[\"https://www.ccgp.gov.cn/cggg/zygg/zbgg/202607/t20260714_26929151.htm\"]}}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"供应商 上海民航新时代机场设计研究院 仅被公开披露，未据此推断全部资格满足。\",\"citations\":[\"5aa54ad9-c33d-5fbd-a803-07bf328dde1b\",\"8859618a-d274-582f-b78a-dd9320b57ba7\"]}"
+      }
+    ],
+    "record_id": "17f55d7a-2e93-5cdc-ac42-71b4d5cef652",
+    "task_type": "tool_call",
+    "project_id": "ab8d6a0c-4f83-551f-b06e-8a256e8fcebe",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取评分办法条目。"
+      },
+      {
+        "role": "user",
+        "content": "抽取评分条目：\n综合评分法，是指投标文件满足招标文件全部实质性要求，且按照评审因素的量化指标评审得分最高的投标人为中标候选人的评标方法。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"item\":\"综合评分法，是指投标文件满足招标文件全部实质性要求，且按照评审因素的量化指标评审得分最高的投标人为中标候选人的评标方法。\",\"score\":null,\"method\":\"综合评分法\"}"
+      }
+    ],
+    "record_id": "13a3e85a-f1d9-5cd3-a6e6-e6eb2087d055",
+    "task_type": "scoring_extract",
+    "project_id": "3a301dc8-7b16-5c69-82be-9bc2648aae42",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标合规风险识别助手。"
+      },
+      {
+        "role": "user",
+        "content": "识别风险：\n一、请各供应厂商认真遵守与我院签署的廉洁协议，坚持以公开、公正、诚信、透"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"risk_level\":\"high\",\"risk_type\":\"other\",\"reason\":\"一、请各供应厂商认真遵守与我院签署的廉洁协议，坚持以公开、公正、诚信、透\",\"is_rejection_clause\":false}"
+      }
+    ],
+    "record_id": "04bd4d01-990f-5461-bf61-e9ae1c338894",
+    "task_type": "risk_detect",
+    "project_id": "c4474ca8-d9ac-5201-be70-da34217c73bc",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标问答助手，回答必须引用证据页码或 chunk。"
+      },
+      {
+        "role": "user",
+        "content": "评分项「综合评分法」如何赋分？"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"综合评分法，是指投标文件满足招标文件全部实质性要求，且按照评审因素的量化指标评审得分最高的投标人为中标候选人的评标方法。\",\"citations\":[\"8f66c13d-2d24-5f0f-a27f-ee9cf5d4ae77\"],\"answerable\":true}"
+      }
+    ],
+    "record_id": "d4379cb4-d37c-5507-a44a-3e9eeddaf593",
+    "task_type": "citation_qa",
+    "project_id": "3a301dc8-7b16-5c69-82be-9bc2648aae42",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责对条款进行分类并判断是否强制。"
+      },
+      {
+        "role": "user",
+        "content": "判断以下条款的类别与是否强制：\n（1）可将本采购包作废标处理，重新组织招标；"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"category\":\"mandatory_rejection\",\"mandatory\":true,\"risk_level\":\"critical\",\"confidence\":0.9}"
+      }
+    ],
+    "record_id": "9389fdd6-369a-5a03-8d2a-c102c2fe90e4",
+    "task_type": "requirement_classify",
+    "project_id": "a8a42050-ff30-538f-8d88-5e052018d273",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标问答助手，回答必须引用证据页码或 chunk。"
+      },
+      {
+        "role": "user",
+        "content": "「中华人民共和国广州出入境边防检查总站轮训」的基本采购信息有哪些？"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"（3）供应商应在密封的外包装上注明采购项目名称、项目编号、包号（标\",\"citations\":[\"c2611e3f-44b2-5b1c-9a82-e576230c7330\"],\"answerable\":true}"
+      }
+    ],
+    "record_id": "bceaf000-aa4f-5281-bf35-0cc1df7cfd6d",
+    "task_type": "citation_qa",
+    "project_id": "a8a42050-ff30-538f-8d88-5e052018d273",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标合规风险识别助手。"
+      },
+      {
+        "role": "user",
+        "content": "识别风险：\n除对所评估内容进行详实总结外，如评估项目建设高度与业主单位申请建设高度不一致，应在结论中详细说明，并提出建议。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"risk_level\":\"high\",\"risk_type\":\"other\",\"reason\":\"除对所评估内容进行详实总结外，如评估项目建设高度与业主单位申请建设高度不一致，应在结论中详细说明，并提出建议。\",\"is_rejection_clause\":false}"
+      }
+    ],
+    "record_id": "0536103f-1b05-5000-8327-20ed665cc486",
+    "task_type": "risk_detect",
+    "project_id": "a8a42050-ff30-538f-8d88-5e052018d273",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取资格要求。"
+      },
+      {
+        "role": "user",
+        "content": "抽取资格要求：\n竞价所提交的一切材料均真实、合法、有效，不以他人名义响应、借用资质、挂靠骗取中选/成交，不提供虚假材料谋取中选/成交（包括官方指定网站查询的信用记录，所有事项如实汇报，不免除在其他网站查询的相关违规记录的责任）。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"requirements\":[\"竞价所提交的一切材料均真实、合法、有效，不以他人名义响应、借用资质、挂靠骗取中选/成交，不提供虚假材料谋取中选/成交（包括官方指定网站查询的信用记录，所有事项如实汇报，不免除在其他网站查询的相关违规记录的责任）。\"],\"mandatory\":true,\"evidence_required\":[\"资质证书\"]}"
+      }
+    ],
+    "record_id": "81552fae-848a-5130-852c-962f5f5b93fa",
+    "task_type": "qualification_extract",
+    "project_id": "ddff323e-15ad-5c77-b0bf-0683e02f5a2d",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责对条款进行分类并判断是否强制。"
+      },
+      {
+        "role": "user",
+        "content": "判断以下条款的类别与是否强制：\n4.3.1在本章第4.2.1项规定的响应文件提交截止时间前，供应商可以修改或撤回已递交的响应文件，但应以书面形式通知采购人。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"category\":\"project_info\",\"mandatory\":true,\"risk_level\":\"high\",\"confidence\":0.55}"
+      }
+    ],
+    "record_id": "1573e50a-c550-5eba-9962-323357e3f486",
+    "task_type": "requirement_classify",
+    "project_id": "a8a42050-ff30-538f-8d88-5e052018d273",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取项目基本信息。"
+      },
+      {
+        "role": "user",
+        "content": "从以下官方项目材料中抽取项目要素：\n一、采购项目内容确定一家供应商，为采购人提供2026年直升机训练与救援服务。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"project_name\":\"广东省深圳市消防救援支队2026年直升机训练与救援服务项目\",\"purchaser\":\"深圳市消防救援支队\",\"budget_cny\":null,\"deadline\":null,\"region\":\"广东\",\"project_code\":\"SSZX2026-191\"}"
+      }
+    ],
+    "record_id": "86a63f04-9ec2-5a7a-a30a-eecd1b535ec9",
+    "task_type": "project_info_extract",
+    "project_id": "ce28d910-5387-53c4-8aca-e0d17f53e35e",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标合规风险识别助手。"
+      },
+      {
+        "role": "user",
+        "content": "识别风险：\n注：其中，对于“不同供应商的单位负责人是否为同一人”，由采购代理机构将通过国家企业"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"risk_level\":\"high\",\"risk_type\":\"other\",\"reason\":\"注：其中，对于“不同供应商的单位负责人是否为同一人”，由采购代理机构将通过国家企业\",\"is_rejection_clause\":false}"
+      }
+    ],
+    "record_id": "0797a148-5b7d-5285-94cc-e3123dde3ada",
+    "task_type": "risk_detect",
+    "project_id": "d9b41828-9428-5bd7-944d-e0626f77a149",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标项目助手。需要时调用工具，工具结果以 tool 角色返回。可用工具：search_chunks、get_project、list_requirements、extract_scoring、get_disclosed_supplier、ask_user。最终回答必须是 JSON：{\"answer\":...,\"citations\":[chunk_id,...]}。"
+      },
+      {
+        "role": "user",
+        "content": "请检索并汇总项目「中国人民警察大学（广州）培训住宿用品服务保障采购（二次）」（编号 YCZB-2026-GZ-02055）的关键信息。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"search_chunks\",\"arguments\":{\"project_id\":\"de18da6a-f1c8-56d8-ba1a-4d9288cb11c4\",\"query\":\"中国人民警察大学（广州）培训住宿用品服务保障采购（二次）\",\"top_k\":5}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"chunks\":[{\"chunk_id\":\"2b0938ea-8490-527e-a558-58da5d8ba55c\",\"document_id\":\"8a3b3150-5170-5870-9f11-fe0770efb1db\",\"page_start\":1,\"text\":\"中国人民警察大学（广州）培训住宿用品服务保障采购（二次）竞价公告\\n\\n财政部唯一指定政府采购信息网络发布媒体 国家级政府采购专业网站\\n服务热线：400-810-1996 | 服务投诉：010-63819289\\n\\n首页\\n\\n政采法规\\n\\n购买服务\\n\\n监督检查\\n\\n信息公告\\n\\n国际专栏\\n\\n当前位置：\\n首页\\n»\\n\\n政采公告\\n»\\n中央公告\\n»\\n其他公告\\n\\n中国人民警察大学（广州）培训住宿用品服务保障采购（二次）竞价公告\\n\\n2026年07月13日 17:06\\n来源：\\n【\\n打印\\n】\\n\\n公告概要：\\n公告信息：\\n采购项目名称\\n中国人民警察大学（广州）培训住宿用品服务保障采购（二次）\\n品目\\n服务/商务服务/批发服务/其他批发服务\\n采购单位\\n中国人民警察大学\\n行政区域\\n广东省\\n公告时间\\n2026年07月13日 17:06\\n开标时间\\n2026年07月24日 14:30\\n预算金额\\n￥20.000000万元（人民币）\\n联系\"},{\"chunk_id\":\"9df4cbdc-616f-5fcd-bb05-092cabf18f3f\",\"document_id\":\"8a3b3150-5170-5870-9f11-fe0770efb1db\",\"page_start\":1,\"text\":\"目内容\\n一、项目基本情况\\n1.项目编号：YCZB-2026-GZ-02055\\n2.项目名称：中国人民警察大学（广州）培训住宿用品服务保障采购（二次）\\n3.采购方式：竞价\\n4.项目预算金额：人民币20万元\\n5.采购需求：培训住宿用品服务保障采购\\n6.项目履约时间：本项目履约期2年，合同一年一签，期满经考核合格可续签1年。因重大政策调整或预算无法保障项目实施，导致合同无法继续履行的，采购人提前30日书面告知，双方协商一致后终止合同。双方据实结算，互不承担违约责任。\\n7.本项目是否接受联合体响应：否\\n二、申请人的资格要求（须同时满足）\\n1.（1）具有独立承担民事责任的能力；\\n（2）具有良好的商业信誉和健全的财务会计制度；\\n（3）具有履行合同所必需的设备和专业技术能力；\\n（4）有依法缴纳税收和社会保障资金的良好记录；\\n（5）参加采购活动前三年内,在经营活动中没有重大违法记录。\\n2.是否专门面向中小\"},{\"chunk_id\":\"f347dae5-f8c1-5b1f-bb6b-bacfc468e4e6\",\"document_id\":\"d70d3db6-db75-55aa-8355-a06c9fd749ba\",\"page_start\":1,\"text\":\"竞价文件\\n项目名称：中国人民警察大学（广州）培训住宿用品服务保障采购（二次）\\n项目编号：YCZB-2026-GZ-02055\\n采购人：中国人民警察大学（广州）\\n采购代理机构：粤采（广东）采购招标代理有限公司\\n二零二六年七月\\n目录\\n第一部分 竞价公告 1\\n第二部分 响应人须知前附表 5\\n第三部分 响应人须知 10\\n第四部分 初步评审标准 20\\n第五部分 采购需求 23\\n第六部分 成交合同 37\\n第七部分 响应文件格式 56\\n第一部分 竞价公告\\n一、项目基本情况\\n1.项目编号：YCZB-2026-GZ-02055\\n2.项目名称：中国人民警察大学（广州）培训住宿用品服务保障采购（二次）\\n3.采购方式：竞价\\n4.项目预算金额：人民币20万元\\n5.采购需求：培训住宿用品服务保障采购\\n6.项目履约时间：本项目履约期2年，合同一年一签，期满经考核合格可续签1年。因重大政策调整或预算无法保障项目实施，导致\"},{\"chunk_id\":\"9a6e8b30-8946-5f1c-81d9-dce22b358a2b\",\"document_id\":\"d70d3db6-db75-55aa-8355-a06c9fd749ba\",\"page_start\":1,\"text\":\"（二）实施方案\\n1.总体思路\\n以质量可靠、供应稳定、配送及时、服务优质、价格合理为核心，建立标准化供货、配送、售后、考核管理体系，满足学校培训住宿日常需求。\\n2.供货方案\\n（1）建立常备库存，重点品类备货量满足1个月用量。\\n（2）供应商直采、原厂正品、资质齐全，杜绝三无产品。\\n（3）定制LOGO按采购人要求设计、打样、确认后生产。\\n3.配送方案\\n（1）固定2名以上专职配送员、1台以上专用车辆。\\n（2）常规订单：当日16:00前下单，次日12:00前送达；紧急订单4小时内送达。\\n（3）送货上门、卸货到位、现场验收、签字确认。\\n4. 质量管控方案\\n（1）入库检验：核对资质、合格证、检测报告、外观质量。\\n（2）出库抽检：每批次随机抽样，不合格禁止出库。\\n（3）质量追溯：建立台账，全程可追溯。\\n5.售后服务方案\\n（1）7×24小时客服电话，1小时响应、2小时回复、24小时解决。\\n（2）质量问题：无\"},{\"chunk_id\":\"34380d5c-75d9-5db7-96f3-1ea25dafce8d\",\"document_id\":\"d70d3db6-db75-55aa-8355-a06c9fd749ba\",\"page_start\":1,\"text\":\"1 中国人民警察大学（广州）培训住宿用品服务保障采购（二次） 培训住宿用品服务保障采购 1 在有效投标单位中，按报价下浮率越高，结算单价越低原则，确定1家成交供应商\\n序号 名称 规格参数 单位 下浮率 推荐品牌\\n一次性洗漱用品（客房标配） 一次性洗漱用品（客房标配） 一次性洗漱用品（客房标配） 一次性洗漱用品（客房标配） 一次性洗漱用品（客房标配） 一次性洗漱用品（客房标配）\"}]}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"get_project\",\"arguments\":{\"project_id\":\"de18da6a-f1c8-56d8-ba1a-4d9288cb11c4\"}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"project\":{\"project_id\":\"de18da6a-f1c8-56d8-ba1a-4d9288cb11c4\",\"project_code\":\"YCZB-2026-GZ-02055\",\"project_name\":\"中国人民警察大学（广州）培训住宿用品服务保障采购（二次）\",\"purchaser\":\"中国人民警察大学\",\"budget_cny\":null,\"bundle_level\":\"level_c\",\"official_project_url\":\"https://download.ccgp.gov.cn/oss/download?uuid=9C7B8473C984690A658388328DD7D7\"}}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"项目编号 YCZB-2026-GZ-02055，名称 中国人民警察大学（广州）培训住宿用品服务保障采购（二次），采购人 中国人民警察大学。预算在公开材料中未披露。\",\"citations\":[\"2b0938ea-8490-527e-a558-58da5d8ba55c\",\"9df4cbdc-616f-5fcd-bb05-092cabf18f3f\",\"f347dae5-f8c1-5b1f-bb6b-bacfc468e4e6\"]}"
+      }
+    ],
+    "record_id": "78554ab3-9e8c-58b8-957f-6b2c03716a61",
+    "task_type": "tool_call",
+    "project_id": "de18da6a-f1c8-56d8-ba1a-4d9288cb11c4",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取项目基本信息。"
+      },
+      {
+        "role": "user",
+        "content": "从以下官方项目材料中抽取项目要素：\n广州新机场工程空管工程工艺设计（项目名称）招标公告"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"project_name\":\"广州新机场工程空管工程工艺设计\",\"purchaser\":\"中国民用航空中南地区空中交通管理局\",\"budget_cny\":null,\"deadline\":null,\"region\":\"广东\",\"project_code\":\"0724-2630S1123294\"}"
+      }
+    ],
+    "record_id": "5d188199-3961-5b12-bb59-96303ae38d75",
+    "task_type": "project_info_extract",
+    "project_id": "ab8d6a0c-4f83-551f-b06e-8a256e8fcebe",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标项目助手。需要时调用工具，工具结果以 tool 角色返回。可用工具：search_chunks、get_project、list_requirements、extract_scoring、get_disclosed_supplier、ask_user。最终回答必须是 JSON：{\"answer\":...,\"citations\":[chunk_id,...]}。"
+      },
+      {
+        "role": "user",
+        "content": "请给出项目 中大招(货)[2026]050号 的精确中标金额与评标得分明细。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"search_chunks\",\"arguments\":{\"project_id\":\"9d3c2112-d8de-5505-b6fd-5accc23af170\",\"query\":\"中标金额 评审得分\",\"top_k\":5}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"chunks\":[{\"chunk_id\":\"6d294ee1-077d-5124-809e-05ab3857fe2c\",\"document_id\":\"65183fb2-a971-5b5c-8566-bad9077091f9\",\"page_start\":37,\"text\":\"37\\n序号\\n条款号\\n内容\\n文件。\\n五、开标、评标与定标\\n18\\n22.1\\n按《投标邀请函》中规定的日期、时间进行开标活动。\\n19\\n25.1\\n投标人未按《资格审查表》提供完整、有效资格证明材料的，作无效投标\\n处理。\\n20\\n26.3\\n按照《关于推动解决政府采购异常低价问题的通知》（财库(2026]2 号)\\n规定，评审中出现下列情形之一的，评审委员会应当启动异常低价投标审\\n查程序。\\n21\\n27.1\\n投标文件的评价采用综合评分法。\\n22\\n28.2\\n中标人确定后，中标结果于评标工作结束后在中山大学智能电子采购系统\\n（\\nhttps://www.zhizhengyun.com\\n）\\n、\\n中\\n国\\n政\\n府\\n采\\n购\\n网\\n（\\nhttp://www.ccgp.gov.cn\\n）\\n及\\n代\\n理\\n机\\n构\\n网\\n站\\n（http://www.gzswbc.com/ ）进行公告发布。\\n公告发布。\\n中标结果公告后，投标人可登录中山大学\"},{\"chunk_id\":\"11804d75-491d-56ff-9efc-e6839fc885b4\",\"document_id\":\"65183fb2-a971-5b5c-8566-bad9077091f9\",\"page_start\":51,\"text\":\"26.6 单一产品采购项目提供相同品牌产品或非单一产品采购项目多家投标人提供的任\\n意一个核心产品品牌相同的，按一家投标人计算，评审后得分最高的同品牌投标人获得中标\\n人推荐资格；评审得分相同的，由采购人或者采购人委托评标委员会按照招标文件规定的方\\n式确定一个投标人获得中标人推荐资格，招标文件未规定的采取随机抽取方式确定，其他同\\n品牌投标人不作为中标候选人。\"},{\"chunk_id\":\"7a83487f-516a-5018-a9df-49d2c5e353a4\",\"document_id\":\"65183fb2-a971-5b5c-8566-bad9077091f9\",\"page_start\":57,\"text\":\"27.4.2 评标价仅用于计算价格评分，中标金额以实际投标价为准。\"},{\"chunk_id\":\"f050d1d1-a00c-5c33-92cf-cd91a17fe439\",\"document_id\":\"65183fb2-a971-5b5c-8566-bad9077091f9\",\"page_start\":60,\"text\":\"35.2 本次招标向中标人收取的采购服务费，按以下规定执行。\\n(1)投标人需在投标文件中提供《采购服务费承诺书》中标人在收到中标通知书5 个工\\n作日内向代理机构交纳采购服务费，采购服务费包括两项：\\n采购服务费一：项目需求调查费用，递交账户信息见《投标须知前附表》；\\n采购服务费二：招标代理服务费用，递交账户信息见《投标须知前附表》。\\n(2)采购服务费由中标人以银行付款的形式用人民币交付，递交账户见《投标须知前附\\n表》。\\n(3)采购服务收费按差额定率累进法计算，以中标通知书中确定的中标金额作为收费的\\n计算依据。本项目为货物类，中标金额的各部分费率如下表：\\n招标代理服务收费标准\\n费率类别\\n中标金额（万元人民币）\\n货物招标费率\"},{\"chunk_id\":\"45d01c63-0dc3-5cc4-8816-b1f56ed75843\",\"document_id\":\"65183fb2-a971-5b5c-8566-bad9077091f9\",\"page_start\":126,\"text\":\"126\\n二十二、其它材料\\n(一)\\n报价成本的明细说明文件（格式自拟，如招标文件有要求时提供）\\n(二)\\n产品出厂标准、质量检测报告、精度检测报告或数据（格式自拟，如招标\\n文件有要求时提供）\\n(三)\\n投标人介绍及认为应提交或可以证明其能力或业绩的其他材料（格式自\\n拟）\\n注：以上材料由投标人根据项目实际情况自行选择提供，如因遗漏材料造成投标\\n无效或影响评审得分的，其责任由投标人全部负责。\"}]}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"ask_user\",\"arguments\":{\"question\":\"公开文件未披露完整评分明细与中标金额字段，请确认需要的字段范围。\"}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"status\":\"need_user_input\"}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"公开材料信息不足，需用户澄清所需字段后再查。\",\"citations\":[\"596f4d1b-07e1-5940-8754-4aa592a4edda\"],\"clarify\":true}"
+      }
+    ],
+    "record_id": "4ee4fc66-0807-5cb9-94ab-e7bc993b4276",
+    "task_type": "tool_call",
+    "project_id": "9d3c2112-d8de-5505-b6fd-5accc23af170",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标合规风险识别助手。"
+      },
+      {
+        "role": "user",
+        "content": "识别风险：\n9.未按遴选文件要求填写《采购需求响应一览表》。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"risk_level\":\"high\",\"risk_type\":\"other\",\"reason\":\"9.未按遴选文件要求填写《采购需求响应一览表》。\",\"is_rejection_clause\":false}"
+      }
+    ],
+    "record_id": "07ad9fb7-73b5-57a7-8f37-61c3eb8e3401",
+    "task_type": "risk_detect",
+    "project_id": "ca35f1bf-ccc4-5c50-aafa-5efb342617ed",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取资格要求。"
+      },
+      {
+        "role": "user",
+        "content": "抽取资格要求：\n14.我单位保证，若所投产品列入强制性产品认证目录的，则所投该产品须获得强制性"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"requirements\":[\"14.我单位保证，若所投产品列入强制性产品认证目录的，则所投该产品须获得强制性\"],\"mandatory\":true,\"evidence_required\":[]}"
+      }
+    ],
+    "record_id": "08311973-0e56-5de0-9a08-2fd681efee3a",
+    "task_type": "qualification_extract",
+    "project_id": "e4fbfbd4-1124-53ca-9d25-54b3c7da01bc",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取项目基本信息。"
+      },
+      {
+        "role": "user",
+        "content": "从以下官方项目材料中抽取项目要素：\n（项目编号：0724-2610SZ964294）"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"project_name\":\"广东省深圳市消防救援支队轨道交通大队2026年饮用水配送服务采购项目\",\"purchaser\":\"深圳市消防救援支队轨道交通大队\",\"budget_cny\":null,\"deadline\":null,\"region\":\"广东\",\"project_code\":\"0724-2610SZ964294\"}"
+      }
+    ],
+    "record_id": "b2d334d9-903f-541d-afcb-e9149e84bc35",
+    "task_type": "project_info_extract",
+    "project_id": "20e306bd-ec4f-59ad-b37c-539c3def5a23",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标项目助手。需要时调用工具，工具结果以 tool 角色返回。可用工具：search_chunks、get_project、list_requirements、extract_scoring、get_disclosed_supplier、ask_user。最终回答必须是 JSON：{\"answer\":...,\"citations\":[chunk_id,...]}。"
+      },
+      {
+        "role": "user",
+        "content": "请检索并汇总项目「广东省深圳市龙岗区消防救援大队2026年弱电、营区监控系统运行维护服务采购项目」（编号 0724-2611SZ144110）的关键信息。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"search_chunks\",\"arguments\":{\"project_id\":\"a86bec0e-7bc3-5656-a94d-d2b9e53ffb19\",\"query\":\"广东省深圳市龙岗区消防救援大队2026年弱电、营区监控系统运行维护服务采购项目\",\"top_k\":5}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"chunks\":[{\"chunk_id\":\"dd167643-3831-56d4-b0e4-0618175c1800\",\"document_id\":\"b4483a0a-0a5c-5d26-87ba-7e0573b968db\",\"page_start\":1,\"text\":\"广东省深圳市龙岗区消防救援大队2026年弱电、营区监控系统运行维护服务采购项目遴选公告\\n\\n财政部唯一指定政府采购信息网络发布媒体 国家级政府采购专业网站\\n服务热线：400-810-1996 | 服务投诉：010-63819289\\n\\n首页\\n\\n政采法规\\n\\n购买服务\\n\\n监督检查\\n\\n信息公告\\n\\n国际专栏\\n\\n当前位置：\\n首页\\n»\\n\\n政采公告\\n»\\n中央公告\\n»\\n其他公告\\n\\n广东省深圳市龙岗区消防救援大队2026年弱电、营区监控系统运行维护服务采购项目遴选公告\\n\\n2026年07月13日 16:22\\n来源：\\n【\\n打印\\n】\\n\\n公告概要：\\n公告信息：\\n采购项目名称\\n广东省深圳市龙岗区消防救援大队2026年弱电、营区监控系统运行维护服务采购项目\\n品目\\n服务/信息技术服务/运行维护服务/安全运维服务\\n采购单位\\n深圳市龙岗区消防救援大队\\n行政区域\\n深圳市\\n公告时间\\n2026年07月13日 16:22\\n开标时间\\n20\"},{\"chunk_id\":\"81523ebf-51ce-5918-850d-0c731593d1b2\",\"document_id\":\"b4483a0a-0a5c-5d26-87ba-7e0573b968db\",\"page_start\":1,\"text\":\"采购单位地址：深圳市龙岗区龙城街道白灰围二路\\n采购单位联系方式：胡工 0755-89551575\\n\\n代理机构联系方式：\\n代理机构：国义招标股份有限公司\\n代理机构联系人：谢宁多、黄颖 0755-82331226\\n代理机构地址： 深圳市福田区红荔路1001号银盛大厦11楼1101-1105\\n\\n一、采购项目内容\\n\\n项目概况根据《深圳市消防救援支队采购管理暂行规定（2024年版）》广东省深圳市龙岗区消防救援大队2026年弱电、营区监控系统运行维护服务采购项目采用内部评选遴选方式择优选择参评人。项目情况如下：\\n\\n（\\n一\\n）\\n项目基本情况\\n项目名称：广东省深圳市龙岗区消防救援大队2026年弱电、营区监控系统运行维护服务采购项目\\n项目编号：0724-2611SZ144110\\n预算金额：537,685.72元\\n采购需求（包括但不限于采购的名称、数量、简要技术需求或服务要求等）：确定一家参评人，为采购人提供\"},{\"chunk_id\":\"754d6d7b-b1da-55a1-a3fe-54d4a61a9dee\",\"document_id\":\"5654cf07-8952-5eba-8fc3-6cb68677c6e5\",\"page_start\":1,\"text\":\"深圳市龙岗区消防救援大队遴选文件\\n（广东省深圳市龙岗区消防救援大队2026年弱\\n电、营区监控系统运行维护服务采购项目）\\n遴选文件\\n采购人：深圳市龙岗区消防救援大队\\n采购代理机构：国义招标股份有限公司\"},{\"chunk_id\":\"4f345e8c-2000-55bb-9c87-b42cbdf95ad5\",\"document_id\":\"5654cf07-8952-5eba-8fc3-6cb68677c6e5\",\"page_start\":2,\"text\":\"2026 年弱电、营区监控系统运行维护服务采购项目遴选公告\\n项目概况\\n根据《深圳市消防救援支队采购管理暂行规定（2024 年版）》广东省深圳市龙岗区消防救\\n援大队2026 年弱电、营区监控系统运行维护服务采购项目采用内部评选遴选方式择优选择参评\\n人。项目情况如下：\\n一、项目基本情况\\n项目名称：广东省深圳市龙岗区消防救援大队2026 年弱电、营区监控系统运行维护服务采购项目\\n项目编号：0724-2611SZ144110\\n预算金额：537,685.72 元\\n采购需求（包括但不限于采购的名称、数量、简要技术需求或服务要求等）：确定一家参评人，为采\\n购人提供服务。\\n合同履行期限：两年（合同一年一签，第一年为本次招标的中标服务期限，合同最多续签一次。如采\\n购人对履约情况不满意，采购人不再续约）。具体以合同签订之日起算，协议期内所有合同实质性条款不\\n得改变。\\n二、参评人的资格要求\\n1.参评人必须是具有\"},{\"chunk_id\":\"3b92d102-6968-559f-afeb-1e114e969c0f\",\"document_id\":\"5654cf07-8952-5eba-8fc3-6cb68677c6e5\",\"page_start\":6,\"text\":\"第一章\\n参评须知\\n参评须知前附表\\n序号\\n项目\\n内容\\n1\\n项目概况\\n项目名称：广东省深圳市龙岗区消防救援大队2026 年弱电、营区监控系统\\n运行维护服务采购项目\\n项目编号：0724-2611SZ144110\\n采购人名称：深圳市龙岗区消防救援大队\\n采购方式：遴选采购\\n2\\n评选有效期\\n从评选截止之日起90 日内。\\n3\\n参评递交材料\\n1、参评文件一式四份（正本一份，复印件副本三份）在每一封口处加盖公\\n章，并在封套上标明项目名称、参评人名称等字样。\\n2、电子参评文件，电子版是以U 盘或硬盘等移动存储介质提交的加盖公章\\n的PDF 电子参评文件。\\n3、参标所用《开标一览表》。单独密封的《开标一览表》1 份。该表内容\\n应与参评文件中的《开标一览表》内容一致；如有差异，以唱标所用的《开\\n标一览表》内容为准。\\n4\\n材料递交方式\\n采用EMS 邮寄参评，邮寄地址及收件人。\\n现场递交地址及收取人：国义招标股份有\"}]}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"get_project\",\"arguments\":{\"project_id\":\"a86bec0e-7bc3-5656-a94d-d2b9e53ffb19\"}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"project\":{\"project_id\":\"a86bec0e-7bc3-5656-a94d-d2b9e53ffb19\",\"project_code\":\"0724-2611SZ144110\",\"project_name\":\"广东省深圳市龙岗区消防救援大队2026年弱电、营区监控系统运行维护服务采购项目\",\"purchaser\":\"深圳市龙岗区消防救援大队\",\"budget_cny\":null,\"bundle_level\":\"level_c\",\"official_project_url\":\"https://download.ccgp.gov.cn/oss/download?uuid=53E3F3A35C9F55883A48C1469AA7BA\"}}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"项目编号 0724-2611SZ144110，名称 广东省深圳市龙岗区消防救援大队2026年弱电、营区监控系统运行维护服务采购项目，采购人 深圳市龙岗区消防救援大队。预算在公开材料中未披露。\",\"citations\":[\"dd167643-3831-56d4-b0e4-0618175c1800\",\"81523ebf-51ce-5918-850d-0c731593d1b2\",\"754d6d7b-b1da-55a1-a3fe-54d4a61a9dee\"]}"
+      }
+    ],
+    "record_id": "95977156-8597-53a5-b94c-ba5d1e4b038a",
+    "task_type": "tool_call",
+    "project_id": "a86bec0e-7bc3-5656-a94d-d2b9e53ffb19",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标合规风险识别助手。"
+      },
+      {
+        "role": "user",
+        "content": "识别风险：\n1.1 竞价小组将根据《资格审查要求》和《符合性审查要求》中规定的内容，对响应人进行审查，并形成审查结果。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"risk_level\":\"high\",\"risk_type\":\"other\",\"reason\":\"1.1 竞价小组将根据《资格审查要求》和《符合性审查要求》中规定的内容，对响应人进行审查，并形成审查结果。\",\"is_rejection_clause\":false}"
+      }
+    ],
+    "record_id": "04718365-1cd8-599c-8c5e-78ed9ce9b64f",
+    "task_type": "risk_detect",
+    "project_id": "ddff323e-15ad-5c77-b0bf-0683e02f5a2d",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标项目助手。需要时调用工具，工具结果以 tool 角色返回。可用工具：search_chunks、get_project、list_requirements、extract_scoring、get_disclosed_supplier、ask_user。最终回答必须是 JSON：{\"answer\":...,\"citations\":[chunk_id,...]}。"
+      },
+      {
+        "role": "user",
+        "content": "请检索并汇总项目「中山大学分析测试中心多功能变温缺陷荧光光谱仪采购项目」（编号 中大招(货)[2026]113号）的关键信息。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"search_chunks\",\"arguments\":{\"project_id\":\"e4a298f5-8013-5617-8983-ac96e54d32fc\",\"query\":\"中山大学分析测试中心多功能变温缺陷荧光光谱仪采购项目\",\"top_k\":5}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"chunks\":[{\"chunk_id\":\"84a1f7fd-d0cd-56c2-bd09-dacad11366bc\",\"document_id\":\"3c23c969-bdbc-59ab-8929-9831dd5c3a29\",\"page_start\":1,\"text\":\"中山大学分析测试中心多功能变温缺陷荧光光谱仪采购项目公开招标公告\\n\\n财政部唯一指定政府采购信息网络发布媒体 国家级政府采购专业网站\\n服务热线：400-810-1996 | 服务投诉：010-63819289\\n\\n首页\\n\\n政采法规\\n\\n购买服务\\n\\n监督检查\\n\\n信息公告\\n\\n国际专栏\\n\\n当前位置：\\n首页\\n»\\n\\n政采公告\\n»\\n中央公告\\n»\\n公开招标公告\\n\\n中山大学分析测试中心多功能变温缺陷荧光光谱仪采购项目公开招标公告\\n\\n2026年07月14日 22:42\\n来源：\\n【\\n打印\\n】\\n\\n公告概要：\\n公告信息：\\n采购项目名称\\n中山大学分析测试中心多功能变温缺陷荧光光谱仪采购项目\\n品目\\n货物/设备/仪器仪表/分析仪器/光学式分析仪器\\n采购单位\\n中山大学\\n行政区域\\n广东省\\n公告时间\\n2026年07月14日 22:42\\n获取招标文件时间\\n2026年07月15日至2026年07月21日\\n每日上午:0:00 至 12:\"},{\"chunk_id\":\"51387ce1-0a15-5e12-9120-63e12069ad90\",\"document_id\":\"3f4435d7-296d-51b0-97e3-cb9843961107\",\"page_start\":11,\"text\":\"11\\n(用户需求书中标注有“★”号的条款必须实质性响应，负偏离（不满足要求）将导致投标\\n无效；标有“▲”号的条款为重要技术指标，负偏离（不满足要求）将在技术评分中按照\\n评分细则进行扣分，但不会导致投标无效。)\\n中山大学分析测试中心多功能变温缺陷荧光光谱仪采购项目\\n项目要求：本项目采购多功能变温缺陷荧光光谱仪，1 套，预算：人民币87.5 万元。\\n一、本项目详细技术参数及配置要求如下：\\n序号\\n具体技术(参数)要求\"},{\"chunk_id\":\"33cfe4be-bf1d-5968-8407-83f98db978c3\",\"document_id\":\"3f4435d7-296d-51b0-97e3-cb9843961107\",\"page_start\":18,\"text\":\"18\\n投标须知前附表\\n序号\\n条款号\\n内容\\n一、说明\\n1\\n1.1\\n项目编号：中大招（货）[2026]113 号\\n2\\n1.2\\n项目名称：中山大学分析测试中心多功能变温缺陷荧光光谱仪采购项目\\n3\\n1.3\\n项目预算：875000.00 元\\n4\\n1.4\\n本项目不允许产自中华人民共和国关境外的进口货物投标。\\n5\\n1.5\\n采购人：中山大学\\n6\\n1.8\\n经费来源：财政性资金\\n7\\n1.9\\n资格审查方式：资格后审\\n8\\n2.6\\n投标授权代表在同一个项目中只能接受一个投标人的委托参加投标。\\n二、招标文件\\n9\\n3.2\\n获取招标文件方式：登录中山大学智能电子采购系统\\n（https://www.zhizhengyun.com）报名。\\n10\\n4.1\\n对招标文件的询问可以口头或书面形式向采购人或者采购代理机构提出。\\n11\\n5.3\\n在提交投标文件截止时间前，无论出于何种原因，采购人或者中山大学政\\n府采购与招投标管理中心可主动\"},{\"chunk_id\":\"f60370ae-c415-555c-b7fc-16a302c17b9b\",\"document_id\":\"3f4435d7-296d-51b0-97e3-cb9843961107\",\"page_start\":21,\"text\":\"1.2 项目名称：中山大学分析测试中心多功能变温缺陷荧光光谱仪采购项目\"},{\"chunk_id\":\"250d8ad1-9467-545c-a768-465dd2d5ec88\",\"document_id\":\"3f4435d7-296d-51b0-97e3-cb9843961107\",\"page_start\":65,\"text\":\"65\\n三、投标函格式\\n投标函\\n致：中山大学\\n根据贵方为（中山大学分析测试中心多功能变温缺陷荧光光谱仪采购项目）项目招标\\n采购货物及相关服务的投标邀请（中大招（货）[2026]113 号），签字代表（姓名，职务）\\n经正式授权并代表投标人(投标人名称和地址)提交电子投标文件一份。\\n签字人代表以此函申明并同意如下:\\n（1）\\n所附投标报价表规定的应提交和交付的货物及服务的投标总价为货物交至贵方\\n指定地点（包括安装）价格，其中含税人民币报价为人民币\\n元（以数字表示）。\\n（2）\\n我方将按招标文件的规定履行合同责任和义务。\\n（3）\\n我方已详细审查全部招标文件，包括修改通知、澄清、补充说明等（如果有的\\n话）。我们完全理解并同意放弃对这方面有不明及误解的权利。\\n（4）\\n我方之投标有效期为自开标之日起90 个日历日。\\n（5）\\n我方保证遵守招标文件的全部规定，所提交的材料中所含的信息均为真实、准\\n确、完整，且不\"}]}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"get_project\",\"arguments\":{\"project_id\":\"e4a298f5-8013-5617-8983-ac96e54d32fc\"}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"project\":{\"project_id\":\"e4a298f5-8013-5617-8983-ac96e54d32fc\",\"project_code\":\"中大招(货)[2026]113号\",\"project_name\":\"中山大学分析测试中心多功能变温缺陷荧光光谱仪采购项目\",\"purchaser\":\"中山大学\",\"budget_cny\":null,\"bundle_level\":\"level_c\",\"official_project_url\":\"https://download.ccgp.gov.cn/oss/download?uuid=E813CFD40627B2B581B7544BAD41EE\"}}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"项目编号 中大招(货)[2026]113号，名称 中山大学分析测试中心多功能变温缺陷荧光光谱仪采购项目，采购人 中山大学。预算在公开材料中未披露。\",\"citations\":[\"84a1f7fd-d0cd-56c2-bd09-dacad11366bc\",\"51387ce1-0a15-5e12-9120-63e12069ad90\",\"33cfe4be-bf1d-5968-8407-83f98db978c3\"]}"
+      }
+    ],
+    "record_id": "5bef80dd-56f6-532a-8725-74299438909a",
+    "task_type": "tool_call",
+    "project_id": "e4a298f5-8013-5617-8983-ac96e54d32fc",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取评分办法条目。"
+      },
+      {
+        "role": "user",
+        "content": "抽取评分条目：\n综合评分法是指在最大限度满足招标文件实质性要求的前提下，按照招标文件中规定的各项"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"item\":\"综合评分法是指在最大限度满足招标文件实质性要求的前提下，按照招标文件中规定的各项\",\"score\":null,\"method\":\"综合评分法\"}"
+      }
+    ],
+    "record_id": "d597fd63-4ec8-596b-8d49-c166cb822bec",
+    "task_type": "scoring_extract",
+    "project_id": "17562952-a8b1-5be5-bdac-c6aed5babc2a",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标合规风险识别助手。"
+      },
+      {
+        "role": "user",
+        "content": "识别风险：\n符合要求的《中小企业声明函》，投标供应商必须属于中型企业或小型企业或微型企业；"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"risk_level\":\"high\",\"risk_type\":\"other\",\"reason\":\"符合要求的《中小企业声明函》，投标供应商必须属于中型企业或小型企业或微型企业；\",\"is_rejection_clause\":false}"
+      }
+    ],
+    "record_id": "028680df-1734-5814-bb93-bfd837ba35e7",
+    "task_type": "risk_detect",
+    "project_id": "1eb966e0-a91a-5a59-a319-2c44efeddf2a",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标问答助手，回答必须引用证据页码或 chunk。"
+      },
+      {
+        "role": "user",
+        "content": "综合评分法中与「2.对于“综合评分指引”请参评人按照」相关的分值如何规定？"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"2.对于“综合评分指引”请参评人按照第二册第二章的《项目评分表》的评分要求，根\",\"citations\":[\"056ae15c-fb35-5c3e-b77d-3894bbbfe929\"],\"answerable\":true}"
+      }
+    ],
+    "record_id": "8ba5db84-7c98-5325-ab5d-a2bc279dbb8e",
+    "task_type": "citation_qa",
+    "project_id": "ca35f1bf-ccc4-5c50-aafa-5efb342617ed",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标合规风险识别助手。"
+      },
+      {
+        "role": "user",
+        "content": "识别风险：\n3.4.1 除第二章“投标人须知”前附表授权直接确定中标人外，评标委员会按照得分由高到低的顺序"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"risk_level\":\"high\",\"risk_type\":\"other\",\"reason\":\"3.4.1 除第二章“投标人须知”前附表授权直接确定中标人外，评标委员会按照得分由高到低的顺序\",\"is_rejection_clause\":false}"
+      }
+    ],
+    "record_id": "05b2c4d8-1d13-52be-a628-7fb1b4d14e0f",
+    "task_type": "risk_detect",
+    "project_id": "ab8d6a0c-4f83-551f-b06e-8a256e8fcebe",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标项目助手。需要时调用工具，工具结果以 tool 角色返回。可用工具：search_chunks、get_project、list_requirements、extract_scoring、get_disclosed_supplier、ask_user。最终回答必须是 JSON：{\"answer\":...,\"citations\":[chunk_id,...]}。"
+      },
+      {
+        "role": "user",
+        "content": "识别项目 SSZX2026-236 中的否决性/投标无效条款。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"search_chunks\",\"arguments\":{\"project_id\":\"fa432488-7da3-5b5c-93ff-7297e1eada9f\",\"query\":\"投标无效 废标 否决\",\"top_k\":8}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"chunks\":[{\"chunk_id\":\"be93fd37-bd7e-51e8-973c-35e1f337a5c1\",\"document_id\":\"382ffb75-66f6-554a-b9db-47007c22fa71\",\"page_start\":18,\"text\":\"广东省深圳市消防救援支队2026 年1 辆100 米以上登高平台消防车购置项目可行性研究报告及初步概算编制服务采\\n购项目\\n17\\n（3）内容框架结构完整、系统；\\n（4）内容亮点突出；\\n（5）内容工作量设置合理可行。\\n优评分标准：满足上述五项要求\\n良评分标准：满足上述四项要求\\n中评分标准：满足上述三项要求\\n差评分标准：满足上述要求少于三项\\n评价为优4.5 分，良3 分，中2 分，差0 分，不提供不得\\n分。如果评价为差，要求专家书面说明理由，并记录在档。\\n3\\n质量（完成时\\n间、安全、环保）\\n保障措施及方\\n案\\n10\\n评审内容：\\n1.工期进度保障：制定分阶段节点计划、延期预警机制、\\n专人对接报审保障措施；\\n2.成果质量保障：建立多级审核、数据交叉校验、报告合\\n规性自查管控措施；\\n3.信息与作业安全保障：项目涉密资料保管、消防装备敏\\n感数据保密、线上线下资料传输安全管控措施；\\n4.项目风险预判及处置保\"},{\"chunk_id\":\"16b916b9-479a-5026-9d7b-84b5e93d51b0\",\"document_id\":\"382ffb75-66f6-554a-b9db-47007c22fa71\",\"page_start\":37,\"text\":\"广东省深圳市消防救援支队2026 年1 辆100 米以上登高平台消防车购置项目可行性研究报告及初步概\\n36\\n日期：\\n年\\n月\\n日\\n附件：\\n①参评人必须是具有独立法人资格或是具有独立承担民事责任能力的其它组织（提供营业\\n执照或事业单位法人证书或其他证明材料复印件加盖公章，如果参评的供应商为分公司则\\n须提供分公司营业执照、其所属集团(或总公司)等具有独立法人资格的组织出具愿为其参\\n评以及履约行为承担民事责任的授权书，但只接受直接授权，不接受逐级授权，并同时提\\n供总公司营业执照。不接受同一集团(或总公司)授权两家或以上分公司同时参评，也不接\\n受集团(或总公司)与分公司同时参评，如出现上述情形，该两家或以上供应商的参评文件\\n均按无效参评处理)。上述资料原件备查）。\\n②供应商法定代表人（负责人）、主要经营负责人、项目参评授权代表人、项目负责人、\\n主要技术人员缴纳社会保险情况（提供开标前一个月的社保缴纳\"},{\"chunk_id\":\"39caef37-a60d-5574-89ee-1fff0a4b2995\",\"document_id\":\"382ffb75-66f6-554a-b9db-47007c22fa71\",\"page_start\":3,\"text\":\"、分包（由供应商在《资格声\\n明函》中作出声明，加盖公章）；\\n9.本项目是否专门面向中小企业采购：本项目属于专门面向中小微企业采购的项目（提供符合\\n要求的《中小企业声明函》，参评供应商必须属于中型企业或小型企业或微型企业；如供应商为残\\n疾人福利性单位或监狱企业，视同小型、微型企业，提供《残疾人福利性单位声明函》或《监狱企业声明函》及监狱企业证明文件亦视为符合；\\n本项目对应的中小企业划分标准所属行业：租赁和商务服务业；\\n10.本项目特定资格要求：无。\\n三、获取遴选文件\\n1.时间：2026 年7 月15 日起至2026 年7 月22 日止（周一至周五上午9:00-12:00，下午\\n14:00-17:30）。\\n2.线上报名。\\n报名网址：https://jdy.shenshuizaojia.com:8443/f/6758fdb2f9ae5eae94a793db。\\n地址：深圳市深水水务咨询有限公司（深\"},{\"chunk_id\":\"9029a9bc-4ccb-55b6-8e39-fbe7ff380e76\",\"document_id\":\"382ffb75-66f6-554a-b9db-47007c22fa71\",\"page_start\":7,\"text\":\"第二章\\n采购需求\\n一、基本要求\\n1．标有“★”的条款为必须完全满足的项目，任何未响应或负偏离将导致无效响应。\\n2．标有“▲”的条款为重要项目，任何未响应或负偏离将被严重扣分。\\n3．参评人必须具有独立法人资格或为具有独立承担民事责任能力的其它组织。\\n4．参评人在响应建议中必须列出具体数值或具体承诺。如果参评人只注明“正偏离”或“无偏\\n离”，将被视为“负偏离”，从而可能导致严重影响评审结果。\\n5．参评人须对所投报价服务及自身经营情况描述的真实性承担法律责任。\\n6．参评人没有在参评文件中注明偏离（文字说明或在响应表注明）的描述、条款视为被参评人\\n完全接受。\\n7．参评人应保证，采购人在中华人民共和国使用该货物、服务或货物、服务的任何一部分时，\\n免受第三方提出的侵犯其专利权、商标权、著作权或其它知识产权的起诉。\\n二、参评报价说明\\n参评报价包括：服务费用、各项税费。\\n三、项目概况\"},{\"chunk_id\":\"757f6266-3401-5ea7-a7a7-313ac8a773d4\",\"document_id\":\"382ffb75-66f6-554a-b9db-47007c22fa71\",\"page_start\":12,\"text\":\"第三章\\n评审办法\\n一、评审与定评\\n1．当通过资格、符合性审查的参评人不少于三家时，按照评审程序的规定和依据评分标准、计\\n算方法，各评委单独封闭对每个参评人进行评审和比较。\\n2．成交人资格的确定，由评审小组推荐，并由采购人确认。\\n3．比较与评价。评审小组按遴选文件中规定的评审方法和标准，对资格审查和符合性审查合格\\n的参评文件进行商务和技术评估，综合比较与评价。技术、商务、价格部分分值分配如下：\\n评分项目\\n技术评分\\n商务评分\\n价格评分\\n合计\\n分值\\n40\\n50\\n10\\n100分\\n4．技术评分\\n（1）由评审小组对所有参评文件的技术部分的响应进行审核和分析；\\n（2）评委独立进行评分，填写“技术评分表”；\\n（3）评分标准：按“技术评分表”中的分值进行评分；\\n（4）将每一个评委的评分汇集，取算术平均值（精确到小数点后两位）为该参评人的技术得分。\\n5．商务评分\\n（1）由评审小组对所有参评文件的商务部分的响应\"},{\"chunk_id\":\"e56930db-0d91-5b96-8aa0-dc661fb4ab5f\",\"document_id\":\"382ffb75-66f6-554a-b9db-47007c22fa71\",\"page_start\":15,\"text\":\"广东省深圳市消防救援支队2026 年1 辆100 米以上登高平台消防车购置项目可行性研究报告及初步概算编制服务采\\n购项目\\n14\\n一人、属同一单位或者在同一单位缴纳社会保险的情形；不同参评供应商不\\n存在直接控股、管理关系的情形（由供应商提供《供应商基本情况表》并加\\n盖供应商公章，同时提供供应商社保缴纳证明材料及股权（或管理）关系证\\n明材料（格式与具体采购文件的章节对应）。如供应商存在未提供《供应商\\n基本情况表》、社保缴纳证明材料及股权（或管理）关系证明材料或所提供\\n证明材料不符合采购文件要求的情形，按资格审查不通过处理）为本项目提\\n供整体设计、规范编制或者项目管理、监理、检测等服务的供应商，不得参\\n评。（由供应商在《资格声明函》中作出声明，加盖公章）；\\n7.为本项目提供整体设计、规范编制或者项目管理、监理、检测等服务的供\\n应商，不得参加本项目参评。（由供应商在《资格声明函》中作出声明，加\\n盖\"},{\"chunk_id\":\"cbe9cead-6789-515d-9793-9f6d3a8d3af6\",\"document_id\":\"382ffb75-66f6-554a-b9db-47007c22fa71\",\"page_start\":16,\"text\":\"广东省深圳市消防救援支队2026 年1 辆100 米以上登高平台消防车购置项目可行性研究报告及初步概算编制服务采\\n购项目\\n15\\n（3）参评报价低于采购项目最高限价45%的，即参评报价＜采购项目最高限\\n价×45%；\\n（4）评审小组基于专业判断，认为供应商报价过低，有可能影响产品质量或\\n者不能诚信履约的其他情形。\\n评审小组启动异常低价参评审查后，属于前述第1 项至第4 项情形的，应当\\n要求相关供应商在评审现场合理的时间内对参评价格作出解释，提供项目具\\n体成本测算等与报价合理性相关的书面说明及必要的证明材料，包括但不限\\n于原材料成本、人工成本、制造费用等，给予相关供应商的合理时间一般不\\n少于30 分钟。其中，属于第3 项情形，供应商已随参评文件一并提交相关书\\n面说明及必要的证明材料的，在评审现场可不再重复提交。\\n评审小组依据专业经验，参考同类项目成交（成交）价格、类似产品市场价\\n格水平、行业人工\"},{\"chunk_id\":\"02c98d08-ec32-5090-bad6-ffc25286e553\",\"document_id\":\"382ffb75-66f6-554a-b9db-47007c22fa71\",\"page_start\":20,\"text\":\"广东省深圳市消防救援支队2026 年1 辆100 米以上登高平台消防车购置项目可行性研究报告及初步概算编制服务采\\n购项目\\n19\\n3.项目工作经验要求同时提供合同关键信息（合同关键信\\n息包括但不限于：甲乙双方完整盖章页、合同具体内容、\\n签订日期等。）。通过合同关键信息无法判断是否得分的，\\n也可以提供能证明得分的其它证明资料，如项目报告的证\\n明文件等；均要求提供复印件，原件备查。\\n5\\n拟安排的项目\\n主要团队成员\\n（主要技术人\\n员）情况（项目\\n负责人除外）\\n12\\n评分内容：\\n项目团队成员须为本单位人员，否则本项不得分。\\n1.团队成员中（项目负责人除外）具有造价专业类中级及\\n以上工程师职称的每人得1 分，满分4 分。\\n2.团队成员中（项目负责人除外）具有注册咨询工程师（投\\n资）资质证书的每人得1 分，满分4 分。\\n注：以上不同类型证书可重复计分。\\n以上2 项累加得分，最高不超过12 分。\\n评分依据\"}]}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"文件中至少包括 1 条否决/无效情形，详见 citations。\",\"citations\":[\"9029a9bc-4ccb-55b6-8e39-fbe7ff380e76\"]}"
+      }
+    ],
+    "record_id": "149e5e06-6c0b-5636-98f6-bf4b63a83970",
+    "task_type": "tool_call",
+    "project_id": "fa432488-7da3-5b5c-93ff-7297e1eada9f",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标项目助手。需要时调用工具，工具结果以 tool 角色返回。可用工具：search_chunks、get_project、list_requirements、extract_scoring、get_disclosed_supplier、ask_user。最终回答必须是 JSON：{\"answer\":...,\"citations\":[chunk_id,...]}。"
+      },
+      {
+        "role": "user",
+        "content": "从项目 CLF26KF01ZC45 文件中提取评分办法要点。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"search_chunks\",\"arguments\":{\"project_id\":\"6dc5d746-5e3e-558a-83d3-1b1bb716ba30\",\"query\":\"综合评分法 评分标准\",\"top_k\":8}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"chunks\":[{\"chunk_id\":\"842b04ba-f4c4-5bf4-8b7a-8d722ba0821f\",\"document_id\":\"9a8185fc-a535-51e4-a47d-bfb7e9e1f519\",\"page_start\":46,\"text\":\"第46页，共96页\\n的书面说明、证明材料不能证明其报价合理性的，评标委员会应当将其作为无效投\\n标处理。\\n采购人、采购代理机构应当为评标委员会在评审现场及时获取同类项目中标\\n（成交）价格、类似产品市场价格水平、行业人工费用标准、国家有关部门指导行\\n业协会发布的行业平均成本等相关信息资料提供便利。评标委员会借助互联网等渠\\n道查询相关信息的，应当严格遵守评审工作纪律，不得实施影响评审公正的行为。\\n异常低价投标审查的启动原因、审查意见和审查结果应当在评标报告中记录，\\n并随供应商提供的相关书面说明及证明材料，以及评标委员会有关互联网浏览、查\\n询历史一并归档。\\n4）详细评审\\n1\\n综合评分法：\\na. 综合评分法是指投标文件满足招标文件全部实质性要求，且按照评审因素的量化\\n指标评审得分最高的投标人为中标候选人的评标方法。\\nb. 评标委员会对符合性审查合格的投标文件进行技术、商务评估，综合比较与评价。\\n具体\"},{\"chunk_id\":\"51ed8d32-3b6a-5f2d-b211-11fbb9d8277f\",\"document_id\":\"9a8185fc-a535-51e4-a47d-bfb7e9e1f519\",\"page_start\":34,\"text\":\"5 人\\n2（1）\\n评标方法\\n综合评分法\\n2（2）\\n异常低价情\\n形\\n①投标报价低于全部通过符合性审查供应商投标报价平均值\\n50％的；\\n②投标报价低于通过符合性审查的次低报价供应商投标报价\\n50％的；\\n③投标报价低于采购项目最高限价50％的；\\n④评标委员会基于专业判断，认为供应商报价过低，有可能影\\n响产品质量或者不能诚信履约的其他情形。\\n相关法律法规对供应商报价有规定的，从其规定。\"},{\"chunk_id\":\"5a66a7b2-97c4-59e6-bf30-50b63f564fc7\",\"document_id\":\"9a8185fc-a535-51e4-a47d-bfb7e9e1f519\",\"page_start\":35,\"text\":\"（三）\\n3\\n推荐中标候\\n选人\\n评标方法\\n综合评分法：推荐综合得分排名第一的投标人为第一中标候选\\n人，排名第二的投标人为第二中标候选人，排名第三的投标人\\n为第三中标候选人。\"},{\"chunk_id\":\"341cd496-cf79-5b68-9bfb-118643ec8e69\",\"document_id\":\"9a8185fc-a535-51e4-a47d-bfb7e9e1f519\",\"page_start\":47,\"text\":\"第47页，共96页\\n同时出现两种以上不一致的，按照前款规定的顺序修正。修正后的报价按照本章\\n“评标委员会组成及职责”第（6）点的规定经投标人确认后产生约束力，投标人不确\\n认的，其投标无效。\\n（4）价格调整：除了算术修正和落实政府采购政策需进行的价格扣除外，不能对投标人\\n的投标价格进行任何调整，详见《价格扣除》。\\n（5）评标委员会成员对需要共同认定的事项存在争议的，应当按照少数服从多数的原则\\n作出结论。持不同意见的评标委员会成员应当在评标报告上签署不同意见及理由，\\n否则视为同意评标报告。\\n(三)推荐中标候选人\\n1. 综合评分法\\n（1) 使用综合评分法的采购项目，单一产品采购项目提供相同品牌产品或非单一产品采\\n购项目多家投标人提供的任意一个核心产品品牌相同的，且通过资格审查、符合性\\n审查的不同投标人参加同一合同项下投标的，按一家投标人计算，评审后得分最高\\n的同品牌投标人获得中标人推荐资格；评审\"},{\"chunk_id\":\"2387d48f-827d-54ac-93e0-dfaaf48ebf8d\",\"document_id\":\"600cde3f-9267-50f6-84e0-74c5a81625ce\",\"page_start\":1,\"text\":\"中国气象局广州热带海洋气象研究所华南地区大气本底综合观测系统建设项目（CLF26KF01ZC45）中标结果公告\\n\\n财政部唯一指定政府采购信息网络发布媒体 国家级政府采购专业网站\\n服务热线：400-810-1996 | 服务投诉：010-63819289\\n\\n首页\\n\\n政采法规\\n\\n购买服务\\n\\n监督检查\\n\\n信息公告\\n\\n国际专栏\\n\\n当前位置：\\n首页\\n»\\n\\n政采公告\\n»\\n中央公告\\n»\\n中标公告\\n\\n中国气象局广州热带海洋气象研究所华南地区大气本底综合观测系统建设项目（CLF26KF01ZC45）中标结果公告\\n\\n2026年07月15日 16:21\\n来源：\\n【\\n打印\\n】\\n\\n公告概要：\\n公告信息：\\n采购项目名称\\n华南地区大气本底综合观测系统建设项目\\n品目\\n货物/设备/仪器仪表/气象仪器\\n采购单位\\n中国气象局广州热带海洋气象研究所\\n行政区域\\n广州市\\n公告时间\\n2026年07月15日 16:21\\n评审专家名单\\n评\"},{\"chunk_id\":\"5ebd4d08-53be-5615-b96f-a00dcb79acbe\",\"document_id\":\"9a8185fc-a535-51e4-a47d-bfb7e9e1f519\",\"page_start\":20,\"text\":\"第三章评标方法和标准\\n一、说明：\\n(一) 投标人必须严格按照《资格性审查表》、《符合性审查表》的评审内容的要求如实提供证明\\n材料并应加盖投标人公章，若投标人不满足《资格性审查表》、《符合性审查表》中任何情\\n形之一的，则其投标无效。\\n(二) 各包组资格性、符合性审查内容详见《资格性审查表》、《符合性审查表》。\\n(三) 技术、商务评分：评标委员会各成员分值的算术平均值（四舍五入后，小数点后保留两位有\\n效数）。\\n(四) 投标人应如实提交《综合评分表》要求提交的相关各类证明、资料等并应加盖投标人公章，\\n投标人如未按要求提交的，该项评分为零分。\"},{\"chunk_id\":\"660c1cf0-f848-5a1b-9bae-0b6a84537b80\",\"document_id\":\"9a8185fc-a535-51e4-a47d-bfb7e9e1f519\",\"page_start\":61,\"text\":\"第61页，共96页\\n投标文件目录表\\n一、相关说明：\\n1. 投标文件包括但不限于以下组成内容，请按顺序制作。\\n2. 投标人编制投标文件中的项目编号为CLF26KF01ZC45。\\n3. 投标人按照《资格性审查表》的评审内容的要求如实提供证明材料并应加盖投标人公\\n章。未通过资格性审查的投标人，为无效投标，不进入符合性审查。\\n4. 投标人按照《符合性审查表》的评审内容的要求如实提供证明材料并应加盖投标人公\\n章。未通过符合性审查的投标人，为无效投标，不进入详细评审。\\n5. 投标人根据第三章评标方法和标准的《综合评分表》要求提交相关各类证明材料，并\\n加盖投标人公章。\\n一、价格评审自查表\\n项目名称：华南地区大气本底综合观测系统建设项目\\n项目编号：CLF26KF01ZC45\\n序号\\n评审分项\\n证明文件\\n1.\\n开标一览表(报价表)\\n第（）页\\n2.\\n投标分项报价表\\n第（）页\\n3.\\n中小企业声明函（如有）\\n第（）\"},{\"chunk_id\":\"c7f7fce4-c835-57aa-9937-dbcf256f866d\",\"document_id\":\"600cde3f-9267-50f6-84e0-74c5a81625ce\",\"page_start\":1,\"text\":\"0\\n\\n五、评审专家（单一来源采购人员）名单：\\n\\n评审委员会总人数：5随机抽取专家名单：罗宏伟、黄立新、杨莘、袁敏；采购人代表名单：邹宇自行选定专家名单： /\\n\\n六、代理服务收费标准及金额：\\n\\n本项目代理费收费标准：本次采购代理服务费向中标人收取。差额定率累进法收费：以中标通知书中的中标总价作为采购代理服务费的计算基数。按照下表规定的“货物类”计费标准计算并缴纳。\\n\\n本项目代理费总金额：6.752664 万元（人民币）\\n\\n七、公告期限\\n\\n自本公告发布之日起1个工作日。\\n\\n八、其它补充事宜\\n\\n1.中标供应商的评审总得分为80.61分。\\n2.各有关当事人对中标/成交结果有异议的，可以在中标/成交公告期限届满之日起7个工作日内，以书面原件形式提出明确的请求并提供必要的证明材料，一次性向采购代理机构提出质疑。\\n\\n九、凡对本次公告内容提出询问，请按以下方式联系。\\n\\n1.采购人信息\\n\\n名 称：中国气象局\"}]}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"tool_name\":\"extract_scoring\",\"arguments\":{\"project_id\":\"6dc5d746-5e3e-558a-83d3-1b1bb716ba30\"}}"
+      },
+      {
+        "role": "tool",
+        "content": "{\"scoring_items\":[{\"requirement_id\":\"efc5bfbb-f692-53eb-bd56-ca01758afb27\",\"title\":\"(四) 投标人应如实提交《综合评分表》要求提交的相关各类证明、资料等并应加盖投标人公章，\",\"score\":null},{\"requirement_id\":\"e9396105-7b11-579b-9a14-4ef3d4482d74\",\"title\":\"综合评分法：推荐综合得分排名第一的投标人为第一中标候选\",\"score\":null},{\"requirement_id\":\"9bddf214-b618-5a39-bede-bb8ab902d2da\",\"title\":\"a. 综合评分法是指投标文件满足招标文件全部实质性要求，且按照评审因素的量化\",\"score\":null},{\"requirement_id\":\"703baea3-f927-5246-840c-6d225526ec2d\",\"title\":\"1. 综合评分法\",\"score\":null},{\"requirement_id\":\"798186bc-4ae8-516d-8c9d-f36b3d05bd58\",\"title\":\"（1) 使用综合评分法的采购项目，单一产品采购项目提供相同品牌产品或非单一产品采\",\"score\":null},{\"requirement_id\":\"ba6e40eb-f380-5715-a4a3-732b922761be\",\"title\":\"（2) 采用综合评分法的，评标结果按评审后得分由高到低顺序排列。\",\"score\":null}]}"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"answer\":\"提取到 6 个评分相关条款。\",\"citations\":[\"5ebd4d08-53be-5615-b96f-a00dcb79acbe\",\"5a66a7b2-97c4-59e6-bf30-50b63f564fc7\",\"842b04ba-f4c4-5bf4-8b7a-8d722ba0821f\",\"341cd496-cf79-5b68-9bfb-118643ec8e69\",\"341cd496-cf79-5b68-9bfb-118643ec8e69\",\"341cd496-cf79-5b68-9bfb-118643ec8e69\"]}"
+      }
+    ],
+    "record_id": "188f50ba-ab1f-534b-8893-61ecfa6062e1",
+    "task_type": "tool_call",
+    "project_id": "6dc5d746-5e3e-558a-83d3-1b1bb716ba30",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取项目基本信息。"
+      },
+      {
+        "role": "user",
+        "content": "从以下官方项目材料中抽取项目要素：\n项目编号：GZGCCG-2026042"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"project_name\":\"中国人民警察大学（广州）无人机设备及挂载设备保险采购项目\",\"purchaser\":\"中国人民警察大学\",\"budget_cny\":null,\"deadline\":null,\"region\":\"广东\",\"project_code\":\"GZGCCG-2026042\"}"
+      }
+    ],
+    "record_id": "0a70adf1-894b-5462-8710-a0a8b167197b",
+    "task_type": "project_info_extract",
+    "project_id": "ddff323e-15ad-5c77-b0bf-0683e02f5a2d",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取评分办法条目。"
+      },
+      {
+        "role": "user",
+        "content": "抽取评分条目：\n综合评分法是指在最大限度地满足招标文件实质性要求前提下，按照招标文件中规定的各项"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"item\":\"综合评分法是指在最大限度地满足招标文件实质性要求前提下，按照招标文件中规定的各项\",\"score\":null,\"method\":\"综合评分法\"}"
+      }
+    ],
+    "record_id": "ff41d6a5-2bb9-5642-9b48-1857009f75cc",
+    "task_type": "scoring_extract",
+    "project_id": "17562952-a8b1-5be5-bdac-c6aed5babc2a",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是招投标文件分析助手，负责抽取评分办法条目。"
+      },
+      {
+        "role": "user",
+        "content": "抽取评分条目：\n（3）参评人的价格得分=评审基准价÷参评报价×价格分值（精确到小数点后两位）。"
+      },
+      {
+        "role": "assistant",
+        "content": "{\"item\":\"（3）参评人的价格得分=评审基准价÷参评报价×价格分值（精确到小数点后两位）。\",\"score\":null,\"method\":\"综合评分法\"}"
+      }
+    ],
+    "record_id": "07cd766a-a75d-5521-b1ac-fb0b31ddaf43",
+    "task_type": "scoring_extract",
+    "project_id": "20e306bd-ec4f-59ad-b37c-539c3def5a23",
+    "quality_level": "course_pilot",
+    "review_status": "course_pilot_approved",
+    "split": "train"
+  }
+]

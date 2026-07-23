@@ -2,7 +2,7 @@ import { Button, Skeleton } from "antd";
 import { ArrowRightOutlined, PlusOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { listProjects } from "../api/client";
+import { listProjects, getActiveModel } from "../api/client";
 import { useBackendHealth, useBackendReady } from "../components/BackendStatus";
 import { usePageTitle } from "../components/usePageTitle";
 
@@ -19,6 +19,8 @@ const INTEL_NODES: CapabilityNode[] = [
   { name: "来源追溯", ready: true, note: "结果携带文件、章节、条款与页码" },
   { name: "文档问答", ready: true, note: "受检索证据约束的带来源回答（Qwen3-8B）" },
   { name: "智能审查", ready: true, note: "确定性规则引擎：覆盖/证据/资格风险/草稿安全/一致性" },
+  { name: "评测中心", ready: true, note: "项目级评测、compare 与导出" },
+  { name: "领域微调", ready: true, note: "Step 13 course_pilot LoRA（非 human_gold）" },
 ];
 
 export default function DashboardPage() {
@@ -26,6 +28,7 @@ export default function DashboardPage() {
   const health = useBackendHealth();
   const ready = useBackendReady();
   const projects = useQuery({ queryKey: ["projects"], queryFn: listProjects, retry: 0 });
+  const modelInfo = useQuery({ queryKey: ["active-model"], queryFn: getActiveModel, retry: 0 });
 
   const apiConnected = health.isSuccess;
   const readyOkCount = ready.isSuccess
@@ -34,6 +37,11 @@ export default function DashboardPage() {
   const readyTotal = ready.isSuccess ? ready.data.services.length : null;
   const openCapabilityCount = INTEL_NODES.filter((n) => n.ready).length;
   const projectTotal = projects.isSuccess ? projects.data.total : null;
+  const finetuneLabel = modelInfo.data?.active_finetune
+    ? `${modelInfo.data.active_finetune.display_name || "LoRA"} · ${modelInfo.data.active_finetune.version || ""}`
+    : modelInfo.data?.served_model
+      ? `基座 ${modelInfo.data.served_model}`
+      : null;
 
   return (
     <div className="bp-dash">
@@ -41,13 +49,17 @@ export default function DashboardPage() {
         <p className="bp-eyebrow">BidPilot / Evidence Workspace</p>
         <h1 className="bp-page-title">智能投标工作台</h1>
         <p className="bp-page-subtitle">
-          定位资料、验证来源、形成可追溯的投标依据。当前开放文档解析与混合检索；问答与审查按阶段接入，不提供模拟结论。
+          定位资料、验证来源、形成可追溯的投标依据。已接入文档解析、混合检索、合规审查、Agent
+          工作流与评测中心；领域微调以 course_pilot LoRA 轨道演示（非 human_gold）。
         </p>
         <div className="bp-dash-actions">
           <Link to="/projects">
             <Button type="primary" size="large" icon={<ArrowRightOutlined />} iconPosition="end">
               进入项目
             </Button>
+          </Link>
+          <Link to="/evaluation">
+            <Button size="large">评估中心</Button>
           </Link>
           <Link to="/projects">
             <Button size="large" icon={<PlusOutlined />}>
@@ -83,6 +95,15 @@ export default function DashboardPage() {
             readyTotal != null && (
               <span className="bp-metric-chip">
                 依赖 <strong>{`${readyOkCount}/${readyTotal}`}</strong>
+              </span>
+            )
+          )}
+          {modelInfo.isLoading ? (
+            <Skeleton.Button active size="small" style={{ width: 140, height: 32 }} />
+          ) : (
+            finetuneLabel && (
+              <span className="bp-metric-chip" data-testid="active-model-chip">
+                模型 <strong>{finetuneLabel}</strong>
               </span>
             )
           )}

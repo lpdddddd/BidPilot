@@ -8,7 +8,7 @@ PIP ?= pip
 
 PIPELINE_DIR := $(ROOT_DIR)/data_pipeline
 
-.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft validate-sft-sample validate-sft-real validate-sft-internal validate-sft-llamafactory validate-sft-smoke dataset-install dataset-test dataset-bootstrap dataset-download dataset-parse dataset-label dataset-review-export dataset-review-priority dataset-validate dataset-build-rag dataset-build-agent dataset-build-sft dataset-build-reference dataset-report dataset-demo rag-smoke rag-smoke-live llm-up
+.PHONY: help infra-up infra-down backend-install frontend-install migrate seed backend frontend test lint format import-demo validate-sft validate-sft-sample validate-sft-real validate-sft-internal validate-sft-llamafactory validate-sft-smoke dataset-install dataset-test dataset-bootstrap dataset-download dataset-parse dataset-label dataset-review-export dataset-review-priority dataset-validate dataset-build-rag dataset-build-agent dataset-build-sft dataset-build-reference dataset-report dataset-demo rag-smoke rag-smoke-live llm-up course-pilot-prepare course-lora-smoke course-lora-train course-lora-eval
 
 help:
 	@echo "BidPilot development commands"
@@ -43,6 +43,10 @@ help:
 	@echo "  make rag-smoke           Mock RAG acceptance (no GPU / vLLM required)"
 	@echo "  make rag-smoke-live      Live RAG smoke against running API + vLLM"
 	@echo "  make llm-up              Print commands to start local Qwen3-8B vLLM"
+	@echo "  make course-pilot-prepare  Build course_pilot SFT + review queue"
+	@echo "  make course-lora-smoke     Smoke LoRA (20 steps)"
+	@echo "  make course-lora-train     Course LoRA 1 epoch"
+	@echo "  make course-lora-eval      Base vs LoRA eval"
 
 infra-up:
 	$(COMPOSE) up -d
@@ -173,4 +177,19 @@ dataset-report:
 
 dataset-demo:
 	cd $(PIPELINE_DIR) && $(PYTHON) -m bidpilot_data run-demo
+
+course-pilot-prepare:
+	$(PYTHON) $(ROOT_DIR)/training/llamafactory/scripts/prepare_course_pilot.py --repo-root $(ROOT_DIR)
+
+course-lora-smoke:
+	CUDA_VISIBLE_DEVICES=$${CUDA_VISIBLE_DEVICES:-2} bash $(ROOT_DIR)/training/llamafactory/scripts/run_course_train.sh smoke
+
+course-lora-train:
+	CUDA_VISIBLE_DEVICES=$${CUDA_VISIBLE_DEVICES:-2} bash $(ROOT_DIR)/training/llamafactory/scripts/run_course_train.sh formal
+
+course-lora-eval:
+	$(PYTHON) $(ROOT_DIR)/training/llamafactory/scripts/eval_course_lora.py \
+		--adapter-path $(ROOT_DIR)/training/llamafactory/outputs/qwen3_8b_lora_course \
+		--device $${COURSE_EVAL_DEVICE:-cuda:0} \
+		--limit $${COURSE_EVAL_LIMIT:-12}
 

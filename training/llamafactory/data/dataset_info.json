@@ -72,5 +72,65 @@
       "tool_tag": "tool",
       "user_tag": "user"
     }
+  },
+  "bidpilot_course_pilot_train": {
+    "file_name": "bidpilot_course_pilot_train.json",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "user_tag": "user",
+      "assistant_tag": "assistant",
+      "system_tag": "system",
+      "tool_tag": "tool"
+    }
+  },
+  "bidpilot_course_pilot_validation": {
+    "file_name": "bidpilot_course_pilot_validation.json",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "user_tag": "user",
+      "assistant_tag": "assistant",
+      "system_tag": "system",
+      "tool_tag": "tool"
+    }
+  },
+  "bidpilot_course_pilot_test": {
+    "file_name": "bidpilot_course_pilot_test.json",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "user_tag": "user",
+      "assistant_tag": "assistant",
+      "system_tag": "system",
+      "tool_tag": "tool"
+    }
+  },
+  "bidpilot_course_pilot_smoke": {
+    "file_name": "bidpilot_course_pilot_smoke.json",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "user_tag": "user",
+      "assistant_tag": "assistant",
+      "system_tag": "system",
+      "tool_tag": "tool"
+    }
   }
 }

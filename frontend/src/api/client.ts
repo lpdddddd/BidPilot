@@ -53,6 +53,31 @@ export async function getHealth(): Promise<HealthResponse> {
   return data;
 }
 
+export type ActiveModelInfo = {
+  llm_enabled: boolean;
+  served_model: string;
+  base_model_source?: string | null;
+  provider?: string | null;
+  train_track?: string | null;
+  version?: string | null;
+  notes?: string | null;
+  active_finetune?: {
+    model_id?: string;
+    display_name?: string;
+    train_track?: string;
+    version?: string;
+    base_model?: string;
+    adapter_name?: string;
+    metrics?: Record<string, unknown>;
+    notes?: string;
+  } | null;
+};
+
+export async function getActiveModel(): Promise<ActiveModelInfo> {
+  const { data } = await http.get<ActiveModelInfo>("/api/v1/models/active");
+  return data;
+}
+
 export async function getReady(): Promise<ReadyResponse> {
   const { data } = await http.get<ReadyResponse>("/ready");
   return data;

@@ -1,0 +1,15 @@
+{
+  "n": 12,
+  "base": {
+    "n": 12,
+    "json_ok_rate": 0.0,
+    "mean_key_overlap": 0.0
+  },
+  "lora": {
+    "n": 12,
+    "json_ok_rate": 0.9166666666666666,
+    "mean_key_overlap": 1.0
+  },
+  "adapter_path": "training/llamafactory/outputs/qwen3_8b_lora_course",
+  "note": "Base model often emits thinking prose; course_pilot LoRA restores structured JSON assistants."
+}

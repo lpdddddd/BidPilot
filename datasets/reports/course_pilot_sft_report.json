@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-07-23T04:38:51.280855+00:00",
+  "input_total": 3624,
+  "qc_accepted": 3624,
+  "qc_rejected": 0,
+  "reject_reasons": {},
+  "course_pilot": {
+    "train": 932,
+    "validation": 200,
+    "test": 150,
+    "smoke": 64,
+    "by_task_train": {
+      "qualification_extract": 200,
+      "risk_detect": 200,
+      "scoring_extract": 71,
+      "requirement_classify": 200,
+      "tool_call": 138,
+      "citation_qa": 101,
+      "project_info_extract": 22
+    }
+  },
+  "label_policy": "course_pilot_approved via automatic QC + balanced sampling; NOT human_gold. Formal LoRA gate still requires reviewed gold."
+}
