@@ -7,6 +7,22 @@ export const COURSE_LORA_MODEL_ID = "qwen3-8b-lora-course";
 
 export const CAP_GROUNDED_QA = "grounded_qa";
 export const CAP_STRUCTURED_EXTRACTION = "structured_extraction";
+export const CAP_AGENT_PIPELINE = "agent_pipeline";
+
+/** Fallback when evaluation-capabilities omits required_capability. */
+export const TARGET_REQUIRED_CAPABILITY_FALLBACK: Record<string, string> = {
+  rag: CAP_GROUNDED_QA,
+  extraction: CAP_STRUCTURED_EXTRACTION,
+  agent_pipeline: CAP_AGENT_PIPELINE,
+};
+
+export function requiredCapabilityForTarget(
+  targetType: string,
+  fromApi?: string | null,
+): string | undefined {
+  if (fromApi) return fromApi;
+  return TARGET_REQUIRED_CAPABILITY_FALLBACK[targetType];
+}
 
 export type ModelStatusFields = Pick<
   ModelCatalogItem,

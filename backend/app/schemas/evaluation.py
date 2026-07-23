@@ -14,6 +14,7 @@ class EvaluationTargetCapability(BaseModel):
     available: bool
     reason: str | None = None
     reason_code: str | None = None
+    required_capability: str | None = None
 
 
 class EvaluationProfileInfo(BaseModel):

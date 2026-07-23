@@ -7,7 +7,11 @@ from app.db.session import get_db
 from app.models.enums import RequirementCategory, ReviewStatus, RiskLevel
 from app.schemas.extraction import ExtractionRunResponse, ExtractionStartRequest
 from app.schemas.requirement import RequirementDetail, RequirementListResponse
-from app.schemas.structured_clause import StructuredClauseRequest, StructuredClauseResponse
+from app.schemas.structured_clause import (
+    StructuredClauseListResponse,
+    StructuredClauseRequest,
+    StructuredClauseResponse,
+)
 from app.services import requirement_extraction_tasks
 from app.services.requirement_extraction_service import RequirementExtractionService
 from app.services.structured_clause import StructuredClauseService
@@ -27,15 +31,32 @@ def analyze_structured_clause(
     """SFT-protocol clause analysis (Base or Course LoRA). Project id scopes auth."""
     # Ensure project exists / accessible via extraction service helper.
     RequirementExtractionService(db)._require_project(project_id)  # noqa: SLF001
-    result = StructuredClauseService().analyze(
+    result = StructuredClauseService(db).analyze(
         clause_text=payload.clause_text,
         task_type=payload.task_type,
         model_id=payload.model_id,
         allow_base_fallback=payload.allow_base_fallback,
         temperature=payload.temperature,
         max_tokens=payload.max_tokens,
+        project_id=project_id,
+        persist=True,
     )
     return StructuredClauseResponse(**result.public_dict())
+
+
+@router.get(
+    "/{project_id}/requirements/structured-analyses",
+    response_model=StructuredClauseListResponse,
+)
+def list_structured_clause_analyses(
+    project_id: UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> StructuredClauseListResponse:
+    RequirementExtractionService(db)._require_project(project_id)  # noqa: SLF001
+    items, total = StructuredClauseService(db).list_analyses(project_id, limit=limit, offset=offset)
+    return StructuredClauseListResponse(items=items, total=total)
 
 
 @router.post(

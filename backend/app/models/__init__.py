@@ -65,6 +65,7 @@ from app.models.requirement import (
     RequirementMatch,
     RequirementMatchEvidence,
 )
+from app.models.structured_clause_analysis import StructuredClauseAnalysis
 
 __all__ = [
     "ActorAuthn",
@@ -132,6 +133,7 @@ __all__ = [
     "RequirementMatchRun",
     "ReviewStatus",
     "RiskLevel",
+    "StructuredClauseAnalysis",
     "ToolCall",
     "User",
 ]

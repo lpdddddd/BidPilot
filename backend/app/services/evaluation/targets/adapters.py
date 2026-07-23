@@ -109,9 +109,15 @@ class RagServiceAdapter:
             )
         model_id = self.config.get("model_id")
         if model_id:
+            from app.services.evaluation.target_capabilities import required_capability_for_target
             from app.services.model_serving import resolve_model_selection
 
-            resolution = resolve_model_selection(str(model_id), allow_fallback=False, probe=True)
+            resolution = resolve_model_selection(
+                str(model_id),
+                allow_fallback=False,
+                probe=True,
+                required_capability=required_capability_for_target("rag"),
+            )
             if not resolution.available:
                 return TargetCapability(
                     target_type=self.target_type,
@@ -206,10 +212,16 @@ class RagServiceAdapter:
         self, question: str, context: TargetExecutionContext, model_id: str
     ) -> TargetResult:
         from app.schemas.ask import AskRequest
+        from app.services.evaluation.target_capabilities import required_capability_for_target
         from app.services.model_serving import resolve_model_selection
         from app.services.rag_answer_service import RagAnswerService
 
-        resolution = resolve_model_selection(model_id, allow_fallback=False, probe=True)
+        resolution = resolve_model_selection(
+            model_id,
+            allow_fallback=False,
+            probe=True,
+            required_capability=required_capability_for_target("rag"),
+        )
         if not resolution.available:
             return TargetResult(
                 ok=False,
@@ -313,9 +325,15 @@ class AgentPipelineAdapter:
             )
         model_id = self.config.get("model_id")
         if model_id:
+            from app.services.evaluation.target_capabilities import required_capability_for_target
             from app.services.model_serving import resolve_model_selection
 
-            resolution = resolve_model_selection(str(model_id), allow_fallback=False, probe=True)
+            resolution = resolve_model_selection(
+                str(model_id),
+                allow_fallback=False,
+                probe=True,
+                required_capability=required_capability_for_target("agent_pipeline"),
+            )
             if not resolution.available:
                 return TargetCapability(
                     target_type=self.target_type,
@@ -343,6 +361,7 @@ class AgentPipelineAdapter:
         try:
             from app.schemas.agent_run import AgentRunStartRequest
             from app.services.agent_run.service import AgentRunService
+            from app.services.evaluation.target_capabilities import required_capability_for_target
             from app.services.llm_client import LlmClient
             from app.services.model_serving import resolve_model_selection
 
@@ -351,7 +370,10 @@ class AgentPipelineAdapter:
             model_meta: dict[str, Any] = {}
             if model_id:
                 resolution = resolve_model_selection(
-                    str(model_id), allow_fallback=False, probe=True
+                    str(model_id),
+                    allow_fallback=False,
+                    probe=True,
+                    required_capability=required_capability_for_target("agent_pipeline"),
                 )
                 if not resolution.available or not resolution.served_model_name:
                     return TargetResult(
@@ -417,7 +439,8 @@ class StructuredExtractionAdapter:
         self.config = config or {}
 
     def capability(self) -> TargetCapability:
-        from app.services.model_serving import CAP_STRUCTURED_EXTRACTION, resolve_model_selection
+        from app.services.evaluation.target_capabilities import required_capability_for_target
+        from app.services.model_serving import resolve_model_selection
 
         model_id = self.config.get("model_id")
         try:
@@ -442,7 +465,7 @@ class StructuredExtractionAdapter:
                 str(model_id),
                 allow_fallback=False,
                 probe=True,
-                required_capability=CAP_STRUCTURED_EXTRACTION,
+                required_capability=required_capability_for_target("extraction"),
             )
             if not resolution.available:
                 return TargetCapability(

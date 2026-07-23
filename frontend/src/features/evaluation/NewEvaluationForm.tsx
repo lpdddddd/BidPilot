@@ -17,9 +17,12 @@ import type {
 } from "../../types/api";
 import {
   BASE_MODEL_ID,
+  CAP_STRUCTURED_EXTRACTION,
   modelSelectLabel,
+  modelsForCapability,
   pickBaseModel,
   pickCourseLora,
+  requiredCapabilityForTarget,
 } from "../models/modelStatus";
 import {
   capabilityOptionLabel,
@@ -94,45 +97,55 @@ export default function NewEvaluationForm({
   const profiles = capabilities?.profiles ?? [];
 
   const showModelSelect = MODEL_SELECT_TARGETS.has(String(targetType ?? ""));
-  const baseModel = modelsQuery.data ? pickBaseModel(modelsQuery.data.items) : undefined;
-  const loraModel = modelsQuery.data ? pickCourseLora(modelsQuery.data.items) : undefined;
-  const selectedModel = useMemo(() => {
+  const selectedCap = caps.find((c) => String(c.target_type) === targetType);
+  const requiredCap = requiredCapabilityForTarget(
+    String(targetType ?? ""),
+    selectedCap?.required_capability,
+  );
+
+  const capableModels = useMemo(() => {
     const items = modelsQuery.data?.items ?? [];
-    return items.find((m) => m.model_id === modelId) ?? baseModel;
-  }, [modelsQuery.data, modelId, baseModel]);
+    if (!requiredCap) return items;
+    return modelsForCapability(items, requiredCap);
+  }, [modelsQuery.data, requiredCap]);
+
+  const baseModel = pickBaseModel(capableModels);
+  const loraModel =
+    requiredCap === CAP_STRUCTURED_EXTRACTION ? pickCourseLora(capableModels) : undefined;
+
+  const selectedModel = useMemo(() => {
+    return capableModels.find((m) => m.model_id === modelId) ?? baseModel;
+  }, [capableModels, modelId, baseModel]);
 
   const modelOptions = useMemo(() => {
-    const opts: { value: string; label: string; disabled?: boolean }[] = [];
-    if (baseModel) {
-      opts.push({
-        value: baseModel.model_id,
-        label: modelSelectLabel(baseModel),
-        disabled: !baseModel.served,
-      });
-    } else {
-      opts.push({ value: BASE_MODEL_ID, label: "Qwen3-8B Base", disabled: true });
-    }
-    if (loraModel) {
-      opts.push({
-        value: loraModel.model_id,
-        label: modelSelectLabel(loraModel),
-        disabled: !loraModel.served,
-      });
-    }
-    return opts;
-  }, [baseModel, loraModel]);
+    return capableModels.map((m) => ({
+      value: m.model_id,
+      label: modelSelectLabel(m),
+      disabled: !m.served,
+    }));
+  }, [capableModels]);
 
   useEffect(() => {
-    if (!showModelSelect) return;
-    if (selectedModel && !selectedModel.served) {
-      const fallback = baseModel?.served
-        ? baseModel.model_id
-        : modelsQuery.data?.default_model_id || BASE_MODEL_ID;
+    if (!showModelSelect || !capableModels.length) return;
+    const currentOk = capableModels.some((m) => m.model_id === modelId);
+    if (!currentOk || (selectedModel && !selectedModel.served)) {
+      const served = capableModels.find((m) => m.served);
+      const fallback =
+        served?.model_id ??
+        baseModel?.model_id ??
+        modelsQuery.data?.default_model_id ??
+        BASE_MODEL_ID;
       if (fallback !== modelId) setModelId(fallback);
     }
-  }, [showModelSelect, selectedModel, baseModel, modelId, modelsQuery.data?.default_model_id]);
+  }, [
+    showModelSelect,
+    capableModels,
+    selectedModel,
+    baseModel,
+    modelId,
+    modelsQuery.data?.default_model_id,
+  ]);
 
-  const selectedCap = caps.find((c) => String(c.target_type) === targetType);
   const modelReady = !showModelSelect || Boolean(selectedModel?.served);
   const canSubmit =
     Boolean(suiteId && targetType && selectedCap?.available) &&
@@ -172,7 +185,8 @@ export default function NewEvaluationForm({
     <div data-testid="eval-new-form" style={{ maxWidth: 640 }}>
       <Typography.Paragraph type="secondary">
         选择套件与目标后启动评测。暂未开放的目标会保持禁用并给出简要说明；不会在此展示 test
-        reference。RAG / Agent 可选择 Base 或 Course LoRA（须已在线）。
+        reference。RAG / Agent 仅可选具备对应能力的 Base（须已在线）；Course LoRA
+        仅用于结构化抽取（extraction）。
       </Typography.Paragraph>
 
       {error && (
@@ -265,8 +279,8 @@ export default function NewEvaluationForm({
                 data-testid="eval-lora-unserved-hint"
                 style={{ display: "block", marginTop: 8 }}
               >
-                模型尚未启动在线服务。请先用 Base，或启动带 --enable-lora 的 vLLM 后再选 Course
-                LoRA。
+                Course LoRA 尚未启动在线服务。请先用 Base，或启动带 llm.lora.yml 的 vLLM
+                后再选 Course LoRA（仅 extraction）。
               </Typography.Text>
             )}
             {showModelSelect && selectedModel && !selectedModel.served && (

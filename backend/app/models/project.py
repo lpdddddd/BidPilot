@@ -35,6 +35,7 @@ if TYPE_CHECKING:
         ProposalDraftVersion,
     )
     from app.models.requirement import Requirement
+    from app.models.structured_clause_analysis import StructuredClauseAnalysis
 
 
 class BidProject(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -97,3 +98,6 @@ class BidProject(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     compliance_findings: Mapped[list[ComplianceFinding]] = relationship(back_populates="project")
     evaluation_suites: Mapped[list[EvaluationSuite]] = relationship(back_populates="project")
     evaluation_runs: Mapped[list[EvaluationRun]] = relationship(back_populates="project")
+    structured_clause_analyses: Mapped[list[StructuredClauseAnalysis]] = relationship(
+        back_populates="project"
+    )

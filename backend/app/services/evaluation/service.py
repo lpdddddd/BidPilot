@@ -136,6 +136,8 @@ class EvaluationService:
                     "ai_judge_enabled": False,
                 },
             )
+        from app.services.evaluation.target_capabilities import required_capability_for_target
+
         return {
             "items": [
                 {
@@ -143,6 +145,7 @@ class EvaluationService:
                     "available": c.available,
                     "reason": c.reason,
                     "reason_code": c.reason_code,
+                    "required_capability": required_capability_for_target(c.target_type),
                 }
                 for c in caps
             ],
@@ -268,10 +271,16 @@ class EvaluationService:
 
         model_id = safe_config.get("model_id")
         if model_id:
+            from app.services.evaluation.target_capabilities import required_capability_for_target
             from app.services.evaluation.targets import get_target
             from app.services.model_serving import resolve_model_selection
 
-            resolution = resolve_model_selection(str(model_id), allow_fallback=False, probe=True)
+            resolution = resolve_model_selection(
+                str(model_id),
+                allow_fallback=False,
+                probe=True,
+                required_capability=required_capability_for_target(tt.value),
+            )
             if not resolution.available:
                 raise HTTPException(
                     status_code=422,

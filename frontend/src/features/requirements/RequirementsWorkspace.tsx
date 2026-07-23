@@ -357,6 +357,145 @@ type Filters = {
   has_conflict?: boolean;
 };
 
+type StructuredClausePanelProps = {
+  clauseText: string;
+  onClauseTextChange: (value: string) => void;
+  structTask: string;
+  onStructTaskChange: (value: string) => void;
+  structModelId: string;
+  onStructModelIdChange: (value: string) => void;
+  structModelOptions: { value: string; label: string; disabled?: boolean }[];
+  modelsLoading: boolean;
+  analyzeDisabled: boolean;
+  analyzePending: boolean;
+  onAnalyze: () => void;
+  structLora: ReturnType<typeof pickCourseLora>;
+  analyzeError: Error | null;
+  structResult: StructuredClauseResponse | null;
+};
+
+/** Shared structured-analysis panel — shown for empty and non-empty requirement lists. */
+export function StructuredClausePanel({
+  clauseText,
+  onClauseTextChange,
+  structTask,
+  onStructTaskChange,
+  structModelId,
+  onStructModelIdChange,
+  structModelOptions,
+  modelsLoading,
+  analyzeDisabled,
+  analyzePending,
+  onAnalyze,
+  structLora,
+  analyzeError,
+  structResult,
+}: StructuredClausePanelProps) {
+  return (
+    <div
+      className="bp-panel"
+      data-testid="structured-clause-panel"
+      style={{ padding: 16, marginBottom: 16 }}
+    >
+      <Typography.Title level={5} style={{ marginTop: 0 }}>
+        条款结构化分析（Course LoRA 协议）
+      </Typography.Title>
+      <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+        复用训练时的 system/user prompt 与 JSON schema（非带来源问答、无 [S1]）。可选 Base 或
+        Course LoRA；未 served 的模型不可选。空项目也可先跑结构化分析。
+      </Typography.Paragraph>
+      <Space wrap style={{ marginBottom: 8 }}>
+        <Select
+          data-testid="struct-model-select"
+          style={{ minWidth: 280 }}
+          value={structModelId}
+          options={structModelOptions}
+          onChange={onStructModelIdChange}
+          loading={modelsLoading}
+        />
+        <Select
+          data-testid="struct-task-select"
+          style={{ minWidth: 200 }}
+          value={structTask}
+          onChange={onStructTaskChange}
+          options={[
+            { value: "requirement_classify", label: "requirement_classify" },
+            { value: "qualification_extract", label: "qualification_extract" },
+            { value: "risk_detect", label: "risk_detect" },
+            { value: "scoring_extract", label: "scoring_extract" },
+            { value: "project_info_extract", label: "project_info_extract" },
+          ]}
+        />
+        <Button
+          type="primary"
+          data-testid="struct-analyze-btn"
+          loading={analyzePending}
+          disabled={analyzeDisabled}
+          onClick={onAnalyze}
+        >
+          分析条款
+        </Button>
+      </Space>
+      {structLora && !structLora.served && (
+        <Typography.Text
+          type="secondary"
+          data-testid="struct-lora-unserved"
+          style={{ display: "block", marginBottom: 8 }}
+        >
+          Course LoRA 当前未在线（{modelOnlineStatusLabel(structLora)}）。请先启动带 llm.lora.yml
+          的 vLLM。
+        </Typography.Text>
+      )}
+      {structLora?.reason_codes?.includes("base_model_mismatch") && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 8 }}
+          message="微调权重与基座模型不匹配"
+        />
+      )}
+      <Input.TextArea
+        data-testid="struct-clause-input"
+        rows={3}
+        value={clauseText}
+        onChange={(e) => onClauseTextChange(e.target.value)}
+        placeholder="粘贴招标条款原文"
+      />
+      {analyzeError && (
+        <Alert
+          style={{ marginTop: 8 }}
+          type="error"
+          showIcon
+          message="结构化分析失败"
+          description={analyzeError.message}
+        />
+      )}
+      {structResult && (
+        <div data-testid="struct-result" style={{ marginTop: 12 }}>
+          <Typography.Text data-testid="struct-model-meta">
+            requested={structResult.requested_model_id} · resolved=
+            {structResult.resolved_model_id} · served={structResult.served_model_name} · type=
+            {structResult.model_type} · adapter={structResult.adapter_version} · fallback=
+            {String(structResult.fallback_used)} · latency=
+            {structResult.latency_ms.toFixed(0)}ms · schema_valid=
+            {String(structResult.schema_valid)}
+          </Typography.Text>
+          <pre
+            className="bp-code-block"
+            style={{ marginTop: 8, maxHeight: 240, overflow: "auto" }}
+          >
+            {JSON.stringify(
+              structResult.parsed ?? { parse_error: structResult.parse_error },
+              null,
+              2,
+            )}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RequirementsWorkspace({
   projectId,
   onOpenSource,
@@ -606,6 +745,28 @@ export default function RequirementsWorkspace({
     Object.keys(filters).length === 0 &&
     !extractionSucceeded;
 
+  const structuredPanel = (
+    <StructuredClausePanel
+      clauseText={clauseText}
+      onClauseTextChange={setClauseText}
+      structTask={structTask}
+      onStructTaskChange={setStructTask}
+      structModelId={structModelId}
+      onStructModelIdChange={setStructModelId}
+      structModelOptions={structModelOptions}
+      modelsLoading={modelsQuery.isLoading}
+      analyzeDisabled={
+        !clauseText.trim() ||
+        !structuredModels.find((m) => m.model_id === structModelId)?.served
+      }
+      analyzePending={structMutation.isPending}
+      onAnalyze={() => structMutation.mutate()}
+      structLora={structLora}
+      analyzeError={structMutation.isError ? (structMutation.error as Error) : null}
+      structResult={structResult}
+    />
+  );
+
   if (isExtracting && run) {
     return <ExtractionProgress run={run} />;
   }
@@ -661,6 +822,7 @@ export default function RequirementsWorkspace({
   if (showEmpty) {
     return (
       <div className="bp-req-empty">
+        {structuredPanel}
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={
@@ -698,96 +860,7 @@ export default function RequirementsWorkspace({
 
   return (
     <div className="bp-req-workspace">
-      <div
-        className="bp-panel"
-        data-testid="structured-clause-panel"
-        style={{ padding: 16, marginBottom: 16 }}
-      >
-        <Typography.Title level={5} style={{ marginTop: 0 }}>
-          条款结构化分析（Course LoRA 协议）
-        </Typography.Title>
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          复用训练时的 system/user prompt 与 JSON schema（非带来源问答、无 [S1]）。可选 Base 或
-          Course LoRA；未 served 的模型不可选。
-        </Typography.Paragraph>
-        <Space wrap style={{ marginBottom: 8 }}>
-          <Select
-            data-testid="struct-model-select"
-            style={{ minWidth: 280 }}
-            value={structModelId}
-            options={structModelOptions}
-            onChange={setStructModelId}
-            loading={modelsQuery.isLoading}
-          />
-          <Select
-            data-testid="struct-task-select"
-            style={{ minWidth: 200 }}
-            value={structTask}
-            onChange={setStructTask}
-            options={[
-              { value: "requirement_classify", label: "requirement_classify" },
-              { value: "qualification_extract", label: "qualification_extract" },
-              { value: "risk_detect", label: "risk_detect" },
-              { value: "scoring_extract", label: "scoring_extract" },
-              { value: "project_info_extract", label: "project_info_extract" },
-            ]}
-          />
-          <Button
-            type="primary"
-            data-testid="struct-analyze-btn"
-            loading={structMutation.isPending}
-            disabled={!clauseText.trim() || !structuredModels.find((m) => m.model_id === structModelId)?.served}
-            onClick={() => structMutation.mutate()}
-          >
-            分析条款
-          </Button>
-        </Space>
-        {structLora && !structLora.served && (
-          <Typography.Text type="secondary" data-testid="struct-lora-unserved" style={{ display: "block", marginBottom: 8 }}>
-            Course LoRA 当前未在线（{modelOnlineStatusLabel(structLora)}）。请先启动带 --enable-lora 的
-            vLLM。
-          </Typography.Text>
-        )}
-        {structLora?.reason_codes?.includes("base_model_mismatch") && (
-          <Alert
-            type="error"
-            showIcon
-            style={{ marginBottom: 8 }}
-            message="微调权重与基座模型不匹配"
-          />
-        )}
-        <Input.TextArea
-          data-testid="struct-clause-input"
-          rows={3}
-          value={clauseText}
-          onChange={(e) => setClauseText(e.target.value)}
-          placeholder="粘贴招标条款原文"
-        />
-        {structMutation.isError && (
-          <Alert
-            style={{ marginTop: 8 }}
-            type="error"
-            showIcon
-            message="结构化分析失败"
-            description={(structMutation.error as Error).message}
-          />
-        )}
-        {structResult && (
-          <div data-testid="struct-result" style={{ marginTop: 12 }}>
-            <Typography.Text data-testid="struct-model-meta">
-              requested={structResult.requested_model_id} · resolved=
-              {structResult.resolved_model_id} · served={structResult.served_model_name} · type=
-              {structResult.model_type} · adapter={structResult.adapter_version} · fallback=
-              {String(structResult.fallback_used)} · latency=
-              {structResult.latency_ms.toFixed(0)}ms · schema_valid=
-              {String(structResult.schema_valid)}
-            </Typography.Text>
-            <pre className="bp-code-block" style={{ marginTop: 8, maxHeight: 240, overflow: "auto" }}>
-              {JSON.stringify(structResult.parsed ?? { parse_error: structResult.parse_error }, null, 2)}
-            </pre>
-          </div>
-        )}
-      </div>
+      {structuredPanel}
 
       <div className="bp-req-toolbar">
         <div>

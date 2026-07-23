@@ -308,6 +308,8 @@ export type StructuredClauseRequest = {
 };
 
 export type StructuredClauseResponse = {
+  id?: string | null;
+  project_id?: string | null;
   task_type: string;
   clause_text: string;
   raw_output: string;
@@ -325,6 +327,12 @@ export type StructuredClauseResponse = {
   fallback_used: boolean;
   latency_ms: number;
   capability: string;
+  created_at?: string | null;
+};
+
+export type StructuredClauseListResponse = {
+  items: StructuredClauseResponse[];
+  total: number;
 };
 
 export async function analyzeStructuredClause(
@@ -335,6 +343,17 @@ export async function analyzeStructuredClause(
     `/api/v1/projects/${projectId}/requirements/structured-analyses`,
     payload,
     { timeout: 180000 },
+  );
+  return data;
+}
+
+export async function listStructuredClauseAnalyses(
+  projectId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<StructuredClauseListResponse> {
+  const { data } = await http.get<StructuredClauseListResponse>(
+    `/api/v1/projects/${projectId}/requirements/structured-analyses`,
+    { params },
   );
   return data;
 }

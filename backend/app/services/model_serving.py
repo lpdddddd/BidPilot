@@ -37,9 +37,14 @@ REASON_CAPABILITY = "capability_unsupported"
 CAP_GROUNDED_QA = "grounded_qa"
 CAP_STRUCTURED_EXTRACTION = "structured_extraction"
 CAP_COMPLIANCE_ANALYSIS = "compliance_analysis"
+CAP_AGENT_PIPELINE = "agent_pipeline"
 
-BASE_CAPABILITIES: tuple[str, ...] = (CAP_GROUNDED_QA, CAP_STRUCTURED_EXTRACTION)
-# Course LoRA SFT is clause JSON — not grounded [S1] Ask, not rule Compliance.
+BASE_CAPABILITIES: tuple[str, ...] = (
+    CAP_GROUNDED_QA,
+    CAP_STRUCTURED_EXTRACTION,
+    CAP_AGENT_PIPELINE,
+)
+# Course LoRA SFT is clause JSON — not grounded Ask, not agent pipeline.
 COURSE_LORA_CAPABILITIES: tuple[str, ...] = (CAP_STRUCTURED_EXTRACTION,)
 
 

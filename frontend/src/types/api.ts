@@ -1154,6 +1154,8 @@ export type EvaluationCapability = {
   reason?: string | null;
   reason_code?: string | null;
   label?: string | null;
+  /** Model capability id required for this target (e.g. grounded_qa). */
+  required_capability?: string | null;
 };
 
 export type EvaluationProfileInfo = {
