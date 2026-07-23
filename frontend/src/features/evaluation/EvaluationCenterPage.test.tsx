@@ -253,8 +253,25 @@ describe("EvaluationCenterPage", () => {
       filename: "export.json",
     });
     compareRuns.mockResolvedValue({
-      left: makeRun({ id: "run-1", dataset_hash: "aaa" }),
-      right: makeRun({ id: "run-2", dataset_hash: "bbb", evaluator_version: "other" }),
+      left: makeRun({
+        id: "run-1",
+        dataset_hash: "aaa",
+        target_config_snapshot: {
+          model_id: "qwen3-8b-base",
+          served_model_name: "bidpilot-qwen3-8b",
+          model_type: "base",
+        },
+      }),
+      right: makeRun({
+        id: "run-2",
+        dataset_hash: "bbb",
+        evaluator_version: "other",
+        target_config_snapshot: {
+          model_id: "qwen3-8b-lora-course",
+          served_model_name: "bidpilot-qwen3-8b-course-lora",
+          model_type: "lora",
+        },
+      }),
       warnings: ["dataset hash mismatch", "evaluator version mismatch"],
       overall_score_delta: -0.05,
       pass_rate_delta: -0.1,
@@ -432,6 +449,12 @@ describe("EvaluationCenterPage", () => {
     await waitFor(() => expect(compareRuns).toHaveBeenCalled());
     expect(await screen.findByTestId("eval-compare-mismatch-warning")).toBeTruthy();
     expect(screen.getByTestId("eval-compare-result")).toBeTruthy();
+    expect(screen.getByTestId("eval-compare-left-model").textContent).toMatch(
+      /bidpilot-qwen3-8b|qwen3-8b-base/,
+    );
+    expect(screen.getByTestId("eval-compare-right-model").textContent).toMatch(
+      /bidpilot-qwen3-8b-course-lora|qwen3-8b-lora-course/,
+    );
   });
 
   it("21. export", async () => {
