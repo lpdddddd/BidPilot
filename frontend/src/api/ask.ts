@@ -22,7 +22,15 @@ export async function askProject(
   const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/ask`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...payload, stream: false }),
+    body: JSON.stringify({
+      question: payload.question,
+      document_types: payload.document_types,
+      document_ids: payload.document_ids,
+      top_k: payload.top_k,
+      model_id: payload.model_id,
+      allow_base_fallback: payload.allow_base_fallback ?? false,
+      stream: false,
+    }),
     signal,
   });
   const body = await res.json().catch(() => ({}));
@@ -51,7 +59,15 @@ export async function askProjectStream(
       "Content-Type": "application/json",
       Accept: "text/event-stream",
     },
-    body: JSON.stringify({ ...payload, stream: true }),
+    body: JSON.stringify({
+      question: payload.question,
+      document_types: payload.document_types,
+      document_ids: payload.document_ids,
+      top_k: payload.top_k,
+      model_id: payload.model_id,
+      allow_base_fallback: payload.allow_base_fallback ?? false,
+      stream: true,
+    }),
     signal,
   });
 

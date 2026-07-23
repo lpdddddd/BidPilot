@@ -17,6 +17,10 @@ services:
         source: ${LLM_MODEL_PATH:?LLM_MODEL_PATH must be set to a host weights directory}
         target: /models/llm
         read_only: true
+      - type: bind
+        source: ${LLM_LORA_HOST_PATH:-./training/llamafactory/outputs/qwen3_8b_lora_course}
+        target: /adapters/course
+        read_only: true
     command:
       - /models/llm
       - --served-model-name
@@ -32,3 +36,10 @@ services:
       - --max-model-len
       - "16384"
       - --enable-prefix-caching
+      - --enable-lora
+      - --max-loras
+      - "2"
+      - --max-lora-rank
+      - "${LLM_MAX_LORA_RANK:-16}"
+      - --lora-modules
+      - "${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}=/adapters/course"

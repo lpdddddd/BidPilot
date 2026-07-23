@@ -13,6 +13,10 @@ class AskRequest(BaseModel):
     document_ids: list[str] = Field(default_factory=list)
     top_k: int | None = Field(default=None, ge=1, le=20)
     stream: bool = False
+    # Public model_id from /api/v1/models (e.g. qwen3-8b-base / qwen3-8b-lora-course).
+    model_id: str | None = Field(default=None, max_length=128)
+    # Explicit Base fallback when requested LoRA is not served (never silent).
+    allow_base_fallback: bool = False
 
 
 class CitationItem(BaseModel):
@@ -53,6 +57,12 @@ class GenerationTrace(BaseModel):
     latency_ms: float
     finish_reason: str | None = None
     request_id: str | None = None
+    requested_model_id: str | None = None
+    resolved_model_id: str | None = None
+    served_model_name: str | None = None
+    model_type: Literal["base", "lora"] | None = None
+    adapter_version: str | None = None
+    fallback_used: bool = False
 
 
 class AskResponse(BaseModel):

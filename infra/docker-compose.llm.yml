@@ -5,6 +5,7 @@
 #   LLM_MODEL          served name (backend calls this)
 #   LLM_MODEL_SOURCE   Hub repo id (default Qwen/Qwen3-8B)
 #   LLM_BASE_URL       http://localhost:8001/v1
+#   LLM_LORA_*         Course LoRA module (Step 14)
 #
 # Hub mode (downloads/caches via HF_HOME):
 #   docker compose --env-file .env \
@@ -35,6 +36,10 @@ services:
       - "${LLM_PORT:-8001}:8000"
     volumes:
       - ${HF_HOME:-${HOME}/.cache/huggingface}:/root/.cache/huggingface
+      - type: bind
+        source: ${LLM_LORA_HOST_PATH:-./training/llamafactory/outputs/qwen3_8b_lora_course}
+        target: /adapters/course
+        read_only: true
     command:
       - ${LLM_MODEL_SOURCE:-Qwen/Qwen3-8B}
       - --served-model-name
@@ -50,6 +55,13 @@ services:
       - --max-model-len
       - "16384"
       - --enable-prefix-caching
+      - --enable-lora
+      - --max-loras
+      - "2"
+      - --max-lora-rank
+      - "${LLM_MAX_LORA_RANK:-16}"
+      - --lora-modules
+      - "${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}=/adapters/course"
     deploy:
       resources:
         reservations:

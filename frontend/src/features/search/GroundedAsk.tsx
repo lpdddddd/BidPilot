@@ -14,9 +14,15 @@ import {
 import { SendOutlined, StopOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
-import { askProjectStream, getLlmHealth, listDocuments } from "../../api/client";
+import { askProjectStream, getLlmHealth, listDocuments, listModels } from "../../api/client";
 import { ApiError } from "../../api/http";
 import type { AskResponse, CitationItem, RagRetrievalTrace } from "../../types/api";
+import {
+  BASE_MODEL_ID,
+  modelSelectLabel,
+  pickBaseModel,
+  pickCourseLora,
+} from "../models/modelStatus";
 
 const TYPE_LABELS: Record<string, string> = {
   tender: "招标文件",
@@ -167,6 +173,7 @@ export default function GroundedAsk({
   const [topK, setTopK] = useState(8);
   const [documentTypes, setDocumentTypes] = useState<string[]>([]);
   const [documentIds, setDocumentIds] = useState<string[]>([]);
+  const [modelId, setModelId] = useState<string>(BASE_MODEL_ID);
   const [phase, setPhase] = useState<Phase>("idle");
   const [answerText, setAnswerText] = useState("");
   const [sources, setSources] = useState<CitationItem[]>([]);
@@ -185,6 +192,13 @@ export default function GroundedAsk({
     refetchInterval: 60_000,
   });
 
+  const modelsQuery = useQuery({
+    queryKey: ["models"],
+    queryFn: listModels,
+    retry: 0,
+    refetchInterval: 60_000,
+  });
+
   const documentsQuery = useQuery({
     queryKey: ["documents", projectId],
     queryFn: () => listDocuments(projectId),
@@ -198,6 +212,38 @@ export default function GroundedAsk({
       })),
     [documentsQuery.data],
   );
+
+  const baseModel = modelsQuery.data ? pickBaseModel(modelsQuery.data.items) : undefined;
+  const loraModel = modelsQuery.data ? pickCourseLora(modelsQuery.data.items) : undefined;
+  const selectedModel =
+    modelsQuery.data?.items.find((m) => m.model_id === modelId) ?? baseModel;
+  const loraServed = Boolean(loraModel?.served);
+  const modelOptions = useMemo(() => {
+    const opts: { value: string; label: string; disabled?: boolean }[] = [];
+    if (baseModel) {
+      opts.push({
+        value: baseModel.model_id,
+        label: modelSelectLabel(baseModel),
+        disabled: !baseModel.served,
+      });
+    } else {
+      opts.push({ value: BASE_MODEL_ID, label: "Qwen3-8B Base" });
+    }
+    if (loraModel) {
+      opts.push({
+        value: loraModel.model_id,
+        label: modelSelectLabel(loraModel),
+        disabled: !loraModel.served,
+      });
+    }
+    return opts;
+  }, [baseModel, loraModel]);
+
+  useEffect(() => {
+    if (loraModel && modelId === loraModel.model_id && !loraModel.served) {
+      setModelId(baseModel?.model_id || modelsQuery.data?.default_model_id || BASE_MODEL_ID);
+    }
+  }, [loraModel, baseModel, modelId, modelsQuery.data?.default_model_id]);
 
   useEffect(() => {
     return () => {
@@ -238,6 +284,8 @@ export default function GroundedAsk({
           top_k: topK,
           document_types: documentTypes,
           document_ids: documentIds,
+          model_id: modelId,
+          allow_base_fallback: false,
           stream: true,
         },
         {
@@ -378,6 +426,16 @@ export default function GroundedAsk({
       <div className="bp-search-filters">
         <span className="bp-search-filters-label">筛选</span>
         <Select
+          data-testid="ask-model-select"
+          style={{ minWidth: 260 }}
+          placeholder="选择模型"
+          loading={modelsQuery.isLoading}
+          options={modelOptions}
+          value={modelId}
+          onChange={setModelId}
+          disabled={busy}
+        />
+        <Select
           mode="multiple"
           allowClear
           placeholder="文档类型"
@@ -415,6 +473,16 @@ export default function GroundedAsk({
           <span className="bp-pill">Citations Required</span>
         </div>
       </div>
+      {loraModel && !loraServed && (
+        <Typography.Text type="secondary" data-testid="ask-lora-unserved-hint" style={{ display: "block", marginBottom: 8 }}>
+          Course LoRA 已注册但未在线；请用 Base，或启动带 --enable-lora 的 vLLM。禁用选项说明：模型尚未启动在线服务。
+        </Typography.Text>
+      )}
+      {selectedModel && !selectedModel.served && selectedModel.model_type === "base" && (
+        <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
+          基座模型当前未在线；请先启动 ./scripts/serve_qwen3_vllm.sh。
+        </Typography.Text>
+      )}
 
       {phase === "retrieving" && (
         <div className="bp-ask-progress">正在检索项目资料…</div>
@@ -444,9 +512,20 @@ export default function GroundedAsk({
           <div className="bp-search-summary">
             <span className="bp-search-summary-title">回答</span>
             {result?.generation_trace && (
-              <span className="bp-search-summary-meta">
-                {result.generation_trace.model} · {result.generation_trace.latency_ms.toFixed(0)} ms
-                · 上下文 {result.generation_trace.context_chunk_count} 条
+              <span className="bp-search-summary-meta" data-testid="ask-generation-trace">
+                {result.generation_trace.served_model_name || result.generation_trace.model}
+                {result.generation_trace.resolved_model_id
+                  ? ` · ${result.generation_trace.resolved_model_id}`
+                  : ""}
+                {result.generation_trace.requested_model_id &&
+                result.generation_trace.requested_model_id !==
+                  result.generation_trace.resolved_model_id
+                  ? `（请求 ${result.generation_trace.requested_model_id}）`
+                  : ""}
+                {result.generation_trace.fallback_used ? " · 已回退基座" : ""}
+                {" · "}
+                {result.generation_trace.latency_ms.toFixed(0)} ms · 上下文{" "}
+                {result.generation_trace.context_chunk_count} 条
               </span>
             )}
           </div>

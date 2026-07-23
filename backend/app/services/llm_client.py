@@ -110,11 +110,13 @@ class LlmClient:
         max_tokens: int | None = None,
         temperature: float | None = None,
         request_id: str | None = None,
+        model: str | None = None,
     ) -> ChatResult:
         self._ensure_enabled()
         rid = request_id or str(uuid.uuid4())
+        model_name = model or self.model
         payload: dict[str, Any] = {
-            "model": self.model,
+            "model": model_name,
             "messages": messages,
             "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
             "temperature": temperature if temperature is not None else self.temperature,
@@ -127,7 +129,7 @@ class LlmClient:
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 response = client.post(url, json=payload, headers=_auth_headers(self.api_key))
         except httpx.TimeoutException as exc:
-            logger.warning("LLM timeout request_id=%s model=%s", rid, self.model)
+            logger.warning("LLM timeout request_id=%s model=%s", rid, model_name)
             raise LlmTimeoutError(
                 "大模型响应超时",
                 detail=f"超过 {self.timeout_seconds:.0f}s（request_id={rid}）",
@@ -146,7 +148,7 @@ class LlmClient:
                 "LLM HTTP %s request_id=%s model=%s latency_ms=%.0f",
                 response.status_code,
                 rid,
-                self.model,
+                model_name,
                 latency_ms,
             )
             raise LlmUnavailableError(
@@ -173,13 +175,13 @@ class LlmClient:
         logger.info(
             "LLM ok request_id=%s model=%s latency_ms=%.0f finish=%s",
             rid,
-            self.model,
+            model_name,
             latency_ms,
             finish_reason,
         )
         return ChatResult(
             content=content,
-            model=str(data.get("model") or self.model),
+            model=str(data.get("model") or model_name),
             latency_ms=round(latency_ms, 2),
             finish_reason=finish_reason,
             request_id=rid,
@@ -193,12 +195,14 @@ class LlmClient:
         max_tokens: int | None = None,
         temperature: float | None = None,
         request_id: str | None = None,
+        model: str | None = None,
     ) -> Iterator[str]:
         """Yield text deltas. Raises LlmError on failure before/during stream."""
         self._ensure_enabled()
         rid = request_id or str(uuid.uuid4())
+        model_name = model or self.model
         payload: dict[str, Any] = {
-            "model": self.model,
+            "model": model_name,
             "messages": messages,
             "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
             "temperature": temperature if temperature is not None else self.temperature,
@@ -304,5 +308,5 @@ class LlmClient:
         return result
 
 
-def get_llm_client() -> LlmClient:
-    return LlmClient()
+def get_llm_client(*, model: str | None = None) -> LlmClient:
+    return LlmClient(model=model)

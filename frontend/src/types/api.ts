@@ -274,6 +274,12 @@ export type GenerationTrace = {
   latency_ms: number;
   finish_reason: string | null;
   request_id: string | null;
+  requested_model_id?: string | null;
+  resolved_model_id?: string | null;
+  served_model_name?: string | null;
+  model_type?: "base" | "lora" | null;
+  adapter_version?: string | null;
+  fallback_used?: boolean;
 };
 
 export type AskRequestPayload = {
@@ -282,6 +288,10 @@ export type AskRequestPayload = {
   document_ids?: string[];
   top_k?: number;
   stream?: boolean;
+  /** Public model_id from GET /api/v1/models (e.g. qwen3-8b-base). */
+  model_id?: string | null;
+  /** Explicit Base fallback when requested LoRA is not served (never silent). */
+  allow_base_fallback?: boolean;
 };
 
 export type AskResponse = {

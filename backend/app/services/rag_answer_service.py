@@ -35,6 +35,7 @@ from app.services.llm_client import (
     LlmUnavailableError,
     get_llm_client,
 )
+from app.services.model_serving import resolve_model_selection
 from app.services.retrieval import RetrievalService
 
 logger = logging.getLogger("bidpilot.rag")
@@ -245,6 +246,53 @@ class RagAnswerService:
         self.retrieval = retrieval or RetrievalService(db)
         self.llm = llm or get_llm_client()
 
+    def _resolve_llm(self, request: AskRequest) -> tuple[LlmClient, Any]:
+        resolution = resolve_model_selection(
+            request.model_id,
+            allow_fallback=bool(request.allow_base_fallback),
+            probe=True,
+        )
+        if not resolution.available or not resolution.served_model_name:
+            codes = ",".join(resolution.reason_codes) or "model_not_served"
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "message": "所选模型当前不可用",
+                    "reason_codes": resolution.reason_codes,
+                    "requested_model_id": resolution.requested_model_id,
+                    "hint": (
+                        "模型尚未启动在线服务"
+                        if "model_not_served" in resolution.reason_codes
+                        else codes
+                    ),
+                },
+            )
+        client = LlmClient(model=resolution.served_model_name)
+        return client, resolution
+
+    def _generation_trace(
+        self,
+        *,
+        result: Any,
+        sources: list[EvidenceSource],
+        context_token_count: int,
+        resolution: Any,
+    ) -> GenerationTrace:
+        return GenerationTrace(
+            model=result.model,
+            context_chunk_count=len(sources),
+            context_token_count=context_token_count,
+            latency_ms=result.latency_ms,
+            finish_reason=result.finish_reason,
+            request_id=result.request_id,
+            requested_model_id=resolution.requested_model_id,
+            resolved_model_id=resolution.resolved_model_id,
+            served_model_name=resolution.served_model_name,
+            model_type=resolution.model_type,
+            adapter_version=resolution.adapter_version,
+            fallback_used=bool(resolution.fallback_used),
+        )
+
     def _prepare(
         self, project_id: UUID, request: AskRequest
     ) -> tuple[list[EvidenceSource], RagRetrievalTrace, str]:
@@ -319,18 +367,20 @@ class RagAnswerService:
                 detail="大模型问答未启用。请设置 LLM_ENABLED=true 并启动 vLLM。",
             )
 
+        llm, resolution = self._resolve_llm(request)
         messages = build_messages(question, sources)
         request_id = str(uuid.uuid4())
         logger.info(
-            "RAG generate request_id=%s project=%s model=%s chunks=%s tokens=%s",
+            "RAG generate request_id=%s project=%s model=%s requested=%s chunks=%s tokens=%s",
             request_id,
             project_id,
-            self.llm.model,
+            resolution.served_model_name,
+            resolution.requested_model_id,
             len(sources),
             trace.context_token_count,
         )
         try:
-            result = self.llm.chat(messages, request_id=request_id)
+            result = llm.chat(messages, request_id=request_id)
         except LlmDisabledError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=exc.detail
@@ -366,13 +416,11 @@ class RagAnswerService:
             citations=citations,
             sources=[s.citation for s in sources],
             retrieval_trace=trace,
-            generation_trace=GenerationTrace(
-                model=result.model,
-                context_chunk_count=len(sources),
+            generation_trace=self._generation_trace(
+                result=result,
+                sources=sources,
                 context_token_count=trace.context_token_count,
-                latency_ms=result.latency_ms,
-                finish_reason=result.finish_reason,
-                request_id=result.request_id,
+                resolution=resolution,
             ),
             status=status_label,
         )
@@ -436,19 +484,39 @@ class RagAnswerService:
             }
             return
 
+        try:
+            llm, resolution = self._resolve_llm(request)
+        except HTTPException as exc:
+            yield {
+                "event": "error",
+                "data": {
+                    "message": "所选模型当前不可用",
+                    "detail": exc.detail,
+                },
+            }
+            return
+
         messages = build_messages(question, sources)
         request_id = str(uuid.uuid4())
         logger.info(
-            "RAG stream request_id=%s project=%s chunks=%s",
+            "RAG stream request_id=%s project=%s model=%s requested=%s chunks=%s",
             request_id,
             project_id,
+            resolution.served_model_name,
+            resolution.requested_model_id,
             len(sources),
         )
         yield {
             "event": "generation_started",
             "data": {
                 "request_id": request_id,
-                "model": self.llm.model,
+                "model": resolution.served_model_name,
+                "requested_model_id": resolution.requested_model_id,
+                "resolved_model_id": resolution.resolved_model_id,
+                "served_model_name": resolution.served_model_name,
+                "model_type": resolution.model_type,
+                "adapter_version": resolution.adapter_version,
+                "fallback_used": resolution.fallback_used,
                 "context_chunk_count": len(sources),
                 "message": "正在生成并核验引用来源",
             },
@@ -458,7 +526,7 @@ class RagAnswerService:
         parts: list[str] = []
         try:
             # Buffer tokens server-side; do not leak unverified text via delta.
-            for delta in self.llm.chat_stream(messages, request_id=request_id):
+            for delta in llm.chat_stream(messages, request_id=request_id):
                 parts.append(delta)
         except LlmError as exc:
             yield {
@@ -486,19 +554,25 @@ class RagAnswerService:
             if any(p in answer for p in INSUFFICIENT_PHRASES) and not citations
             else "answered"
         )
+
+        class _StreamResult:
+            def __init__(self) -> None:
+                self.model = resolution.served_model_name or llm.model
+                self.latency_ms = round(latency_ms, 2)
+                self.finish_reason = "stop"
+                self.request_id = request_id
+
         result = AskResponse(
             question=question,
             answer=answer,
             citations=citations,
             sources=[s.citation for s in sources],
             retrieval_trace=trace,
-            generation_trace=GenerationTrace(
-                model=self.llm.model,
-                context_chunk_count=len(sources),
+            generation_trace=self._generation_trace(
+                result=_StreamResult(),
+                sources=sources,
                 context_token_count=trace.context_token_count,
-                latency_ms=round(latency_ms, 2),
-                finish_reason="stop",
-                request_id=request_id,
+                resolution=resolution,
             ),
             status=status_label,
         )
