@@ -1142,6 +1142,7 @@ export type EvaluationCapability = {
   target_type: EvaluationTargetType | string;
   available: boolean;
   reason?: string | null;
+  reason_code?: string | null;
   label?: string | null;
 };
 
@@ -1149,17 +1150,25 @@ export type EvaluationProfileInfo = {
   id: string;
   version: string;
   name?: string | null;
+  enabled_metrics?: string[];
+  ai_judge_enabled?: boolean;
 };
 
 export type EvaluationDatasetInfo = {
   name: string;
   version: string;
   dataset_hash: string;
+  hash_short?: string | null;
   total_cases?: number | null;
   task_family_counts?: Record<string, number> | null;
   split_counts?: Record<string, number> | null;
   reference_kind_counts?: Record<string, number> | null;
   direct_reference_coverage?: number | null;
+  human_gold_count?: number | null;
+  auto_reference_count?: number | null;
+  rule_expected_count?: number | null;
+  no_direct_reference_count?: number | null;
+  label_policy?: string | null;
 };
 
 export type EvaluationCapabilitiesResponse = {
@@ -1188,6 +1197,8 @@ export type EvaluationSuite = {
 export type EvaluationSuiteListResponse = {
   items: EvaluationSuite[];
   total: number;
+  page?: number;
+  page_size?: number;
 };
 
 export type EvaluationRunSummary = {
@@ -1236,13 +1247,17 @@ export type EvaluationRun = {
 
 export type EvaluationRunCreatePayload = {
   suite_id: string;
-  target_type: EvaluationTargetType | string;
+  target: EvaluationTargetType | string;
+  /** @deprecated use target */
+  target_type?: EvaluationTargetType | string;
   split?: string | null;
   task_family?: string | null;
-  profile?: string | null;
+  task_families?: string[] | null;
+  evaluator_profile?: string | null;
   seed?: number;
   case_limit?: number | null;
   target_config?: Record<string, unknown> | null;
+  idempotency_key?: string | null;
 };
 
 export type EvaluationRunListParams = {
@@ -1250,6 +1265,8 @@ export type EvaluationRunListParams = {
   suite_id?: string;
   task_family?: string;
   target_type?: EvaluationTargetType | string;
+  page?: number;
+  page_size?: number;
   limit?: number;
   offset?: number;
   started_after?: string;
@@ -1259,6 +1276,8 @@ export type EvaluationRunListParams = {
 export type EvaluationRunListResponse = {
   items: EvaluationRun[];
   total: number;
+  page?: number;
+  page_size?: number;
   limit?: number;
   offset?: number;
 };
@@ -1339,6 +1358,8 @@ export type EvaluationCaseResultListParams = {
 export type EvaluationCaseResultListResponse = {
   items: EvaluationCaseResult[];
   total: number;
+  page?: number;
+  page_size?: number;
   limit?: number;
   offset?: number;
 };

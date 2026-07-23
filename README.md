@@ -290,19 +290,23 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 
 1. **持久化 attempt**：DB `FOR UPDATE` 分配，`(run, node, attempt)` 唯一；API retry 接续最大值。
 2. **原子 claim**：resume/retry 数据库 claim；仅 claimed 才挂 BackgroundTask。
-3. **完整 Graph+Service 中途可见性**：`test_agent_persist_attempt_graph.py` barrier 测试。
+3. **完整 Graph+Service 中途可见性**：成功 / 失败 / retry 路径见 `test_agent_persist_attempt_graph.py`（含 HTTP retry、并发 retry claim、BackgroundTask 登记失败释放）。
 4. CI：`ruff format --check` + `mypy app`。
 
 - **异步启动**：`POST` 持久化 `AgentRun` 后立即返回；图在 `BackgroundTasks` 执行；resume/retry 默认 prepare + 后台；`?sync=true` 同步；同 run 去重
 - **事件/节点/tool 生命周期**：attempt 从 1；失败 attempt 无 `node_completed`；逻辑 `call_id` 稳定；幂等键含 attempt
-- **中途可见**：短提交；完整 Graph 证明见 `test_full_graph_service_midrun_visibility`（barrier，无 sleep）
+- **中途可见**：短提交；完整 Graph 证明见 `test_full_graph_service_midrun_visibility` / `test_full_graph_tool_failure_midrun_visibility`（barrier，无 sleep）
 - **项目作用域 / SSE / 前端**：归属不匹配 404；SSE + 轮询回退；`AgentLoopPanel`
 - **尚未实现（Agent）**：WebSocket、CoT 流式展示
 
 ## 评测中心（第 12 步）
 
-项目级自动评测：复用 `datasets/eval/reference/`（140 auto_reference cases），确定性指标 + hard gates，前端评测中心。详见 [`docs/evaluation_center.md`](docs/evaluation_center.md)。
+项目级自动评测：复用 `datasets/eval/reference/`（**140 auto_reference，human Gold=0**，统计由 loader 动态生成），确定性指标 + hard gates，前端评测中心。详见 [`docs/evaluation_center.md`](docs/evaluation_center.md)。
 
+- 生产默认后台执行（`BackgroundTasks` + 独立 Session）；`sync=true` 仅测试
+- FE/BE 契约统一：`items` 分页、`target`/`case_limit`/`evaluator_profile`、结构化 profiles
+- Target 防泄漏：`target_input` 不含 citation gold / reference；`deterministic_fake` 不进生产 capability
+- Citation 深链由后端校验 `valid` / `validation_error`
 - **尚未实现（训练）**：LoRA / 第 13 步训练数据构建
 
 ## 可追溯响应准备草稿

@@ -321,7 +321,7 @@ describe("EvaluationCenterPage", () => {
     await user.dblClick(btn);
     await waitFor(() => expect(createRun).toHaveBeenCalledTimes(1));
     expect(createRun.mock.calls[0][0]).toBe("proj-1");
-    expect(createRun.mock.calls[0][1].target_type).toBe("deterministic_fake");
+    expect(createRun.mock.calls[0][1].target).toBe("deterministic_fake");
     await waitFor(() => expect(screen.getByTestId("eval-run-detail")).toBeTruthy());
   });
 

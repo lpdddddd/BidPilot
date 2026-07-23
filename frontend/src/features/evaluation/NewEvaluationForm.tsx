@@ -85,10 +85,10 @@ export default function NewEvaluationForm({
         : `eval-${Date.now()}`;
     const payload: EvaluationRunCreatePayload = {
       suite_id: suiteId,
-      target_type: targetType,
+      target: targetType,
       split: split || null,
       task_family: taskFamily || null,
-      profile: profile || null,
+      evaluator_profile: profile || null,
       seed,
       case_limit: caseLimit,
     };
