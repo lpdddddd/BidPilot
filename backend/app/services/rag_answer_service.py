@@ -246,7 +246,26 @@ class RagAnswerService:
         self.retrieval = retrieval or RetrievalService(db)
         self.llm = llm or get_llm_client()
 
-    def _resolve_llm(self, request: AskRequest) -> tuple[LlmClient, Any]:
+    def _resolve_llm(self, request: AskRequest) -> tuple[Any, Any]:
+        from app.services.llm_client import LlmClient
+        from app.services.model_serving import BASE_MODEL_ID, ModelResolution
+
+        # Unit tests inject FakeLlm (not LlmClient); keep injection and skip live probe.
+        if self.llm is not None and not isinstance(self.llm, LlmClient):
+            requested = (request.model_id or BASE_MODEL_ID).strip() or BASE_MODEL_ID
+            return self.llm, ModelResolution(
+                available=True,
+                requested_model_id=requested,
+                resolved_model_id=requested,
+                served_model_name=str(getattr(self.llm, "model", None) or "test-llm"),
+                model_type="base",
+                adapter_version=None,
+                train_track=None,
+                fallback_used=False,
+                reason_codes=[],
+                display_name="test-llm",
+            )
+
         resolution = resolve_model_selection(
             request.model_id,
             allow_fallback=bool(request.allow_base_fallback),
@@ -267,7 +286,15 @@ class RagAnswerService:
                     ),
                 },
             )
-        client = LlmClient(model=resolution.served_model_name)
+        client = LlmClient(
+            base_url=self.llm.base_url if isinstance(self.llm, LlmClient) else None,
+            api_key=self.llm.api_key if isinstance(self.llm, LlmClient) else None,
+            model=resolution.served_model_name,
+            timeout_seconds=(
+                self.llm.timeout_seconds if isinstance(self.llm, LlmClient) else None
+            ),
+            enabled=self.llm.enabled if isinstance(self.llm, LlmClient) else None,
+        )
         return client, resolution
 
     def _generation_trace(
