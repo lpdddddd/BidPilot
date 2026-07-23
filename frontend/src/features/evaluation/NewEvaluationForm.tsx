@@ -13,7 +13,11 @@ import type {
   EvaluationRunCreatePayload,
   EvaluationSuite,
 } from "../../types/api";
-import { capabilityOptionLabel, evaluationTargetLabel } from "./evaluationParams";
+import {
+  capabilityOptionLabel,
+  evaluationTargetLabel,
+  friendlyCapabilityReason,
+} from "./evaluationParams";
 
 type Props = {
   suites: EvaluationSuite[];
@@ -102,7 +106,8 @@ export default function NewEvaluationForm({
   return (
     <div data-testid="eval-new-form" style={{ maxWidth: 640 }}>
       <Typography.Paragraph type="secondary">
-        选择套件与目标后启动评测。不可用目标已禁用并显示原因；不会在此展示 test reference。
+        选择套件与目标后启动评测。暂未开放的目标会保持禁用并给出简要说明；不会在此展示 test
+        reference。
       </Typography.Paragraph>
 
       {error && (
@@ -165,8 +170,12 @@ export default function NewEvaluationForm({
             onChange={setTargetType}
           />
           {selectedCap && !selectedCap.available && (
-            <Typography.Text type="danger" data-testid="eval-target-unavailable-reason">
-              {selectedCap.reason || "当前不可用"}
+            <Typography.Text
+              type="secondary"
+              data-testid="eval-target-unavailable-reason"
+              style={{ display: "block", marginTop: 8 }}
+            >
+              该目标暂不可用：{friendlyCapabilityReason(selectedCap)}
             </Typography.Text>
           )}
           {caps.length === 0 && (

@@ -84,5 +84,5 @@ Workbench「评估中心」→ `/evaluation`：概览（human Gold=0）、新建
 
 - LLM-backed `agent_pipeline` 依赖真实 provider（本地可用 vLLM）；CI 用 deterministic_fake。
 - extraction/matching/drafting 尚未 case-level 接线。
-- 不启动 LoRA / 不导出训练集（Step 13）。
+- 评测中心本身不启动 LoRA / 不导出训练集；领域微调见 [`step13_lora.md`](step13_lora.md)。
 - 不引入 WebSocket / Celery / Kafka。

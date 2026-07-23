@@ -1,21 +1,32 @@
 # BidPilot
 
-BidPilot 是一个基于 RAG、LangGraph Agent 与领域模型微调的招投标文件分析与合规审查平台。
+BidPilot 面向招投标场景：帮助团队管理招标/企业文档，基于 **RAG + 引用** 做证据约束问答，用确定性规则与 **LangGraph Agent** 做合规审查与可恢复业务闭环，并用 **评测中心** 对能力做可复现评估。
 
-本仓库当前为 **工程脚手架阶段**：已打通目录结构、PostgreSQL 模型与 Alembic 迁移、基础 API、前端骨架，以及独立的 LLaMAFactory 训练目录。完整 RAG / Agent / 大规模采集 / LoRA 训练不在本阶段。
+### 当前能力（诚实口径）
 
-> 布局说明：工作区根目录 `/root/autodl-tmp` 已存在其他项目，因此本工程创建在 **`bidpilot/`** 子目录，而非再嵌套一层 `bidpilot/bidpilot`。
+| 能力 | 状态 |
+| --- | --- |
+| 项目 / 文档上传、解析、结构感知 Chunk、混合检索索引 | 可用 |
+| 带来源 RAG 问答（本地 **Qwen3-8B @ vLLM**） | 可用（需启动 LLM） |
+| 需求抽取 / 材料匹配 / 人工审核 / 响应草稿 | 业务路径可用；**评测 target 未 case 级接线** |
+| 合规规则引擎 + Agent（Step/ToolCall 状态、SSE 时间线） | 可用 |
+| 评测中心（suite / run / case、对比、导出 JSON·CSV·MD） | 可用；reference 为 auto_reference，**human Gold=0** |
+| 领域微调 / LoRA（Step 13） | **course_pilot 可用**：QC→审核队列→LoRA smoke/正式训练→评测→注册；**非 human_gold** → [`docs/step13_lora.md`](docs/step13_lora.md) |
+
+**课程演示走查**（创建项目 → 上传样例 → 解析索引 → RAG → 合规/Agent → 评测对比导出）：[`docs/course_demo.md`](docs/course_demo.md)。
+
+> 布局说明：工作区根目录 `/root/autodl-tmp` 已存在其他项目，因此本工程位于 **`bidpilot/`** 子目录。
 
 ## 系统架构
 
-- **FastAPI backend**：业务 API、健康检查、repository/service 分层
-- **React frontend**：项目列表 / 创建 / 详情与文档占位页
-- **PostgreSQL**：业务与文件元数据
-- **MinIO**：原始文件对象存储
-- **Qdrant**：向量检索预留
-- **Redis**：缓存 / 任务预留
-- **OpenSearch**：BM25 预留（本轮未启动）
-- **training/llamafactory**：外部 LLaMAFactory 的配置与数据导出脚本
+- **FastAPI backend**：业务 API、文档管道、RAG、合规、Agent、评测中心
+- **React frontend**：项目 / 文档中心、检索与问答、智能审查、Agent 时间线、评估中心
+- **PostgreSQL**：业务与文件元数据、Agent / 评测 run
+- **MinIO**：原始与解析文件对象存储
+- **Qdrant + OpenSearch**：Dense + BM25 混合检索
+- **Redis**：缓存 / 任务协调预留
+- **本地 vLLM**：`Qwen/Qwen3-8B`（served name `bidpilot-qwen3-8b`）
+- **training/llamafactory**：ShareGPT 导出与 QLoRA 配置（训练在外部 LLaMAFactory）
 
 详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 与 [docs/DATABASE.md](docs/DATABASE.md)。
 
@@ -25,7 +36,7 @@ BidPilot 是一个基于 RAG、LangGraph Agent 与领域模型微调的招投标
 bidpilot/
 ├── backend/                 # FastAPI + SQLAlchemy + Alembic
 ├── frontend/                # React + Vite + Ant Design
-├── data_pipeline/           # 采集/解析/切块/标注（骨架）
+├── data_pipeline/           # 采集/解析/切块/标注/SFT 流水线
 ├── training/llamafactory/   # QLoRA 配置与 ShareGPT 导出
 ├── datasets/                # raw/interim/processed/gold/silver/eval
 ├── demo_data/               # 本地演示数据包（可被 import 脚本导入）
@@ -83,11 +94,14 @@ python scripts/import_demo_data.py --dry-run
 - 尽量保留原始 `requirement_id`
 - 可重复执行，避免重复插入
 
+上传样例招标文本：`demo_data/sample_tender.txt`。完整 UI 走查见 [`docs/course_demo.md`](docs/course_demo.md)。
+
 ## 前后端启动
 
 ```bash
 make backend    # http://localhost:8000/docs
 make frontend   # http://localhost:5173
+make infra-up   # 基础设施（若尚未启动）
 ```
 
 ## 文档上传与解析
@@ -214,7 +228,7 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
   - 脱敏摘要写入 `docs/acceptance/rag_smoke_*.json`（已 gitignore，不入库原文）
 - 前端：「检索证据」保留；「带来源问答」仅在 `final` 后展示确认答案
 - 真实联调记录：`docs/rag_e2e_acceptance.md`
-- **本步未包含**：微调 / LoRA、企业材料匹配、LangGraph Agent
+- 后续能力（匹配 / Agent / 评测）见下文各节；LoRA 见 [`docs/step13_lora.md`](docs/step13_lora.md)
 
 ## 招标要求结构化抽取（第 7 步）
 
@@ -266,7 +280,7 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
   产出含 `coverage_matrix`（含 `focus_sample_count`）；当前正式规则 **29 条已执行**，其中通常 **3 条**有直接 reference 可对照（如 A001 / C003 / E003）。**自动 reference 不是人工 Gold**；无 focus 样本的规则不得宣称 100% 一致率。
 - **Step 9 修复**：双边证据严格定义、C005/E003/E005 语义、失败 run 持久化、离线一致性评估
 - **限制**：非法律意见 / 非人工 gold；不足则 unknown，不编造
-- **尚未实现**：LoRA 审查、自动投标结论
+- LoRA 审查 / 自动投标结论：未交付（见 [`docs/step13_lora.md`](docs/step13_lora.md)）
 
 ## LangGraph Agent 业务闭环（第 10 步）
 
@@ -297,7 +311,7 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 - **事件/节点/tool 生命周期**：attempt 从 1；失败 attempt 无 `node_completed`；逻辑 `call_id` 稳定；幂等键含 attempt
 - **中途可见**：短提交；完整 Graph 证明见 `test_full_graph_service_midrun_visibility` / `test_full_graph_tool_failure_midrun_visibility`（barrier，无 sleep）
 - **项目作用域 / SSE / 前端**：归属不匹配 404；SSE + 轮询回退；`AgentLoopPanel`
-- **尚未实现（Agent）**：WebSocket、CoT 流式展示
+- Agent 侧未做：WebSocket、CoT 流式展示
 
 ## 评测中心（第 12 步）
 
@@ -307,9 +321,9 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 - FE/BE 契约统一：`items` 分页、`target`/`case_limit`/`evaluator_profile`、结构化 profiles
 - Target 结构隔离：`TargetCaseInput` + `TargetExecutionContext`；`PrivateReferenceBundle` 仅 evaluator
 - RAG scope=`EvaluationRun.project_id`；每 case 独立 Session；有界 cancel；幂等唯一约束兜底
-- `deterministic_fake` 不进生产；extraction/matching/drafting=`service_not_wired`
+- `deterministic_fake` 不进生产；extraction / matching / drafting 评测 target **未 case 级接线**（前端显示「当前版本暂未开放」等友好文案，不暴露 reason_code）
 - Citation 深链由后端校验 `valid` / `invalid_reason` / `detail_url`
-- **尚未实现（训练）**：LoRA / 第 13 步训练数据构建
+- 领域微调（Step 13）见 [`docs/step13_lora.md`](docs/step13_lora.md)（占位；尚未接入业务路径）
 
 ## 可追溯响应准备草稿
 
@@ -318,7 +332,7 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 
 - 正向正文仅用 `confirmed` + `active` + `supported|partially_supported`
 - 不可变版本 / 来源快照 / 人工修订与审核；Markdown·DOCX 仅 reviewed 可导出
-- **尚未实现**：LoRA / 自动投标结论 / 价格与法律承诺生成 / 投标提交
+- 未交付：自动投标结论 / 价格与法律承诺生成 / 投标提交；LoRA 见 [`docs/step13_lora.md`](docs/step13_lora.md)
 
 ## 测试 / 静态检查
 
@@ -436,32 +450,29 @@ llamafactory-cli train /absolute/path/to/bidpilot/training/llamafactory/configs/
 
 ## 当前已完成功能
 
-1. 完整工程目录与模块隔离
-2. 17 张核心业务表 + Alembic 初始迁移
-3. Docker Compose：Postgres / Redis / MinIO（自动建桶）/ Qdrant / OpenSearch（单节点、关闭安全插件）
-4. `GET /health`、`GET /ready`
-5. 项目与文档元数据最小 API
-6. 前端基础页面骨架
-7. 演示数据导入脚本
-8. LLaMAFactory ShareGPT 导出 / 校验与 QLoRA 配置模板
-9. **可安装 data_pipeline**：采集/解析/切块/标注/审核/RAG&Agent 评测/SFT/校验/DB 导入
-10. pytest 覆盖 backend 与 data_pipeline
-11. 结构感知 Chunk 与字符/页码溯源
-12. 混合检索：Qdrant Dense + OpenSearch BM25 + RRF 融合 + Cross-Encoder 重排
-13. 带来源引用的文档问答（RAG：检索证据约束 + Qwen3-8B + 引用校验 + SSE）
-14. 确定性规则合规检查引擎（coverage/evidence/资格风险/草稿安全/一致性）
-15. LangGraph Agent 业务闭环（可恢复 checkpoint / resume / retry）
-16. Agent 实时执行时间线（异步跑图、SSE、`AgentLoopPanel`）
-17. 评测中心（EvaluationSuite/Run、确定性指标、前端评测中心）
+1. 工程目录与模块隔离；Alembic 迁移；Docker Compose（Postgres / Redis / MinIO / Qdrant / OpenSearch）
+2. 项目与文档上传 / 解析 / Chunk / 混合检索索引
+3. 带来源 RAG 问答（本地 Qwen3-8B @ vLLM + 引用校验 + SSE）
+4. 需求抽取、材料匹配、人工审核、响应准备草稿
+5. 确定性合规规则引擎；LangGraph Agent 闭环与实时时间线（Step / ToolCall）
+6. 评测中心（capability、小跑、case 结果、compare、导出）
+7. 演示数据导入（`make import-demo`）与课程走查 [`docs/course_demo.md`](docs/course_demo.md)
+8. data_pipeline + LLaMAFactory ShareGPT 导出 / 校验与 QLoRA **配置模板**（训练本身未作为产品能力交付）
+
+## 已知限制
+
+- 评测 reference：**auto_reference**，**human Gold=0**；不得称为人工 Gold
+- extraction / matching / drafting：**业务功能存在**，但评测中心 target **未 case 级接线**
+- Agent：无 WebSocket / 无 CoT 流式展示；非法律意见；证据不足则 warning / blocked
+- OCR、完整认证授权、大规模采集、**LoRA 领域微调**尚未交付（Step 13 占位见 [`docs/step13_lora.md`](docs/step13_lora.md)）
 
 ## 后续开发顺序建议
 
-1. 人工审核沉淀 gold 需求 / Match / RAG / SFT
-2. 第 13 步：训练数据构建与 LoRA（在评测中心稳定之后）
+1. 人工审核沉淀 human gold（需求 / Match / RAG / SFT）
+2. Step 13：训练数据构建与 LoRA（见 [`docs/step13_lora.md`](docs/step13_lora.md)）
 3. 合规公开源采集规模化 + OCR
 4. 认证授权与组织权限
-5. 多 GPU QLoRA 正式训练
-6. LoRA 审查 / 自动投标结论 / 投标提交（远期，明确不在当前范围）
+5. 多 GPU QLoRA 正式训练；LoRA 审查 / 自动投标结论 / 投标提交（远期）
 
 ## Makefile 命令
 

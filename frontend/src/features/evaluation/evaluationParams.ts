@@ -155,10 +155,82 @@ export function parseEvaluationTab(raw: string | null): EvaluationTab {
   return "overview";
 }
 
+/** Map backend reason_code → user-facing Chinese. Never surface raw codes. */
+export const EVAL_REASON_CODE_LABELS: Record<string, string> = {
+  service_not_wired: "当前版本暂未开放",
+  provider_not_configured: "模型服务未配置",
+  project_dependency_missing: "检索依赖未就绪",
+  fake_disabled: "当前版本暂未开放",
+  settings_unavailable: "模型服务未配置",
+  unknown_target: "当前版本暂未开放",
+  unavailable: "当前不可用",
+};
+
+const RAW_REASON_CODE_RE =
+  /^(service_not_wired|provider_not_configured|project_dependency_missing|fake_disabled|settings_unavailable|unknown_target|unavailable)\b/i;
+
+/** Exception-looking fragments that must never appear in UI copy. */
+const EXCEPTION_CLASS_RE =
+  /\b([A-Z][A-Za-z0-9_]*(?:Error|Exception|Timeout|Failure))\b/;
+
+function normalizeReasonCode(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  // Backend may append ":ExceptionName" — drop the suffix.
+  const base = raw.trim().split(":")[0]?.trim().toLowerCase() ?? "";
+  return base || null;
+}
+
+/**
+ * Friendly unavailable reason for Evaluation Center selects / alerts.
+ * Prefer reason_code; never show raw codes or exception class names.
+ */
+export function friendlyCapabilityReason(
+  cap: Pick<EvaluationCapability, "reason" | "reason_code" | "available">,
+): string {
+  if (cap.available) return "";
+  const code = normalizeReasonCode(cap.reason_code);
+  if (code && EVAL_REASON_CODE_LABELS[code]) {
+    return EVAL_REASON_CODE_LABELS[code];
+  }
+
+  let text = (cap.reason ?? "").trim();
+  if (!text) return "当前不可用";
+
+  // If reason itself is a code or code:Exception, map / sanitize.
+  const fromText = normalizeReasonCode(text);
+  if (fromText && EVAL_REASON_CODE_LABELS[fromText] && RAW_REASON_CODE_RE.test(text)) {
+    return EVAL_REASON_CODE_LABELS[fromText];
+  }
+
+  if (EXCEPTION_CLASS_RE.test(text) || RAW_REASON_CODE_RE.test(text)) {
+    if (code && EVAL_REASON_CODE_LABELS[code]) {
+      return EVAL_REASON_CODE_LABELS[code];
+    }
+    if (fromText && EVAL_REASON_CODE_LABELS[fromText]) {
+      return EVAL_REASON_CODE_LABELS[fromText];
+    }
+    return "当前不可用";
+  }
+
+  // Known English backend reasons → Chinese.
+  const lower = text.toLowerCase();
+  if (lower.includes("embedding") || lower.includes("retrieval")) {
+    return "检索依赖未就绪";
+  }
+  if (lower.includes("llm") || lower.includes("provider")) {
+    return "模型服务未配置";
+  }
+  if (lower.includes("not wired") || lower.includes("not available")) {
+    return "当前版本暂未开放";
+  }
+
+  return text;
+}
+
 export function capabilityOptionLabel(cap: EvaluationCapability): string {
   const base = cap.label || evaluationTargetLabel(String(cap.target_type));
   if (cap.available) return base;
-  const reason = cap.reason?.trim() || "当前不可用";
+  const reason = friendlyCapabilityReason(cap);
   return `${base}（不可用：${reason}）`;
 }
 

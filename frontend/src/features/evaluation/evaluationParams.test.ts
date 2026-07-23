@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   compareMismatchWarnings,
   containsForbiddenLeak,
+  capabilityOptionLabel,
   formatPercent,
   formatScore,
+  friendlyCapabilityReason,
   isActiveEvaluationStatus,
   isTerminalEvaluationStatus,
   metricDisplayValue,
@@ -14,6 +16,54 @@ import {
 } from "./evaluationParams";
 
 describe("evaluationParams", () => {
+  it("maps capability reason_codes to friendly Chinese (no raw codes)", () => {
+    expect(
+      friendlyCapabilityReason({
+        available: false,
+        reason_code: "service_not_wired",
+        reason: "extraction case-level evaluation adapter is not wired",
+      }),
+    ).toBe("当前版本暂未开放");
+    expect(
+      friendlyCapabilityReason({
+        available: false,
+        reason_code: "provider_not_configured",
+        reason: "LLM provider not configured",
+      }),
+    ).toBe("模型服务未配置");
+    expect(
+      friendlyCapabilityReason({
+        available: false,
+        reason_code: "project_dependency_missing:ConnectionError",
+        reason: "Embedding/retrieval stack not available",
+      }),
+    ).toBe("检索依赖未就绪");
+    expect(
+      friendlyCapabilityReason({
+        available: false,
+        reason_code: "fake_disabled",
+        reason: "deterministic_fake is not available",
+      }),
+    ).toBe("当前版本暂未开放");
+    expect(
+      capabilityOptionLabel({
+        target_type: "extraction",
+        available: false,
+        label: "需求抽取",
+        reason_code: "service_not_wired",
+        reason: "not wired",
+      }),
+    ).toMatch(/不可用：当前版本暂未开放/);
+    expect(
+      capabilityOptionLabel({
+        target_type: "extraction",
+        available: false,
+        label: "需求抽取",
+        reason_code: "service_not_wired",
+        reason: "not wired",
+      }),
+    ).not.toMatch(/service_not_wired|Exception|Error/);
+  });
   it("parses tabs and terminal statuses", () => {
     expect(parseEvaluationTab("new")).toBe("new");
     expect(parseEvaluationTab("nope")).toBe("overview");

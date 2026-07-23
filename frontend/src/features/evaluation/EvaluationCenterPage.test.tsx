@@ -72,8 +72,16 @@ const CAPS = {
     {
       target_type: "rag",
       available: false,
-      reason: "检索服务未就绪",
+      reason: "Embedding/retrieval stack not available",
+      reason_code: "project_dependency_missing",
       label: "RAG",
+    },
+    {
+      target_type: "extraction",
+      available: false,
+      reason: "extraction case-level evaluation adapter is not wired to formal service",
+      reason_code: "service_not_wired",
+      label: "需求抽取",
     },
   ],
   evaluator_version: "bidpilot-eval-1.0.0",
@@ -310,9 +318,15 @@ describe("EvaluationCenterPage", () => {
     // Open target select and assert unavailable option disabled
     const targetSelect = screen.getByTestId("eval-target-select");
     await user.click(within(targetSelect).getByRole("combobox"));
-    const unavailable = await screen.findByText(/RAG（不可用：检索服务未就绪）/);
+    const unavailable = await screen.findByText(/RAG（不可用：检索依赖未就绪）/);
+    expect(unavailable.textContent || "").toMatch(/不可用|暂未开放|未就绪/);
+    expect(unavailable.textContent || "").not.toMatch(/service_not_wired|project_dependency_missing/);
     const optionEl = unavailable.closest(".ant-select-item") || unavailable.parentElement;
     expect(optionEl?.className || "").toMatch(/disabled|ant-select-item-option-disabled/);
+
+    const unwired = await screen.findByText(/需求抽取（不可用：当前版本暂未开放）/);
+    expect(unwired.textContent || "").toMatch(/不可用|暂未开放/);
+    expect(unwired.textContent || "").not.toContain("service_not_wired");
 
     // Pick available target
     await user.click(await screen.findByText(/确定性假目标/));
