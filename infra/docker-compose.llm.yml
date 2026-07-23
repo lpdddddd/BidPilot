@@ -1,24 +1,21 @@
 # Optional vLLM profile — Hugging Face Hub id mode (no local weight mount).
 # Not started by `make infra-up`. Requires NVIDIA GPU + nvidia-container-toolkit.
 #
-# Shared env with scripts/serve_qwen3_vllm.sh:
-#   LLM_MODEL          served name (backend calls this)
-#   LLM_MODEL_SOURCE   Hub repo id (default Qwen/Qwen3-8B)
-#   LLM_BASE_URL       http://localhost:8001/v1
-#   LLM_LORA_*         Course LoRA module (Step 14)
-#
-# Hub mode (downloads/caches via HF_HOME):
+# IMPORTANT — run Compose from the **repository root** (not from infra/):
 #   docker compose --env-file .env \
 #     -f infra/docker-compose.yml -f infra/docker-compose.llm.yml \
-#     --profile llm up -d
+#     --profile llm config
 #
-# Local weights mode (mount LLM_MODEL_PATH — must be non-empty and valid):
-#   docker compose --env-file .env \
-#     -f infra/docker-compose.yml -f infra/docker-compose.llm.yml \
-#     -f infra/docker-compose.llm.local.yml \
-#     --profile llm up -d
+# Default LoRA bind uses a path **relative to this compose file** (`infra/`):
+#   ../training/llamafactory/outputs/qwen3_8b_lora_course
+# Override with LLM_LORA_HOST_PATH (absolute or repo-root-relative resolved by you).
+# Container mount is always: /models/bidpilot-course-lora
 #
-# Then set LLM_ENABLED=true on the API process.
+# Local weights mode:
+#   -f infra/docker-compose.llm.local.yml  (requires LLM_MODEL_PATH)
+#
+# Preflight (host Adapter must exist before `up`):
+#   bash scripts/check_lora_adapter.sh
 
 services:
   vllm-qwen3:
@@ -32,18 +29,21 @@ services:
       CUDA_VISIBLE_DEVICES: ${LLM_CUDA_VISIBLE_DEVICES:-0}
       LLM_MODEL: ${LLM_MODEL:-bidpilot-qwen3-8b}
       LLM_MODEL_SOURCE: ${LLM_MODEL_SOURCE:-Qwen/Qwen3-8B}
+      LLM_BASE_SERVED_NAME: ${LLM_BASE_SERVED_NAME:-${LLM_MODEL:-bidpilot-qwen3-8b}}
+      LLM_LORA_SERVED_NAME: ${LLM_LORA_SERVED_NAME:-${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}}
     ports:
       - "${LLM_PORT:-8001}:8000"
     volumes:
       - ${HF_HOME:-${HOME}/.cache/huggingface}:/root/.cache/huggingface
       - type: bind
-        source: ${LLM_LORA_HOST_PATH:-./training/llamafactory/outputs/qwen3_8b_lora_course}
-        target: /adapters/course
+        # Relative default is vs THIS file's directory (infra/), hence ../training/...
+        source: ${LLM_LORA_HOST_PATH:-../training/llamafactory/outputs/qwen3_8b_lora_course}
+        target: ${LLM_LORA_CONTAINER_PATH:-/models/bidpilot-course-lora}
         read_only: true
     command:
       - ${LLM_MODEL_SOURCE:-Qwen/Qwen3-8B}
       - --served-model-name
-      - ${LLM_MODEL:-bidpilot-qwen3-8b}
+      - ${LLM_BASE_SERVED_NAME:-${LLM_MODEL:-bidpilot-qwen3-8b}}
       - --host
       - 0.0.0.0
       - --port
@@ -61,7 +61,7 @@ services:
       - --max-lora-rank
       - "${LLM_MAX_LORA_RANK:-16}"
       - --lora-modules
-      - "${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}=/adapters/course"
+      - "${LLM_LORA_SERVED_NAME:-${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}}=${LLM_LORA_CONTAINER_PATH:-/models/bidpilot-course-lora}"
     deploy:
       resources:
         reservations:

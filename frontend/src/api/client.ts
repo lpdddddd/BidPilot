@@ -71,6 +71,11 @@ export type ModelCatalogItem = {
   version: string | null;
   train_track: string | null;
   reason_codes: string[];
+  reason_code?: string | null;
+  base_model_match?: string | null;
+  configured_base_model?: string | null;
+  adapter_base_model?: string | null;
+  last_probe_at?: string | null;
   notes: string | null;
   status_label: ModelCatalogStatusLabel;
 };

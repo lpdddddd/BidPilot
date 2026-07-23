@@ -64,40 +64,36 @@ resolve_adapter() {
 preflight_lora() {
   local adapter
   adapter="$(resolve_adapter)"
-  if [[ ! -d "${adapter}" ]]; then
-    echo "ERROR: LoRA adapter directory missing: ${LORA_REL}" >&2
-    exit 1
-  fi
-  if [[ ! -f "${adapter}/adapter_config.json" ]]; then
-    echo "ERROR: adapter_config.json missing under ${LORA_REL}" >&2
-    exit 1
-  fi
-  if [[ ! -f "${adapter}/adapter_model.safetensors" \
-     && ! -f "${adapter}/adapter_model.bin" ]]; then
-    echo "ERROR: adapter weights missing under ${LORA_REL}" >&2
-    exit 1
-  fi
-  local rank
-  rank="$(python - <<PY
-import json
+  local configured_base="${LLM_MODEL_PATH:-${LLM_MODEL_SOURCE:-Qwen/Qwen3-8B}}"
+  # Strong validation via shared Python helper (match / rank / files).
+  python - <<PY
+import json, sys
 from pathlib import Path
-cfg = json.loads(Path(r"""${adapter}/adapter_config.json""").read_text())
-print(int(cfg.get("r") or 0))
+sys.path.insert(0, r"${ROOT_DIR}/backend")
+from app.services.model_serving import validate_adapter_for_serving
+adapter = Path(r"""${adapter}""")
+result = validate_adapter_for_serving(
+    adapter if adapter.exists() else None,
+    configured_base=r"""${configured_base}""",
+    max_lora_rank=int("${MAX_LORA_RANK}"),
+)
+if not result["adapter_exists"]:
+    codes = ",".join(result["reason_codes"]) or "adapter_invalid"
+    print(
+        f"ERROR: LoRA preflight failed reason_code={codes} "
+        f"configured_base={result['configured_base_model']!r} "
+        f"adapter_base={result['adapter_base_model']!r} "
+        f"rank={result['lora_rank']}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+print(
+    f"  lora_adapter_ok=1 rank={result['lora_rank']} "
+    f"base_match={result['base_model_match']} "
+    f"adapter_base={result['adapter_base_model']}",
+    file=sys.stderr,
+)
 PY
-)"
-  if [[ "${rank}" -gt "${MAX_LORA_RANK}" ]]; then
-    echo "ERROR: adapter rank ${rank} > LLM_MAX_LORA_RANK=${MAX_LORA_RANK}" >&2
-    exit 1
-  fi
-  local base_hint
-  base_hint="$(python - <<PY
-from pathlib import Path
-import json
-cfg = json.loads(Path(r"""${adapter}/adapter_config.json""").read_text())
-print(Path(str(cfg.get("base_model_name_or_path") or "")).name)
-PY
-)"
-  echo "  lora_adapter_ok=1 rank=${rank} base_hint=${base_hint}" >&2
   echo "${adapter}"
 }
 

@@ -153,7 +153,7 @@ export default function ComparePanel({
             </div>
           </Space>
 
-          <div className="bp-tech-grid">
+          <div className="bp-tech-grid" data-testid="eval-compare-model-info">
             <span>
               Left hash {shortHash(result.left.dataset_hash)} · eval {result.left.evaluator_version}
             </span>
@@ -163,6 +163,36 @@ export default function ComparePanel({
             <span>
               Left {evaluationTargetLabel(String(result.left.target_type))} / Right{" "}
               {evaluationTargetLabel(String(result.right.target_type))}
+            </span>
+            <span data-testid="eval-compare-left-model">
+              Left 模型{" "}
+              {String(
+                (result.left.target_config_snapshot as Record<string, unknown> | null | undefined)
+                  ?.served_model_name ||
+                  (result.left.target_config_snapshot as Record<string, unknown> | null | undefined)
+                    ?.model_id ||
+                  "—",
+              )}
+              {" · "}
+              {String(
+                (result.left.target_config_snapshot as Record<string, unknown> | null | undefined)
+                  ?.model_type || "—",
+              )}
+            </span>
+            <span data-testid="eval-compare-right-model">
+              Right 模型{" "}
+              {String(
+                (result.right.target_config_snapshot as Record<string, unknown> | null | undefined)
+                  ?.served_model_name ||
+                  (result.right.target_config_snapshot as Record<string, unknown> | null | undefined)
+                    ?.model_id ||
+                  "—",
+              )}
+              {" · "}
+              {String(
+                (result.right.target_config_snapshot as Record<string, unknown> | null | undefined)
+                  ?.model_type || "—",
+              )}
             </span>
           </div>
 

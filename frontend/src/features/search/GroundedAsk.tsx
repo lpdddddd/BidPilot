@@ -19,6 +19,7 @@ import { ApiError } from "../../api/http";
 import type { AskResponse, CitationItem, RagRetrievalTrace } from "../../types/api";
 import {
   BASE_MODEL_ID,
+  formatAskGenerationModelLine,
   modelSelectLabel,
   pickBaseModel,
   pickCourseLora,
@@ -513,16 +514,7 @@ export default function GroundedAsk({
             <span className="bp-search-summary-title">回答</span>
             {result?.generation_trace && (
               <span className="bp-search-summary-meta" data-testid="ask-generation-trace">
-                {result.generation_trace.served_model_name || result.generation_trace.model}
-                {result.generation_trace.resolved_model_id
-                  ? ` · ${result.generation_trace.resolved_model_id}`
-                  : ""}
-                {result.generation_trace.requested_model_id &&
-                result.generation_trace.requested_model_id !==
-                  result.generation_trace.resolved_model_id
-                  ? `（请求 ${result.generation_trace.requested_model_id}）`
-                  : ""}
-                {result.generation_trace.fallback_used ? " · 已回退基座" : ""}
+                {formatAskGenerationModelLine(result.generation_trace)}
                 {" · "}
                 {result.generation_trace.latency_ms.toFixed(0)} ms · 上下文{" "}
                 {result.generation_trace.context_chunk_count} 条

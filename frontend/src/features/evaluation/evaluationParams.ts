@@ -161,6 +161,9 @@ export const EVAL_REASON_CODE_LABELS: Record<string, string> = {
   model_not_served: "模型尚未启动在线服务",
   adapter_missing: "微调权重尚未就绪",
   adapter_incomplete: "微调权重不完整",
+  base_model_mismatch: "微调权重与基座模型不匹配",
+  base_model_unverified: "无法确认微调权重与基座是否匹配",
+  lora_rank_exceeded: "LoRA rank 超出服务配置上限",
   provider_not_configured: "模型服务未配置",
   project_dependency_missing: "检索依赖未就绪",
   fake_disabled: "当前版本暂未开放",
@@ -170,7 +173,7 @@ export const EVAL_REASON_CODE_LABELS: Record<string, string> = {
 };
 
 const RAW_REASON_CODE_RE =
-  /^(service_not_wired|provider_not_configured|project_dependency_missing|fake_disabled|settings_unavailable|unknown_target|unavailable|model_not_served|adapter_missing|adapter_incomplete)\b/i;
+  /^(service_not_wired|provider_not_configured|project_dependency_missing|fake_disabled|settings_unavailable|unknown_target|unavailable|model_not_served|adapter_missing|adapter_incomplete|base_model_mismatch|base_model_unverified|lora_rank_exceeded)\b/i;
 
 /** Exception-looking fragments that must never appear in UI copy. */
 const EXCEPTION_CLASS_RE =

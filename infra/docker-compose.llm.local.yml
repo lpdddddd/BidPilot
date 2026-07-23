@@ -1,6 +1,7 @@
 # Local-weights override for the optional `llm` profile.
 # Only use when LLM_MODEL_PATH is a non-empty host directory with config.json.
 #
+# From repository root:
 #   export LLM_MODEL_PATH=/absolute/path/to/Qwen3-8B
 #   docker compose --env-file .env \
 #     -f infra/docker-compose.yml \
@@ -18,13 +19,13 @@ services:
         target: /models/llm
         read_only: true
       - type: bind
-        source: ${LLM_LORA_HOST_PATH:-./training/llamafactory/outputs/qwen3_8b_lora_course}
-        target: /adapters/course
+        source: ${LLM_LORA_HOST_PATH:-../training/llamafactory/outputs/qwen3_8b_lora_course}
+        target: ${LLM_LORA_CONTAINER_PATH:-/models/bidpilot-course-lora}
         read_only: true
     command:
       - /models/llm
       - --served-model-name
-      - ${LLM_MODEL:-bidpilot-qwen3-8b}
+      - ${LLM_BASE_SERVED_NAME:-${LLM_MODEL:-bidpilot-qwen3-8b}}
       - --host
       - 0.0.0.0
       - --port
@@ -42,4 +43,4 @@ services:
       - --max-lora-rank
       - "${LLM_MAX_LORA_RANK:-16}"
       - --lora-modules
-      - "${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}=/adapters/course"
+      - "${LLM_LORA_SERVED_NAME:-${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}}=${LLM_LORA_CONTAINER_PATH:-/models/bidpilot-course-lora}"
