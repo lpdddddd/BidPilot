@@ -1,14 +1,15 @@
-"""Evaluation batch runner."""
+"""Evaluation batch runner — session-per-case, bounded cancel, isolated target I/O."""
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.db.session import SessionLocal
 from app.models.enums import EvaluationCaseStatus, EvaluationReferenceKind, EvaluationRunStatus
 from app.models.evaluation import EvaluationCaseResult, EvaluationMetricResult, EvaluationRun
 from app.services.evaluation import EVALUATOR_VERSION
@@ -19,6 +20,10 @@ from app.services.evaluation.profiles import evaluate_hard_gates, get_profile
 from app.services.evaluation.suite_loader import load_reference_suite
 from app.services.evaluation.targets import get_target
 from app.services.evaluation.targets.base import run_target_safely
+from app.services.evaluation.types import (
+    TargetExecutionContext,
+    split_case_for_evaluation,
+)
 
 
 def _now():
@@ -50,6 +55,76 @@ def _persist_metrics(db: Session, case_result: EvaluationCaseResult, metrics) ->
         )
 
 
+def _load_samples(run: EvaluationRun, samples: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    if samples is not None:
+        return samples
+    filt = dict(run.filter_json or {})
+    fixture = filt.get("fixture_id")
+    # Production never accepts arbitrary paths; only pre-registered fixture ids.
+    if fixture == "mini_suite":
+        from pathlib import Path
+
+        from app.services.evaluation.suite_loader import load_jsonl
+
+        path = (
+            Path(__file__).resolve().parents[3]
+            / "tests"
+            / "fixtures"
+            / "evaluation"
+            / "mini_suite.jsonl"
+        )
+        return load_jsonl(path)
+    # Internal test-only: filter_json.fixture_path set by service when ALLOW_FAKE
+    legacy = filt.get("fixture_path")
+    if legacy and __import__("os").getenv("EVALUATION_ALLOW_FAKE", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }:
+        from pathlib import Path
+
+        from app.services.evaluation.suite_loader import load_jsonl
+
+        return load_jsonl(Path(legacy))
+    bundle = load_reference_suite()
+    return bundle.samples
+
+
+def _execute_one_case(
+    *,
+    run_id: UUID,
+    project_id: UUID,
+    target_type: str,
+    target_config: dict[str, Any],
+    seed: int,
+    case: EvaluationCase,
+) -> dict[str, Any]:
+    """Run a single case in an isolated Session + target instance."""
+    session = SessionLocal()
+    try:
+        run = session.get(EvaluationRun, run_id)
+        if run is None or run.cancel_requested or run.status == EvaluationRunStatus.cancelled:
+            return {"case": case, "skipped": True, "reason": "cancelled"}
+        target = get_target(target_type, config=target_config, db=session)
+        target_input, private = split_case_for_evaluation(case)
+        context = TargetExecutionContext(
+            project_id=project_id,
+            target_config=dict(target_config or {}),
+            seed=seed,
+            evaluation_run_id=run_id,
+        )
+        result = run_target_safely(target, target_input, context)
+        return {
+            "case": case,
+            "result": result,
+            "private": private,
+            "target_input": target_input,
+            "skipped": False,
+        }
+    finally:
+        session.close()
+
+
 def execute_evaluation_run(
     db: Session,
     run_id: UUID,
@@ -65,21 +140,7 @@ def execute_evaluation_run(
         db.commit()
         return run
 
-    bundle_samples = samples
-    if bundle_samples is None:
-        # Prefer fixture path from filter_json
-        filt = dict(run.filter_json or {})
-        fixture = filt.get("fixture_path")
-        if fixture:
-            from pathlib import Path
-
-            from app.services.evaluation.suite_loader import load_jsonl
-
-            bundle_samples = load_jsonl(Path(fixture))
-        else:
-            bundle = load_reference_suite()
-            bundle_samples = bundle.samples
-
+    bundle_samples = _load_samples(run, samples)
     filt = dict(run.filter_json or {})
     cases = filter_cases(
         bundle_samples,
@@ -91,7 +152,6 @@ def execute_evaluation_run(
         case_keys=filt.get("case_keys"),
     )
 
-    # Skip already completed case keys (resume)
     done_keys = {
         r.case_key
         for r in run.case_results
@@ -110,60 +170,106 @@ def execute_evaluation_run(
     run.evaluator_version = run.evaluator_version or EVALUATOR_VERSION
     db.commit()
 
-    target = get_target(
-        run.target_type.value if hasattr(run.target_type, "value") else str(run.target_type),
-        config=dict(run.target_config_snapshot or {}),
-        db=db,
+    target_type = (
+        run.target_type.value if hasattr(run.target_type, "value") else str(run.target_type)
     )
-    cap = target.capability()
+    target_config = dict(run.target_config_snapshot or {})
+    # Capability gate (no shared session leak into workers).
+    probe = get_target(target_type, config=target_config, db=db)
+    cap = probe.capability()
     if not cap.available:
         run.status = EvaluationRunStatus.failed
         run.safe_error_summary = cap.reason or "target unavailable"
         run.finished_at = _now()
+        run.execution_claim_token = None
         db.commit()
         return run
 
-    def _one(case: EvaluationCase) -> dict[str, Any]:
-        result = run_target_safely(target, case)
-        return {"case": case, "result": result}
-
-    # Controlled concurrency for target execution; DB writes stay on main session.
+    workers = max(1, min(int(max_workers or 1), 4))
     results: list[dict[str, Any]] = []
-    if max_workers <= 1 or len(pending) <= 1:
-        for pending_case in pending:
+    queue = list(pending)
+
+    if workers == 1 or len(queue) <= 1:
+        while queue:
             db.refresh(run)
             if run.cancel_requested:
                 break
-            results.append(_one(pending_case))
+            case = queue.pop(0)
+            results.append(
+                _execute_one_case(
+                    run_id=run.id,
+                    project_id=run.project_id,
+                    target_type=target_type,
+                    target_config=target_config,
+                    seed=int(run.seed or 42),
+                    case=case,
+                )
+            )
     else:
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futs = {pool.submit(_one, c): c.case_key for c in pending}
-            for fut in as_completed(futs):
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            in_flight: dict[Any, str] = {}
+
+            def _submit_next() -> None:
+                nonlocal queue
+                db.refresh(run)
+                if run.cancel_requested or not queue:
+                    return
+                if len(in_flight) >= workers:
+                    return
+                case = queue.pop(0)
+                fut = pool.submit(
+                    _execute_one_case,
+                    run_id=run.id,
+                    project_id=run.project_id,
+                    target_type=target_type,
+                    target_config=target_config,
+                    seed=int(run.seed or 42),
+                    case=case,
+                )
+                in_flight[fut] = case.case_key
+
+            while queue and len(in_flight) < workers:
+                _submit_next()
+
+            while in_flight:
+                done, _ = wait(set(in_flight.keys()), return_when=FIRST_COMPLETED)
+                for fut in done:
+                    in_flight.pop(fut, None)
+                    item = fut.result()
+                    if not item.get("skipped"):
+                        results.append(item)
                 db.refresh(run)
                 if run.cancel_requested:
-                    break
-                results.append(fut.result())
+                    # Do not submit more; allow in-flight to finish.
+                    queue.clear()
+                    continue
+                while queue and len(in_flight) < workers:
+                    _submit_next()
 
     for item in results:
-        case = item["case"]
+        if item.get("skipped"):
+            continue
+        eval_case: EvaluationCase = item["case"]
         tres = item["result"]
+        private = item["private"]
+        target_input = item["target_input"]
         started = _now()
-        profile = get_profile(case.task_family)
+        profile = get_profile(eval_case.task_family)
         if not tres.ok:
             status = EvaluationCaseStatus.error
             metrics = []
             score = None
             passed = False
             gates: list[str] = []
-            snap = {"error": tres.error_summary, "unavailable": tres.unavailable}
+            snap = tres.to_response_snapshot()
         else:
+            # Evaluator receives private reference only after target returns.
             metrics = evaluate_case_metrics(
-                case, tres.output, profile=profile, duration_ms=tres.duration_ms
+                eval_case, tres.output, profile=profile, duration_ms=tres.duration_ms
             )
-            gates = evaluate_hard_gates(case, tres.output, metrics)
+            gates = evaluate_hard_gates(eval_case, tres.output, metrics)
             score = aggregate_case_score(metrics)
             passed = score is not None and score >= 0.5 and not gates
-            # metric hard fails
             if any(
                 m.passed is False
                 and m.name
@@ -178,17 +284,24 @@ def execute_evaluation_run(
             if gates:
                 passed = False
             status = EvaluationCaseStatus.passed if passed else EvaluationCaseStatus.failed
-            snap = {"output": tres.output}
+            snap = tres.to_response_snapshot()
         finished = _now()
+        # Build safe input snapshot from TargetCaseInput only
+        input_snap = {
+            "case_key": target_input.case_key,
+            "task_family": target_input.task_family,
+            "split": target_input.split,
+            "input": dict(target_input.task_input),
+        }
         row = EvaluationCaseResult(
             evaluation_run_id=run.id,
-            case_key=case.case_key,
-            case_content_hash=case.content_hash,
-            task_family=case.task_family,
-            split=case.split,
+            case_key=eval_case.case_key,
+            case_content_hash=eval_case.content_hash,
+            task_family=eval_case.task_family,
+            split=eval_case.split,
             status=status,
             response_snapshot=snap,
-            reference_kind=_kind(case.reference_kind),
+            reference_kind=_kind(private.reference_kind),
             score=score,
             passed=passed if status != EvaluationCaseStatus.error else False,
             hard_gate_failures=gates,
@@ -197,8 +310,8 @@ def execute_evaluation_run(
             finished_at=finished,
             duration_ms=tres.duration_ms
             or max(0, int((finished - started).total_seconds() * 1000)),
-            input_snapshot=case.target_input(),
-            reference_summary=case.reference_summary(include_output=False),
+            input_snapshot=input_snap,
+            reference_summary=eval_case.reference_summary(include_output=False),
         )
         db.add(row)
         db.flush()
@@ -206,7 +319,6 @@ def execute_evaluation_run(
         db.commit()
 
     db.refresh(run)
-    # Aggregate
     rows = list(run.case_results)
     agg_input = [
         {
@@ -231,15 +343,11 @@ def execute_evaluation_run(
         run.duration_ms = int((run.finished_at - run.started_at).total_seconds() * 1000)
     if run.cancel_requested:
         run.status = EvaluationRunStatus.cancelled
-    elif (
-        summary["error_cases"]
-        and summary["error_cases"] + summary["failed_cases"] + summary["passed_cases"]
-        < run.total_cases
-    ):
+    elif run.completed_cases < run.total_cases and summary["error_cases"]:
         run.status = EvaluationRunStatus.partial
     elif summary["error_cases"] and summary["passed_cases"] == 0 and summary["failed_cases"] == 0:
         run.status = EvaluationRunStatus.failed
-    elif summary["error_cases"]:
+    elif summary["error_cases"] or run.completed_cases < run.total_cases:
         run.status = EvaluationRunStatus.partial
     else:
         run.status = EvaluationRunStatus.completed

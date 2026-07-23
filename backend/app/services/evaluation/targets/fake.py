@@ -1,4 +1,4 @@
-"""Deterministic fake target for CI — never reads reference_output or citation gold."""
+"""Deterministic fake target for CI — only via test override; never reads private reference."""
 
 from __future__ import annotations
 
@@ -6,12 +6,16 @@ import hashlib
 import time
 from typing import Any
 
-from app.services.evaluation.case_loader import EvaluationCase, assert_no_reference_in_target_input
 from app.services.evaluation.targets.base import TargetCapability, TargetResult
+from app.services.evaluation.types import (
+    TargetCaseInput,
+    TargetExecutionContext,
+    assert_no_private_reference,
+)
 
 
 class DeterministicFakeTarget:
-    """Produce deterministic predictions from case input only."""
+    """Produce deterministic predictions from TargetCaseInput only."""
 
     target_type = "deterministic_fake"
 
@@ -20,35 +24,35 @@ class DeterministicFakeTarget:
         self.fail_case_keys = fail_case_keys or set()
 
     def capability(self) -> TargetCapability:
-        return TargetCapability(
-            target_type=self.target_type,
-            available=True,
-            reason=None,
-            reason_code=None,
-        )
+        return TargetCapability(target_type=self.target_type, available=True)
 
-    def run_case(self, case: EvaluationCase) -> TargetResult:
+    def run_case(
+        self, target_input: TargetCaseInput, context: TargetExecutionContext
+    ) -> TargetResult:
         started = time.perf_counter()
-        payload = case.target_input()
-        assert_no_reference_in_target_input(payload)
-        if case.case_key in self.fail_case_keys:
+        assert_no_private_reference(target_input, context)
+        if target_input.case_key in self.fail_case_keys:
             return TargetResult(ok=False, error_summary="injected case failure", duration_ms=1)
         digest = hashlib.sha256(
-            f"{self.seed}:{case.case_key}:{case.task_family}".encode()
+            f"{context.seed}:{target_input.case_key}:{target_input.task_family}".encode()
         ).hexdigest()
-        out = self._predict(case, digest)
+        out = self._predict(target_input, digest)
         ms = max(1, int((time.perf_counter() - started) * 1000))
-        return TargetResult(ok=True, output=out, duration_ms=ms)
+        citations = list(out.get("citations") or [])
+        retrieved = [str(x) for x in (out.get("retrieved_chunk_ids") or [])]
+        return TargetResult(
+            ok=True,
+            output=out,
+            citations=citations if all(isinstance(c, dict) for c in citations) else [],
+            retrieved_chunk_ids=retrieved,
+            duration_ms=ms,
+        )
 
-    def _predict(self, case: EvaluationCase, digest: str) -> dict[str, Any]:
-        family = case.task_family
-        inp = case.input_data
-        # Only non-gold context ids that already live in the case input blob.
-        chunk_ids = list(inp.get("context_chunk_ids") or [])
-        doc_ids = list(inp.get("document_ids") or [])
-        if case.document_id and case.document_id not in doc_ids:
-            # document scope hint is not a gold citation target list.
-            pass
+    def _predict(self, target_input: TargetCaseInput, digest: str) -> dict[str, Any]:
+        family = target_input.task_family
+        inp = target_input.task_input
+        chunk_ids = [str(x) for x in (inp.get("context_chunk_ids") or [])]
+        doc_ids = [str(x) for x in (inp.get("document_ids") or [])]
         if family == "rag":
             return {
                 "answer": f"fake-answer:{digest[:8]}",
@@ -70,7 +74,7 @@ class DeterministicFakeTarget:
                     "risk_level": "high",
                     "normalized_requirement": title,
                 },
-                "citations": chunk_ids[:2],
+                "citations": [{"chunk_id": c} for c in chunk_ids[:2]],
             }
         if family == "matching":
             return {
@@ -80,14 +84,13 @@ class DeterministicFakeTarget:
                 "match_decision": "insufficient_evidence",
             }
         if family == "compliance":
-            # Deterministic offline verdict from input fields only — not gold metadata.
             return {
                 "verdict": "unknown",
                 "severity": "info",
                 "rule_type": inp.get("rule_type") or "coverage",
                 "finding": "deterministic fake offline finding",
                 "rule_ids": [str(inp.get("rule_id") or "A001")],
-                "citations": chunk_ids[:1],
+                "citations": [{"chunk_id": c} for c in chunk_ids[:1]],
             }
         if family == "drafting":
             return {
@@ -107,4 +110,4 @@ class DeterministicFakeTarget:
                 "safe_explanation": "证据不足，拒绝作答",
                 "unsupported_citation_count": 0,
             }
-        return {"answer": digest[:12], "citations": chunk_ids[:1]}
+        return {"answer": digest[:12], "citations": [{"chunk_id": c} for c in chunk_ids[:1]]}

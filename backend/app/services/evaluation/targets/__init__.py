@@ -6,10 +6,9 @@ import os
 from typing import Any
 
 from app.models.enums import EvaluationTargetType
-from app.services.evaluation.targets.base import TargetCapability
+from app.services.evaluation.targets.base import TargetCapability, TargetResult
 from app.services.evaluation.targets.fake import DeterministicFakeTarget
-
-_PLACEHOLDER_KEYS = frozenset({"", "local", "changeme", "none", "test", "dummy"})
+from app.services.evaluation.types import TargetCaseInput, TargetExecutionContext
 
 
 class UnavailableTarget:
@@ -26,14 +25,10 @@ class UnavailableTarget:
             reason_code=self.reason_code,
         )
 
-    def run_case(self, case):  # pragma: no cover
-        from app.services.evaluation.targets.base import TargetResult
-
-        return TargetResult(
-            ok=False,
-            unavailable=True,
-            error_summary=self.reason,
-        )
+    def run_case(
+        self, target_input: TargetCaseInput, context: TargetExecutionContext
+    ) -> TargetResult:
+        return TargetResult(ok=False, unavailable=True, error_summary=self.reason)
 
 
 def allow_fake_targets(*, explicit: bool | None = None) -> bool:
@@ -55,6 +50,7 @@ def allow_fake_targets(*, explicit: bool | None = None) -> bool:
 
 
 def _llm_configured() -> tuple[bool, str | None]:
+    """Local vLLM uses api_key=local; enabled flag is the gate."""
     try:
         from app.core.config import get_settings
 
@@ -62,22 +58,21 @@ def _llm_configured() -> tuple[bool, str | None]:
     except Exception:
         return False, "settings_unavailable"
     if not getattr(settings, "llm_enabled", False):
-        return False, "llm_disabled"
-    key = (settings.llm_api_key or settings.openai_api_key or "").strip()
-    if key.lower() in _PLACEHOLDER_KEYS:
-        return False, "llm_provider_not_configured"
+        return False, "provider_not_configured"
+    base = (settings.llm_base_url or "").strip()
+    if not base:
+        return False, "provider_not_configured"
     return True, None
 
 
 def _retrieval_configured() -> tuple[bool, str | None]:
-    """RAG requires embedding stack; mark unavailable when it cannot load."""
     try:
         from app.services.embeddings import get_embedding_service
 
         get_embedding_service()
         return True, None
     except Exception as exc:  # noqa: BLE001
-        return False, f"retrieval_unavailable:{type(exc).__name__}"
+        return False, f"project_dependency_missing:{type(exc).__name__}"
 
 
 def list_capabilities(*, allow_fake: bool | None = None) -> list[TargetCapability]:
@@ -89,53 +84,44 @@ def list_capabilities(*, allow_fake: bool | None = None) -> list[TargetCapabilit
     llm_ok, llm_code = _llm_configured()
     rag_ok, rag_code = _retrieval_configured()
 
-    mapping: list[tuple[str, bool, str | None, str | None]] = [
-        (
-            EvaluationTargetType.rag.value,
-            rag_ok,
-            None if rag_ok else "Embedding/retrieval stack not available",
-            None if rag_ok else (rag_code or "retrieval_unavailable"),
-        ),
+    # Real available set: only adapters that can execute today.
+    caps.append(
+        TargetCapability(
+            target_type=EvaluationTargetType.rag.value,
+            available=rag_ok,
+            reason=None if rag_ok else "Embedding/retrieval stack not available",
+            reason_code=None if rag_ok else (rag_code or "project_dependency_missing"),
+        )
+    )
+    for t, reason, code in (
         (
             EvaluationTargetType.extraction.value,
-            llm_ok,
-            None if llm_ok else "LLM provider not configured",
-            None if llm_ok else (llm_code or "llm_provider_not_configured"),
+            "extraction case-level evaluation adapter is not wired to formal service",
+            "service_not_wired",
         ),
         (
             EvaluationTargetType.matching.value,
-            llm_ok,
-            None if llm_ok else "LLM provider not configured",
-            None if llm_ok else (llm_code or "llm_provider_not_configured"),
-        ),
-        (
-            EvaluationTargetType.compliance.value,
-            True,
-            None,
-            None,
+            "matching case-level evaluation adapter is not wired to formal service",
+            "service_not_wired",
         ),
         (
             EvaluationTargetType.drafting.value,
-            llm_ok,
-            None if llm_ok else "LLM provider not configured",
-            None if llm_ok else (llm_code or "llm_provider_not_configured"),
+            "drafting case-level evaluation adapter is not wired to formal service",
+            "service_not_wired",
         ),
-        (
-            EvaluationTargetType.agent_pipeline.value,
-            llm_ok,
-            None if llm_ok else "LLM provider not configured",
-            None if llm_ok else (llm_code or "llm_provider_not_configured"),
-        ),
-    ]
-    for t, ok, reason, code in mapping:
+    ):
         caps.append(
-            TargetCapability(
-                target_type=t,
-                available=ok,
-                reason=reason,
-                reason_code=code,
-            )
+            TargetCapability(target_type=t, available=False, reason=reason, reason_code=code)
         )
+    caps.append(TargetCapability(target_type=EvaluationTargetType.compliance.value, available=True))
+    caps.append(
+        TargetCapability(
+            target_type=EvaluationTargetType.agent_pipeline.value,
+            available=llm_ok,
+            reason=None if llm_ok else "LLM provider not configured",
+            reason_code=None if llm_ok else (llm_code or "provider_not_configured"),
+        )
+    )
     return caps
 
 

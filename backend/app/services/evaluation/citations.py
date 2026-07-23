@@ -20,19 +20,30 @@ def _as_uuid(value: Any) -> UUID | None:
 
 
 def extract_raw_citations(snapshot: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Extract citations from the canonical response_snapshot shape.
+
+    Supports both flattened top-level fields and nested ``output`` for
+    backwards compatibility with older rows.
+    """
     if not snapshot:
         return []
-    raw = snapshot.get("citations") or []
+    buckets: list[Any] = []
+    nested = snapshot.get("output") if isinstance(snapshot.get("output"), dict) else {}
+    for src in (snapshot, nested):
+        if not isinstance(src, dict):
+            continue
+        buckets.append(src.get("citations") or [])
+        for key in ("retrieved_chunk_ids", "evidence_chunk_ids"):
+            buckets.append([{"chunk_id": str(c)} for c in (src.get(key) or [])])
     out: list[dict[str, Any]] = []
-    if isinstance(raw, list):
+    for raw in buckets:
+        if not isinstance(raw, list):
+            continue
         for item in raw:
             if isinstance(item, dict):
                 out.append(dict(item))
             elif item:
                 out.append({"chunk_id": str(item)})
-    for key in ("retrieved_chunk_ids", "evidence_chunk_ids"):
-        for cid in snapshot.get(key) or []:
-            out.append({"chunk_id": str(cid)})
     return out
 
 
@@ -46,6 +57,7 @@ def validate_citation(
     result = {
         "document_id": citation.get("document_id"),
         "document_title": citation.get("document_title"),
+        "document_name": citation.get("document_name") or citation.get("file_name"),
         "file_name": citation.get("file_name"),
         "page": citation.get("page")
         if citation.get("page") is not None
@@ -56,7 +68,9 @@ def validate_citation(
         "project_id": str(project_id),
         "valid": False,
         "validation_error": None,
+        "invalid_reason": None,
         "summary": citation.get("summary"),
+        "detail_url": None,
     }
     chunk_id = _as_uuid(citation.get("chunk_id"))
     document_id = _as_uuid(citation.get("document_id"))
@@ -64,12 +78,14 @@ def validate_citation(
 
     if chunk_id is None and document_id is None:
         result["validation_error"] = "missing_document_or_chunk"
+        result["invalid_reason"] = "missing_document_or_chunk"
         return result
 
     if chunk_id is not None:
         chunk = db.get(DocumentChunk, chunk_id)
         if chunk is None or chunk.project_id != project_id:
             result["validation_error"] = "chunk_not_found_or_forbidden"
+            result["invalid_reason"] = "chunk_not_found_or_forbidden"
             return result
         result["chunk_id"] = str(chunk.id)
         result["document_id"] = str(chunk.document_id)
@@ -77,33 +93,48 @@ def validate_citation(
         result["page"] = chunk.page_start if page is None else page
         result["section"] = chunk.section
         document_id = chunk.document_id
+        if citation.get("document_id"):
+            claimed = _as_uuid(citation.get("document_id"))
+            if claimed is not None and claimed != chunk.document_id:
+                result["validation_error"] = "chunk_document_mismatch"
+                result["invalid_reason"] = "chunk_document_mismatch"
+                return result
         if page is not None and chunk.page_start is not None and chunk.page_end is not None:
             try:
                 page_i = int(page)
             except Exception:
                 result["validation_error"] = "invalid_page"
+                result["invalid_reason"] = "invalid_page"
                 return result
             if page_i < chunk.page_start or page_i > chunk.page_end:
                 result["validation_error"] = "page_out_of_range"
+                result["invalid_reason"] = "page_out_of_range"
                 return result
         doc = db.get(Document, document_id)
         if doc is None or doc.project_id != project_id:
             result["validation_error"] = "document_not_found_or_forbidden"
+            result["invalid_reason"] = "document_not_found_or_forbidden"
             return result
         result["file_name"] = getattr(doc, "file_name", None)
         result["document_title"] = result["file_name"]
+        result["document_name"] = result["file_name"]
         result["valid"] = True
+        result["detail_url"] = f"/projects/{project_id}/documents/{doc.id}?chunkId={chunk.id}" + (
+            f"&page={result['page']}" if result["page"] is not None else ""
+        )
         return result
 
-    # document-only citation
     doc = db.get(Document, document_id) if document_id else None
     if doc is None or doc.project_id != project_id:
         result["validation_error"] = "document_not_found_or_forbidden"
+        result["invalid_reason"] = "document_not_found_or_forbidden"
         return result
     result["document_id"] = str(doc.id)
     result["file_name"] = getattr(doc, "file_name", None)
     result["document_title"] = result["file_name"]
+    result["document_name"] = result["file_name"]
     result["valid"] = True
+    result["detail_url"] = f"/projects/{project_id}/documents/{doc.id}"
     return result
 
 

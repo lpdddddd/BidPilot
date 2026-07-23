@@ -231,9 +231,9 @@ def _walk_forbidden(obj: Any, *, path: str = "") -> str | None:
 
 def assert_no_reference_in_target_input(payload: dict[str, Any]) -> None:
     """Raise if private reference / gold fields leaked into a target payload."""
-    found = _walk_forbidden(payload)
-    if found:
-        raise ValueError(f"private reference field leaked to target at '{found}'")
+    from app.services.evaluation.types import assert_no_private_reference
+
+    assert_no_private_reference(payload)
     # Also scan serialized form for sneaky string keys
     blob = json.dumps(payload, ensure_ascii=False)
     for key in (

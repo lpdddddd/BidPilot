@@ -203,7 +203,10 @@ class EvaluationService:
         """Persist queued run, claim, optionally execute sync. Returns (run, claim).
 
         When execute=False, caller must schedule background work for a claimed run.
+        Concurrent identical idempotency keys are resolved via unique constraint.
         """
+        from sqlalchemy.exc import IntegrityError
+
         self._project(project_id)
         idem = idempotency_key or payload.get("idempotency_key")
         if idem:
@@ -236,7 +239,13 @@ class EvaluationService:
         caps = {c.target_type: c for c in list_capabilities(allow_fake=allow_fake)}
         cap = caps.get(tt.value)
         if cap and not cap.available:
-            raise HTTPException(status_code=422, detail=cap.reason or "target unavailable")
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": cap.reason or "target unavailable",
+                    "reason_code": cap.reason_code,
+                },
+            )
 
         safe_config = {
             k: v
@@ -253,22 +262,27 @@ class EvaluationService:
             }
         }
         safe_config["seed"] = int(payload.get("seed") or 42)
-        if payload.get("fail_case_keys"):
+        # fail_case_keys / fixture_path only via internal test path when fake allowed
+        if allow_fake and payload.get("fail_case_keys"):
             safe_config["fail_case_keys"] = list(payload["fail_case_keys"])
 
         case_limit = payload.get("case_limit")
         if case_limit is None:
             case_limit = payload.get("limit")
-        filt = {
+        filt: dict[str, Any] = {
             "split": payload.get("split"),
             "splits": payload.get("splits"),
             "task_family": payload.get("task_family"),
             "task_families": payload.get("task_families"),
             "limit": case_limit,
             "case_keys": payload.get("case_keys"),
-            "fixture_path": payload.get("fixture_path"),
             "evaluator_profile": payload.get("evaluator_profile") or payload.get("profile"),
         }
+        if allow_fake and payload.get("fixture_path"):
+            filt["fixture_path"] = payload["fixture_path"]
+        if allow_fake and payload.get("fixture_id"):
+            filt["fixture_id"] = payload["fixture_id"]
+
         run = EvaluationRun(
             project_id=project_id,
             suite_id=suite.id,
@@ -284,6 +298,30 @@ class EvaluationService:
             filter_json=filt,
         )
         self.db.add(run)
+        try:
+            self.db.flush()
+        except IntegrityError as exc:
+            self.db.rollback()
+            # Only treat unique-(project_id, idempotency_key) as idempotent hit.
+            constraint = getattr(getattr(exc, "orig", None), "diag", None)
+            constraint_name = getattr(constraint, "constraint_name", None) or ""
+            msg = str(getattr(exc, "orig", exc)).lower()
+            is_idem_unique = idem and (
+                "idempotency" in msg
+                or "idempotency_key" in msg
+                or "uq_evaluation_runs_project_idempotency" in msg
+                or "uq_evaluation_runs_project_idempotency" in str(constraint_name).lower()
+            )
+            if is_idem_unique:
+                existing = self.db.scalar(
+                    select(EvaluationRun).where(
+                        EvaluationRun.project_id == project_id,
+                        EvaluationRun.idempotency_key == idem,
+                    )
+                )
+                if existing:
+                    return existing, None
+            raise
         self.db.commit()
         self.db.refresh(run)
 

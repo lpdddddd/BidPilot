@@ -94,16 +94,13 @@ def create_run(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    sync: bool = Query(
-        default=False,
-        description="Test-only: execute in-request. Production default is background.",
-    ),
 ):
+    """Create evaluation run and schedule background execution (always async)."""
     svc = EvaluationService(db)
     body = payload.model_dump()
     key = idempotency_key or body.get("idempotency_key")
-    run, claim = svc.create_run(project_id, body, idempotency_key=key, execute=sync)
-    if not sync and claim is not None and claim.outcome == EvalClaimOutcome.claimed:
+    run, claim = svc.create_run(project_id, body, idempotency_key=key, execute=False)
+    if claim is not None and claim.outcome == EvalClaimOutcome.claimed:
         _schedule_or_release(
             background_tasks,
             db,
@@ -235,11 +232,10 @@ def resume_run(
     run_id: UUID,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    sync: bool = Query(default=False, description="Test-only sync resume"),
 ):
     svc = EvaluationService(db)
-    run, claim = svc.resume(project_id, run_id, execute=sync)
-    if not sync and claim is not None and claim.outcome == EvalClaimOutcome.claimed:
+    run, claim = svc.resume(project_id, run_id, execute=False)
+    if claim is not None and claim.outcome == EvalClaimOutcome.claimed:
         _schedule_or_release(
             background_tasks,
             db,

@@ -1,28 +1,19 @@
-"""Real-service target adapters — unavailable when dependencies missing.
-
-Never read private reference / citation_metadata gold into predictions.
-"""
+"""Real-service target adapters — project scope from TargetExecutionContext only."""
 
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
 
-from app.services.evaluation.case_loader import EvaluationCase, assert_no_reference_in_target_input
 from app.services.evaluation.targets.base import TargetCapability, TargetResult
-
-
-def _safe_uuid(value: Any) -> UUID | None:
-    if value is None:
-        return None
-    try:
-        return UUID(str(value))
-    except Exception:
-        return None
+from app.services.evaluation.types import (
+    TargetCaseInput,
+    TargetExecutionContext,
+    assert_no_private_reference,
+)
 
 
 class ComplianceServiceAdapter:
-    """Calls the formal ComplianceEngine with a minimal non-gold context."""
+    """Calls the formal ComplianceEngine scoped to the authorized run project."""
 
     target_type = "compliance"
 
@@ -33,28 +24,24 @@ class ComplianceServiceAdapter:
     def capability(self) -> TargetCapability:
         return TargetCapability(target_type=self.target_type, available=True)
 
-    def run_case(self, case: EvaluationCase) -> TargetResult:
-        assert_no_reference_in_target_input(case.target_input())
+    def run_case(
+        self, target_input: TargetCaseInput, context: TargetExecutionContext
+    ) -> TargetResult:
+        assert_no_private_reference(target_input, context)
         from app.schemas.compliance import ComplianceContext
         from app.services.compliance.engine import ComplianceEngine
 
-        project_uuid = _safe_uuid(case.project_id) or _safe_uuid(
-            (case.input_data or {}).get("project_id")
-        )
-        if project_uuid is None:
-            # Engine still runs with a nil-safe placeholder project scope for offline cases.
-            project_uuid = UUID(int=0)
-        rule_id = (case.input_data or {}).get("rule_id")
+        project_uuid = context.project_id
+        rule_id = (target_input.task_input or {}).get("rule_id")
         rule_ids = [str(rule_id)] if rule_id else None
         ctx = ComplianceContext(
             project_id=project_uuid,
             metadata={
-                "evaluation_case_key": case.case_key,
-                "rule_type": (case.input_data or {}).get("rule_type"),
+                "evaluation_case_key": target_input.case_key,
+                "rule_type": (target_input.task_input or {}).get("rule_type"),
             },
         )
         findings, stats = ComplianceEngine().run(ctx, rule_ids=rule_ids)
-        # Map to evaluation prediction shape without inventing gold citations.
         statuses = [
             f.status.value if hasattr(f.status, "value") else str(f.status) for f in findings
         ]
@@ -70,34 +57,33 @@ class ComplianceServiceAdapter:
         severity = (
             "critical" if "critical" in severities else (severities[0] if severities else "info")
         )
+        output = {
+            "verdict": verdict,
+            "severity": severity,
+            "rule_type": (target_input.task_input or {}).get("rule_type") or "coverage",
+            "finding": findings[0].message if findings else "no findings",
+            "rule_ids": list(stats.get("rule_ids") or []),
+            "findings": [
+                {
+                    "rule_id": f.rule_id,
+                    "status": f.status.value if hasattr(f.status, "value") else str(f.status),
+                    "severity": f.severity.value
+                    if hasattr(f.severity, "value")
+                    else str(f.severity),
+                    "message": f.message,
+                }
+                for f in findings[:20]
+            ],
+            "citations": [],
+            "engine_version": stats.get("engine_version"),
+        }
         return TargetResult(
-            ok=True,
-            output={
-                "verdict": verdict,
-                "severity": severity,
-                "rule_type": (case.input_data or {}).get("rule_type") or "coverage",
-                "finding": findings[0].message if findings else "no findings",
-                "rule_ids": list(stats.get("rule_ids") or []),
-                "findings": [
-                    {
-                        "rule_id": f.rule_id,
-                        "status": f.status.value if hasattr(f.status, "value") else str(f.status),
-                        "severity": f.severity.value
-                        if hasattr(f.severity, "value")
-                        else str(f.severity),
-                        "message": f.message,
-                    }
-                    for f in findings[:20]
-                ],
-                "citations": [],
-                "engine_version": stats.get("engine_version"),
-            },
-            duration_ms=1,
+            ok=True, output=output, citations=[], retrieved_chunk_ids=[], duration_ms=1
         )
 
 
 class RagServiceAdapter:
-    """Calls formal RetrievalService using the case question only."""
+    """Calls formal RetrievalService using run project_id (never case source project)."""
 
     target_type = "rag"
 
@@ -116,85 +102,111 @@ class RagServiceAdapter:
                 target_type=self.target_type,
                 available=False,
                 reason=f"Embedding/retrieval stack not available: {type(exc).__name__}",
-                reason_code="retrieval_unavailable",
+                reason_code="project_dependency_missing",
             )
 
-    def run_case(self, case: EvaluationCase) -> TargetResult:
-        assert_no_reference_in_target_input(case.target_input())
+    def run_case(
+        self, target_input: TargetCaseInput, context: TargetExecutionContext
+    ) -> TargetResult:
+        assert_no_private_reference(target_input, context)
         if self.db is None:
             return TargetResult(
                 ok=False,
                 unavailable=True,
                 error_summary="RAG target requires database session",
             )
-        project_uuid = _safe_uuid(case.project_id) or _safe_uuid(
-            (case.input_data or {}).get("project_id")
-        )
         question = str(
-            (case.input_data or {}).get("question") or (case.input_data or {}).get("query") or ""
+            (target_input.task_input or {}).get("question")
+            or (target_input.task_input or {}).get("query")
+            or ""
         ).strip()
-        if not project_uuid or not question:
-            return TargetResult(
-                ok=False,
-                error_summary="RAG case missing project_id or question",
-            )
+        if not question:
+            return TargetResult(ok=False, error_summary="RAG case missing question")
         try:
             from app.schemas.search import SearchRequest
             from app.services.retrieval import RetrievalService
 
-            top_k = int(self.config.get("top_k") or 5)
+            top_k = int(self.config.get("top_k") or context.target_config.get("top_k") or 5)
+            # Authorization scope: EvaluationRun.project_id only.
             resp = RetrievalService(self.db).search(
-                project_uuid,
+                context.project_id,
                 SearchRequest(query=question, top_k=top_k),
             )
-        except Exception as exc:  # noqa: BLE001 — surface as case error, not fake hits
+        except Exception as exc:  # noqa: BLE001
             return TargetResult(
                 ok=False,
                 error_summary=f"retrieval_failed:{type(exc).__name__}",
             )
-        hits = list(getattr(resp, "results", None) or getattr(resp, "hits", None) or [])
+        hits = list(getattr(resp, "results", None) or [])
         chunk_ids: list[str] = []
-        doc_ids: list[str] = []
         citations: list[dict[str, Any]] = []
-        for hit in hits[:top_k]:
-            chunk_id = getattr(hit, "chunk_id", None) or (
-                hit.get("chunk_id") if isinstance(hit, dict) else None
-            )
-            doc_id = getattr(hit, "document_id", None) or (
-                hit.get("document_id") if isinstance(hit, dict) else None
-            )
-            page = getattr(hit, "page_start", None) or (
-                hit.get("page_start") if isinstance(hit, dict) else None
-            )
+        for hit in hits[: int(self.config.get("top_k") or 5)]:
+            chunk_id = str(getattr(hit, "chunk_id", "") or "")
+            doc_id = str(getattr(hit, "document_id", "") or "")
+            page = getattr(hit, "page_start", None)
             if chunk_id:
-                chunk_ids.append(str(chunk_id))
-            if doc_id:
-                doc_ids.append(str(doc_id))
+                chunk_ids.append(chunk_id)
             citations.append(
                 {
-                    "chunk_id": str(chunk_id) if chunk_id else None,
-                    "document_id": str(doc_id) if doc_id else None,
+                    "chunk_id": chunk_id or None,
+                    "document_id": doc_id or None,
                     "page": page,
+                    "file_name": getattr(hit, "file_name", None),
+                    "section": getattr(hit, "section", None),
                 }
             )
+        output = {
+            "answer": "",
+            "answerable": bool(chunk_ids),
+            "citations": citations,
+            "retrieved_chunk_ids": chunk_ids,
+            "document_ids": list(
+                dict.fromkeys(
+                    str(getattr(h, "document_id", ""))
+                    for h in hits
+                    if getattr(h, "document_id", None)
+                )
+            ),
+            "top_k": int(self.config.get("top_k") or 5),
+        }
         return TargetResult(
             ok=True,
-            output={
-                "answer": "",
-                "answerable": bool(chunk_ids),
-                "citations": citations,
-                "retrieved_chunk_ids": chunk_ids,
-                "document_ids": list(dict.fromkeys(doc_ids)),
-                "top_k": top_k,
-            },
+            output=output,
+            citations=citations,
+            retrieved_chunk_ids=chunk_ids,
+            metadata={"project_id": str(context.project_id)},
         )
 
 
-class LlmGatedAdapter:
-    """Placeholder for LLM-backed families — never invents scores."""
+class UnwiredLlmTarget:
+    """LLM-family targets that are not yet case-level wired to formal services."""
 
-    def __init__(self, target_type: str, *, db=None, config: dict[str, Any] | None = None):
+    def __init__(self, target_type: str, *, reason: str, reason_code: str = "service_not_wired"):
         self.target_type = target_type
+        self.reason = reason
+        self.reason_code = reason_code
+
+    def capability(self) -> TargetCapability:
+        return TargetCapability(
+            target_type=self.target_type,
+            available=False,
+            reason=self.reason,
+            reason_code=self.reason_code,
+        )
+
+    def run_case(
+        self, target_input: TargetCaseInput, context: TargetExecutionContext
+    ) -> TargetResult:
+        assert_no_private_reference(target_input, context)
+        return TargetResult(ok=False, unavailable=True, error_summary=self.reason)
+
+
+class AgentPipelineAdapter:
+    """Full Agent pipeline via formal AgentRunService (sync, project-scoped)."""
+
+    target_type = "agent_pipeline"
+
+    def __init__(self, *, db=None, config: dict[str, Any] | None = None):
         self.db = db
         self.config = config or {}
 
@@ -202,30 +214,58 @@ class LlmGatedAdapter:
         from app.services.evaluation.targets import _llm_configured
 
         ok, code = _llm_configured()
-        return TargetCapability(
-            target_type=self.target_type,
-            available=ok,
-            reason=None if ok else "LLM provider not configured",
-            reason_code=None if ok else code,
-        )
+        if not ok:
+            return TargetCapability(
+                target_type=self.target_type,
+                available=False,
+                reason="LLM provider not configured",
+                reason_code=code or "provider_not_configured",
+            )
+        return TargetCapability(target_type=self.target_type, available=True)
 
-    def run_case(self, case: EvaluationCase) -> TargetResult:
-        assert_no_reference_in_target_input(case.target_input())
+    def run_case(
+        self, target_input: TargetCaseInput, context: TargetExecutionContext
+    ) -> TargetResult:
+        assert_no_private_reference(target_input, context)
+        if self.db is None:
+            return TargetResult(
+                ok=False, unavailable=True, error_summary="agent_pipeline requires db session"
+            )
         cap = self.capability()
         if not cap.available:
             return TargetResult(ok=False, unavailable=True, error_summary=cap.reason)
-        # Production LLM invocation is out of scope for CI; require explicit force.
-        if not self.config.get("force_llm_invoke"):
-            return TargetResult(
-                ok=False,
-                unavailable=True,
-                error_summary=f"{self.target_type} requires online provider invoke (not enabled)",
+        try:
+            from app.schemas.agent_run import AgentRunStartRequest
+            from app.services.agent_run.service import AgentRunService
+
+            question = str(
+                (target_input.task_input or {}).get("question")
+                or (target_input.task_input or {}).get("query")
+                or (target_input.task_input or {}).get("text")
+                or target_input.case_key
             )
-        return TargetResult(
-            ok=False,
-            unavailable=True,
-            error_summary=f"{self.target_type} online invoke not wired in this build",
-        )
+            read = AgentRunService(self.db).start_run(
+                context.project_id,
+                AgentRunStartRequest(
+                    user_request=question[:2000],
+                    metadata={"evaluation_case_key": target_input.case_key},
+                ),
+                execute=True,
+            )
+            status = read.status.value if hasattr(read.status, "value") else str(read.status)
+            return TargetResult(
+                ok=True,
+                output={
+                    "agent_run_id": str(read.id),
+                    "status": status,
+                    "answer": getattr(read, "result_summary", None) or "",
+                },
+                citations=[],
+                retrieved_chunk_ids=[],
+                metadata={"agent_run_id": str(read.id)},
+            )
+        except Exception as exc:  # noqa: BLE001
+            return TargetResult(ok=False, error_summary=f"agent_failed:{type(exc).__name__}")
 
 
 def build_adapter(target_type: str, *, config: dict[str, Any] | None = None, db=None):
@@ -234,17 +274,16 @@ def build_adapter(target_type: str, *, config: dict[str, Any] | None = None, db=
         return ComplianceServiceAdapter(db=db, config=config)
     if target_type == "rag":
         return RagServiceAdapter(db=db, config=config)
-    if target_type in {"extraction", "matching", "drafting", "agent_pipeline"}:
-        from app.services.evaluation.targets import UnavailableTarget, _llm_configured
-
-        ok, code = _llm_configured()
-        if not ok and not config.get("force_available"):
-            return UnavailableTarget(
-                target_type,
-                "LLM provider not configured",
-                reason_code=code or "llm_provider_not_configured",
-            )
-        return LlmGatedAdapter(target_type, db=db, config=config)
+    if target_type == "agent_pipeline":
+        return AgentPipelineAdapter(db=db, config=config)
+    if target_type in {"extraction", "matching", "drafting"}:
+        # Formal services operate on project documents / match runs, not standalone
+        # evaluation case text. Keep unavailable until a case-level entry exists.
+        return UnwiredLlmTarget(
+            target_type,
+            reason=f"{target_type} case-level evaluation adapter is not wired to formal service",
+            reason_code="service_not_wired",
+        )
     from app.services.evaluation.targets import UnavailableTarget
 
     return UnavailableTarget(

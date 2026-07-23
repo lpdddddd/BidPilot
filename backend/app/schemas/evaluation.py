@@ -76,7 +76,9 @@ class PaginatedSuites(BaseModel):
 
 
 class EvaluationRunCreate(BaseModel):
-    """Create payload — aliases keep older test fields working."""
+    """Public create payload — no sync/fixture/fail injection fields."""
+
+    model_config = {"extra": "forbid"}
 
     suite_id: UUID | None = None
     target: str | None = None
@@ -87,14 +89,10 @@ class EvaluationRunCreate(BaseModel):
     task_family: str | None = None
     task_families: list[str] | None = None
     case_limit: int | None = None
-    limit: int | None = None  # legacy alias for case_limit
     case_keys: list[str] | None = None
     seed: int = 42
     evaluator_profile: str | None = None
-    profile: str | None = None  # legacy alias
-    fixture_path: str | None = None
     created_by: str | None = None
-    fail_case_keys: list[str] | None = None
     idempotency_key: str | None = None
 
     @model_validator(mode="after")
@@ -103,20 +101,35 @@ class EvaluationRunCreate(BaseModel):
             object.__setattr__(self, "target_type", self.target)
         if not self.target:
             object.__setattr__(self, "target", self.target_type)
-        if self.case_limit is None and self.limit is not None:
-            object.__setattr__(self, "case_limit", self.limit)
-        if self.evaluator_profile is None and self.profile is not None:
-            object.__setattr__(self, "evaluator_profile", self.profile)
+        if self.evaluator_profile is None:
+            pass
         if self.task_families is None and self.task_family:
             object.__setattr__(self, "task_families", [self.task_family])
         return self
 
-    @field_validator("case_limit", "limit")
+    @field_validator("case_limit")
     @classmethod
     def _non_negative(cls, v: int | None) -> int | None:
         if v is not None and v < 0:
             raise ValueError("case_limit must be >= 0")
         return v
+
+
+class EvaluationCitationRead(BaseModel):
+    document_id: str | None = None
+    document_title: str | None = None
+    document_name: str | None = None
+    file_name: str | None = None
+    page: int | None = None
+    page_start: int | None = None
+    section: str | None = None
+    chunk_id: str | None = None
+    project_id: str | None = None
+    valid: bool | None = None
+    validation_error: str | None = None
+    invalid_reason: str | None = None
+    summary: str | None = None
+    detail_url: str | None = None
 
 
 class EvaluationRunRead(BaseModel):
@@ -173,20 +186,6 @@ class EvaluationMetricRead(BaseModel):
     reference_kind: str
 
     model_config = {"from_attributes": True}
-
-
-class EvaluationCitationRead(BaseModel):
-    document_id: str | None = None
-    document_title: str | None = None
-    file_name: str | None = None
-    page: int | None = None
-    page_start: int | None = None
-    section: str | None = None
-    chunk_id: str | None = None
-    project_id: str | None = None
-    valid: bool | None = None
-    validation_error: str | None = None
-    summary: str | None = None
 
 
 class EvaluationCaseResultRead(BaseModel):
