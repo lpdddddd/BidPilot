@@ -1298,6 +1298,7 @@ export type EvaluationMetricResult = {
 export type EvaluationCitation = {
   document_id?: string | null;
   document_title?: string | null;
+  document_name?: string | null;
   file_name?: string | null;
   page?: number | null;
   page_start?: number | null;
@@ -1307,7 +1308,9 @@ export type EvaluationCitation = {
   /** Server-side validation; false means deep-link is invalid. */
   valid?: boolean | null;
   validation_error?: string | null;
+  invalid_reason?: string | null;
   summary?: string | null;
+  detail_url?: string | null;
 };
 
 export type EvaluationReferenceSummary = {

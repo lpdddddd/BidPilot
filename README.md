@@ -303,10 +303,12 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 
 项目级自动评测：复用 `datasets/eval/reference/`（**140 auto_reference，human Gold=0**，统计由 loader 动态生成），确定性指标 + hard gates，前端评测中心。详见 [`docs/evaluation_center.md`](docs/evaluation_center.md)。
 
-- 生产默认后台执行（`BackgroundTasks` + 独立 Session）；`sync=true` 仅测试
+- 生产 API **始终后台**执行；公开 schema 无 `sync` / `fixture_path` / `fail_case_keys`
 - FE/BE 契约统一：`items` 分页、`target`/`case_limit`/`evaluator_profile`、结构化 profiles
-- Target 防泄漏：`target_input` 不含 citation gold / reference；`deterministic_fake` 不进生产 capability
-- Citation 深链由后端校验 `valid` / `validation_error`
+- Target 结构隔离：`TargetCaseInput` + `TargetExecutionContext`；`PrivateReferenceBundle` 仅 evaluator
+- RAG scope=`EvaluationRun.project_id`；每 case 独立 Session；有界 cancel；幂等唯一约束兜底
+- `deterministic_fake` 不进生产；extraction/matching/drafting=`service_not_wired`
+- Citation 深链由后端校验 `valid` / `invalid_reason` / `detail_url`
 - **尚未实现（训练）**：LoRA / 第 13 步训练数据构建
 
 ## 可追溯响应准备草稿

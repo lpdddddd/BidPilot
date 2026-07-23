@@ -243,11 +243,15 @@ export function validateEvaluationCitation(
   const label = labelParts.join(" · ");
 
   if (citation.valid === false) {
+    const reason =
+      citation.invalid_reason ||
+      citation.validation_error ||
+      "引用校验失败：文档、页码或 chunk 不匹配";
     return {
       valid: false,
       href: null,
       label,
-      error: citation.validation_error || "引用校验失败：文档、页码或 chunk 不匹配",
+      error: reason.includes("chunk") ? "chunk 不存在或无权访问" : reason,
     };
   }
 
@@ -268,6 +272,11 @@ export function validateEvaluationCitation(
       label,
       error: "引用校验失败：缺少 document_id",
     };
+  }
+
+  // Prefer server-built deep link when present.
+  if (citation.detail_url) {
+    return { valid: true, href: citation.detail_url, label, error: null };
   }
 
   const params = new URLSearchParams({

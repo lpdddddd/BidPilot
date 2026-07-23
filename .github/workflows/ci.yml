@@ -110,6 +110,19 @@ jobs:
             tests/test_evaluation_api.py \
             tests/test_evaluation_permissions.py \
             tests/test_evaluation_leakage.py \
+            tests/test_evaluation_rag_scope.py \
+            tests/test_evaluation_citations.py \
+            tests/test_evaluation_cancel.py \
+            tests/test_evaluation_idempotency_pg.py \
+            tests/test_evaluation_session_isolation.py \
+            tests/test_agent_step11_api_acceptance.py \
+            --tb=short
+      - name: Step 11 graph + barrier
+        run: |
+          pytest -q \
+            tests/test_agent_persist_attempt_graph.py \
+            tests/test_agent_midrun_visibility.py \
+            tests/test_agent_step11_api_acceptance.py \
             --tb=short
       - name: Full backend suite
         run: pytest -q --tb=line
