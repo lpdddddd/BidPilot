@@ -57,7 +57,38 @@ def llm_health() -> LlmHealthResponse:
 
 @router.get("/api/v1/models/active")
 def active_model() -> dict:
-    """Public active model / LoRA registration info for UI."""
+    """Public active model / LoRA registration info for UI (legacy chip)."""
     from app.services.model_registry import public_model_info
+    from app.services.model_serving import public_models_payload
 
-    return public_model_info()
+    info = public_model_info()
+    catalog = public_models_payload(probe=True)
+    # Prefer live served flags over registry-only online claims.
+    info["models"] = catalog["items"]
+    info["default_model_id"] = catalog["default_model_id"]
+    active_lora = next(
+        (
+            m
+            for m in catalog["items"]
+            if m.get("model_id") == catalog.get("active_finetune_model_id")
+        ),
+        None,
+    )
+    if info.get("active_finetune") and active_lora:
+        info["active_finetune"] = {
+            **info["active_finetune"],
+            "registered": active_lora.get("registered"),
+            "adapter_exists": active_lora.get("adapter_exists"),
+            "served": active_lora.get("served"),
+            "status_label": active_lora.get("status_label"),
+            "reason_codes": active_lora.get("reason_codes") or [],
+        }
+    return info
+
+
+@router.get("/api/v1/models")
+def list_models() -> dict:
+    """Catalog with registered / adapter_exists / served (probed)."""
+    from app.services.model_serving import public_models_payload
+
+    return public_models_payload(probe=True)

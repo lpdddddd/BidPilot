@@ -53,6 +53,35 @@ export async function getHealth(): Promise<HealthResponse> {
   return data;
 }
 
+export type ModelCatalogStatusLabel =
+  | "online"
+  | "adapter_ready"
+  | "registered"
+  | "unavailable";
+
+export type ModelCatalogItem = {
+  model_id: string;
+  display_name: string;
+  model_type: "base" | "lora";
+  registered: boolean;
+  adapter_exists: boolean;
+  /** Live vLLM probe — only true when the served name is online. */
+  served: boolean;
+  served_model_name: string | null;
+  version: string | null;
+  train_track: string | null;
+  reason_codes: string[];
+  notes: string | null;
+  status_label: ModelCatalogStatusLabel;
+};
+
+export type ModelCatalogResponse = {
+  llm_enabled: boolean;
+  default_model_id: string;
+  active_finetune_model_id: string | null;
+  items: ModelCatalogItem[];
+};
+
 export type ActiveModelInfo = {
   llm_enabled: boolean;
   served_model: string;
@@ -61,6 +90,8 @@ export type ActiveModelInfo = {
   train_track?: string | null;
   version?: string | null;
   notes?: string | null;
+  default_model_id?: string;
+  models?: ModelCatalogItem[];
   active_finetune?: {
     model_id?: string;
     display_name?: string;
@@ -70,11 +101,21 @@ export type ActiveModelInfo = {
     adapter_name?: string;
     metrics?: Record<string, unknown>;
     notes?: string;
+    registered?: boolean;
+    adapter_exists?: boolean;
+    served?: boolean;
+    status_label?: ModelCatalogStatusLabel;
+    reason_codes?: string[];
   } | null;
 };
 
 export async function getActiveModel(): Promise<ActiveModelInfo> {
   const { data } = await http.get<ActiveModelInfo>("/api/v1/models/active");
+  return data;
+}
+
+export async function listModels(): Promise<ModelCatalogResponse> {
+  const { data } = await http.get<ModelCatalogResponse>("/api/v1/models");
   return data;
 }
 

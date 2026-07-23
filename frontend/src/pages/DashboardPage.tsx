@@ -2,9 +2,14 @@ import { Button, Skeleton } from "antd";
 import { ArrowRightOutlined, PlusOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { listProjects, getActiveModel } from "../api/client";
+import { listModels, listProjects } from "../api/client";
 import { useBackendHealth, useBackendReady } from "../components/BackendStatus";
 import { usePageTitle } from "../components/usePageTitle";
+import {
+  modelOnlineStatusLabel,
+  pickBaseModel,
+  pickCourseLora,
+} from "../features/models/modelStatus";
 
 type CapabilityNode = {
   name: string;
@@ -20,7 +25,11 @@ const INTEL_NODES: CapabilityNode[] = [
   { name: "文档问答", ready: true, note: "受检索证据约束的带来源回答（Qwen3-8B）" },
   { name: "智能审查", ready: true, note: "确定性规则引擎：覆盖/证据/资格风险/草稿安全/一致性" },
   { name: "评测中心", ready: true, note: "项目级评测、compare 与导出" },
-  { name: "领域微调", ready: true, note: "Step 13 course_pilot LoRA（非 human_gold）" },
+  {
+    name: "领域微调",
+    ready: true,
+    note: "Step 13 course_pilot + Step 14 在线服务（非 human_gold；须 served 才显示在线）",
+  },
 ];
 
 export default function DashboardPage() {
@@ -28,7 +37,7 @@ export default function DashboardPage() {
   const health = useBackendHealth();
   const ready = useBackendReady();
   const projects = useQuery({ queryKey: ["projects"], queryFn: listProjects, retry: 0 });
-  const modelInfo = useQuery({ queryKey: ["active-model"], queryFn: getActiveModel, retry: 0 });
+  const modelsQuery = useQuery({ queryKey: ["models"], queryFn: listModels, retry: 0 });
 
   const apiConnected = health.isSuccess;
   const readyOkCount = ready.isSuccess
@@ -37,11 +46,9 @@ export default function DashboardPage() {
   const readyTotal = ready.isSuccess ? ready.data.services.length : null;
   const openCapabilityCount = INTEL_NODES.filter((n) => n.ready).length;
   const projectTotal = projects.isSuccess ? projects.data.total : null;
-  const finetuneLabel = modelInfo.data?.active_finetune
-    ? `${modelInfo.data.active_finetune.display_name || "LoRA"} · ${modelInfo.data.active_finetune.version || ""}`
-    : modelInfo.data?.served_model
-      ? `基座 ${modelInfo.data.served_model}`
-      : null;
+
+  const baseModel = modelsQuery.data ? pickBaseModel(modelsQuery.data.items) : undefined;
+  const loraModel = modelsQuery.data ? pickCourseLora(modelsQuery.data.items) : undefined;
 
   return (
     <div className="bp-dash">
@@ -50,7 +57,8 @@ export default function DashboardPage() {
         <h1 className="bp-page-title">智能投标工作台</h1>
         <p className="bp-page-subtitle">
           定位资料、验证来源、形成可追溯的投标依据。已接入文档解析、混合检索、合规审查、Agent
-          工作流与评测中心；领域微调以 course_pilot LoRA 轨道演示（非 human_gold）。
+          工作流与评测中心；领域微调以 course_pilot LoRA 轨道演示（非 human_gold；在线须 vLLM
+          --enable-lora）。
         </p>
         <div className="bp-dash-actions">
           <Link to="/projects">
@@ -98,14 +106,25 @@ export default function DashboardPage() {
               </span>
             )
           )}
-          {modelInfo.isLoading ? (
-            <Skeleton.Button active size="small" style={{ width: 140, height: 32 }} />
+          {modelsQuery.isLoading ? (
+            <Skeleton.Button active size="small" style={{ width: 200, height: 32 }} />
           ) : (
-            finetuneLabel && (
-              <span className="bp-metric-chip" data-testid="active-model-chip">
-                模型 <strong>{finetuneLabel}</strong>
-              </span>
-            )
+            <>
+              {baseModel && (
+                <span className="bp-metric-chip" data-testid="base-model-chip">
+                  Base <strong>{modelOnlineStatusLabel(baseModel)}</strong>
+                </span>
+              )}
+              {loraModel && (
+                <span className="bp-metric-chip" data-testid="lora-model-chip">
+                  LoRA{" "}
+                  <strong>
+                    {loraModel.display_name || "Course LoRA"} · {modelOnlineStatusLabel(loraModel)}
+                    {loraModel.version ? ` · ${loraModel.version}` : ""}
+                  </strong>
+                </span>
+              )}
+            </>
           )}
         </div>
       </section>
