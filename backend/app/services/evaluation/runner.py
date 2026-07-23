@@ -22,7 +22,9 @@ from app.services.evaluation.targets import get_target
 from app.services.evaluation.targets.base import run_target_safely
 from app.services.evaluation.types import (
     TargetExecutionContext,
+    build_evaluator_view,
     split_case_for_evaluation,
+    target_input_as_dict,
 )
 
 
@@ -254,7 +256,15 @@ def execute_evaluation_run(
         private = item["private"]
         target_input = item["target_input"]
         started = _now()
-        profile = get_profile(eval_case.task_family)
+        # Evaluator sees PrivateReferenceBundle via EvaluatorCaseView — never full case to metrics.
+        evaluator_view = build_evaluator_view(
+            case_key=eval_case.case_key,
+            task_family=eval_case.task_family,
+            split=eval_case.split,
+            content_hash=eval_case.content_hash,
+            private=private,
+        )
+        profile = get_profile(evaluator_view.task_family)
         if not tres.ok:
             status = EvaluationCaseStatus.error
             metrics = []
@@ -263,11 +273,10 @@ def execute_evaluation_run(
             gates: list[str] = []
             snap = tres.to_response_snapshot()
         else:
-            # Evaluator receives private reference only after target returns.
             metrics = evaluate_case_metrics(
-                eval_case, tres.output, profile=profile, duration_ms=tres.duration_ms
+                evaluator_view, tres.output, profile=profile, duration_ms=tres.duration_ms
             )
-            gates = evaluate_hard_gates(eval_case, tres.output, metrics)
+            gates = evaluate_hard_gates(evaluator_view, tres.output, metrics)
             score = aggregate_case_score(metrics)
             passed = score is not None and score >= 0.5 and not gates
             if any(
@@ -286,19 +295,13 @@ def execute_evaluation_run(
             status = EvaluationCaseStatus.passed if passed else EvaluationCaseStatus.failed
             snap = tres.to_response_snapshot()
         finished = _now()
-        # Build safe input snapshot from TargetCaseInput only
-        input_snap = {
-            "case_key": target_input.case_key,
-            "task_family": target_input.task_family,
-            "split": target_input.split,
-            "input": dict(target_input.task_input),
-        }
+        input_snap = target_input_as_dict(target_input)
         row = EvaluationCaseResult(
             evaluation_run_id=run.id,
-            case_key=eval_case.case_key,
-            case_content_hash=eval_case.content_hash,
-            task_family=eval_case.task_family,
-            split=eval_case.split,
+            case_key=evaluator_view.case_key,
+            case_content_hash=evaluator_view.content_hash,
+            task_family=evaluator_view.task_family,
+            split=evaluator_view.split,
             status=status,
             response_snapshot=snap,
             reference_kind=_kind(private.reference_kind),
@@ -311,7 +314,7 @@ def execute_evaluation_run(
             duration_ms=tres.duration_ms
             or max(0, int((finished - started).total_seconds() * 1000)),
             input_snapshot=input_snap,
-            reference_summary=eval_case.reference_summary(include_output=False),
+            reference_summary=evaluator_view.reference_summary(include_output=False),
         )
         db.add(row)
         db.flush()

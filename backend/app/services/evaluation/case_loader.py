@@ -57,21 +57,11 @@ class EvaluationCase:
     raw_meta: dict[str, Any] = field(default_factory=dict)
 
     def target_input(self) -> dict[str, Any]:
-        """Input payload for generation targets (private reference stripped).
+        """Whitelist public target payload (no gold document/chunk identifiers)."""
+        from app.services.evaluation.types import split_case_for_evaluation, target_input_as_dict
 
-        Targets may receive case identity, task family, split, and the case
-        ``input`` blob plus non-gold project/document scope hints only.
-        """
-        return {
-            "case_key": self.case_key,
-            "task_family": self.task_family,
-            "split": self.split,
-            "input": deepcopy(self.input_data),
-            "context_hints": {
-                "project_id": self.project_id,
-                "document_id": self.document_id,
-            },
-        }
+        public, _private = split_case_for_evaluation(self)
+        return target_input_as_dict(public)
 
     def private_reference(self) -> dict[str, Any]:
         """Evaluator-only reference bundle — never pass to targets."""

@@ -51,15 +51,15 @@ class DeterministicFakeTarget:
     def _predict(self, target_input: TargetCaseInput, digest: str) -> dict[str, Any]:
         family = target_input.task_family
         inp = target_input.task_input
-        chunk_ids = [str(x) for x in (inp.get("context_chunk_ids") or [])]
-        doc_ids = [str(x) for x in (inp.get("document_ids") or [])]
+        # Never read gold/context_chunk_ids — synthesize opaque ids from digest only.
+        fake_chunks = [f"fake-chunk-{digest[:8]}-{i}" for i in range(3)]
         if family == "rag":
             return {
                 "answer": f"fake-answer:{digest[:8]}",
                 "answerable": True,
-                "citations": [{"chunk_id": c} for c in chunk_ids[:3]],
-                "retrieved_chunk_ids": chunk_ids[:5],
-                "document_ids": doc_ids[:3],
+                "citations": [{"chunk_id": c} for c in fake_chunks[:3]],
+                "retrieved_chunk_ids": fake_chunks[:5],
+                "document_ids": [],
                 "top_k": 5,
             }
         if family == "extraction":
@@ -69,18 +69,18 @@ class DeterministicFakeTarget:
             return {
                 "extracted": {
                     "title": title,
-                    "category": inp.get("category") or "qualification",
+                    "category": inp.get("category") or inp.get("category_hint") or "qualification",
                     "mandatory": True,
                     "risk_level": "high",
                     "normalized_requirement": title,
                 },
-                "citations": [{"chunk_id": c} for c in chunk_ids[:2]],
+                "citations": [{"chunk_id": c} for c in fake_chunks[:2]],
             }
         if family == "matching":
             return {
                 "status": "insufficient_evidence",
                 "reason": "deterministic fake lacks bilateral supplier evidence",
-                "evidence_chunk_ids": chunk_ids[:2],
+                "evidence_chunk_ids": fake_chunks[:2],
                 "match_decision": "insufficient_evidence",
             }
         if family == "compliance":
@@ -89,15 +89,15 @@ class DeterministicFakeTarget:
                 "severity": "info",
                 "rule_type": inp.get("rule_type") or "coverage",
                 "finding": "deterministic fake offline finding",
-                "rule_ids": [str(inp.get("rule_id") or "A001")],
-                "citations": [{"chunk_id": c} for c in chunk_ids[:1]],
+                "rule_ids": [str(inp.get("rule_id") or inp.get("check_id") or "A001")],
+                "citations": [{"chunk_id": c} for c in fake_chunks[:1]],
             }
         if family == "drafting":
             return {
                 "outline": ["概述", "资质响应", "风险说明"],
                 "summary": "deterministic draft summary",
                 "draft_text": "本响应基于已知材料整理，不做满足性承诺。",
-                "citations": [{"chunk_id": c} for c in chunk_ids[:2]],
+                "citations": [{"chunk_id": c} for c in fake_chunks[:2]],
                 "supported_claim_rate": 0.8,
                 "unsupported_claim_rate": 0.2,
             }
@@ -110,4 +110,4 @@ class DeterministicFakeTarget:
                 "safe_explanation": "证据不足，拒绝作答",
                 "unsupported_citation_count": 0,
             }
-        return {"answer": digest[:12], "citations": [{"chunk_id": c} for c in chunk_ids[:1]]}
+        return {"answer": digest[:12], "citations": [{"chunk_id": c} for c in fake_chunks[:1]]}

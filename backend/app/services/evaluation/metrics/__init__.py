@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.evaluation.case_loader import EvaluationCase
 from app.services.evaluation.metrics import compliance as compliance_m
 from app.services.evaluation.metrics import drafting as drafting_m
 from app.services.evaluation.metrics import extraction as extraction_m
@@ -16,12 +15,18 @@ from app.services.evaluation.metrics.base import MetricObservation
 
 
 def evaluate_case_metrics(
-    case: EvaluationCase,
+    case: Any,
     prediction: dict[str, Any],
     *,
     profile: dict[str, Any],
     duration_ms: int | None = None,
 ) -> list[MetricObservation]:
+    """Score a prediction against evaluator-facing reference (EvaluatorCaseView).
+
+    ``case`` must expose task_family / reference_* / evidence / citation_metadata.
+    Prefer ``EvaluatorCaseView`` built from ``PrivateReferenceBundle`` after target
+    returns — do not pass target-facing objects here.
+    """
     family = case.task_family
     weights = dict(profile.get("metric_weights") or {})
     thresholds = dict(profile.get("metric_thresholds") or {})

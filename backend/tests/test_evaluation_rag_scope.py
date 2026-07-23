@@ -15,7 +15,6 @@ from app.services.evaluation.suite_loader import load_jsonl
 from app.services.evaluation.targets.adapters import RagServiceAdapter
 from app.services.evaluation.targets.base import TargetResult
 from app.services.evaluation.types import (
-    TargetCaseInput,
     TargetExecutionContext,
     split_case_for_evaluation,
 )
@@ -108,8 +107,13 @@ def test_rag_adapter_searches_run_project_not_case_source(db: Session):
     sample = next(s for s in load_jsonl(FIXTURE) if s.get("task_type") == "rag")
     case = normalize_case(sample)
     case.project_id = str(other_project.id)
-    target_input, _ = split_case_for_evaluation(case)
-    assert target_input.source_project_id == str(other_project.id)
+    target_input, private = split_case_for_evaluation(case)
+    # Gold source project stays in private only — never on TargetCaseInput.
+    assert "source_project_id" not in target_input.__dataclass_fields__
+    assert "source_project_id" not in target_input.task_input
+    assert private.source_project_id == str(other_project.id)
+    assert "context_chunk_ids" not in target_input.task_input
+    assert private.context_chunk_ids or private.citation_metadata is not None
 
     captured: list = []
 
@@ -191,13 +195,13 @@ def test_forged_source_project_id_does_not_change_retrieval_scope(db: Session):
     forged = _project(db, "FORGED")
     db.commit()
 
-    target_input = TargetCaseInput(
-        case_key="rag-forge-1",
-        task_family="rag",
-        split="test",
-        task_input={"question": "资质要求？"},
-        source_project_id=str(forged.id),
-    )
+    sample = next(s for s in load_jsonl(FIXTURE) if s.get("task_type") == "rag")
+    case = normalize_case(sample)
+    case.project_id = str(forged.id)
+    target_input, private = split_case_for_evaluation(case)
+    assert private.source_project_id == str(forged.id)
+    assert "project_id" not in target_input.task_input
+
     seen: list = []
 
     def spy_search(self, project_id, request: SearchRequest):
