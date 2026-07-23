@@ -1,33 +1,36 @@
-# Local-weights override for the optional `llm` profile.
+# Local-weights override for the optional `llm` profile (Base path only).
 # Only use when LLM_MODEL_PATH is a non-empty host directory with config.json.
 #
-# From repository root:
+# From repository root (Base-only local):
 #   export LLM_MODEL_PATH=/absolute/path/to/Qwen3-8B
-#   bash scripts/check_lora_adapter.sh
 #   docker compose --env-file .env \
 #     -f infra/docker-compose.yml \
 #     -f infra/docker-compose.llm.yml \
 #     -f infra/docker-compose.llm.local.yml \
 #     --profile llm up -d
 #
+# Local + Course LoRA (apply local *after* lora so serve path stays /models/llm;
+# entrypoint appends --enable-lora / --lora-modules when LLM_ENABLE_LORA=true):
+#   bash scripts/check_lora_adapter.sh
+#   docker compose --env-file .env \
+#     -f infra/docker-compose.yml \
+#     -f infra/docker-compose.llm.yml \
+#     -f infra/docker-compose.llm.lora.yml \
+#     -f infra/docker-compose.llm.local.yml \
+#     --profile llm up -d
+#
 # Do not use this file with an empty LLM_MODEL_PATH (Docker rejects empty binds).
-# Entrypoint preflight is inherited from docker-compose.llm.yml.
-# Container Adapter path is always /models/bidpilot-course-lora.
+# Entrypoint is inherited from docker-compose.llm.yml.
+# LoRA volume comes from llm.lora.yml; LoRA CLI flags are ensured by the entrypoint.
 
 services:
   vllm-qwen3:
     environment:
       LLM_MODEL_PATH: /models/llm
-      LLM_LORA_ADAPTER_PATH: /models/bidpilot-course-lora
-      LLM_ENABLE_LORA: ${LLM_ENABLE_LORA:-true}
     volumes:
       - type: bind
         source: ${LLM_MODEL_PATH:?LLM_MODEL_PATH must be set to a host weights directory}
         target: /models/llm
-        read_only: true
-      - type: bind
-        source: ${LLM_LORA_HOST_PATH:-../training/llamafactory/outputs/qwen3_8b_lora_course}
-        target: /models/bidpilot-course-lora
         read_only: true
     command:
       - serve
@@ -45,10 +48,3 @@ services:
       - --max-model-len
       - "16384"
       - --enable-prefix-caching
-      - --enable-lora
-      - --max-loras
-      - "2"
-      - --max-lora-rank
-      - "${LLM_MAX_LORA_RANK:-16}"
-      - --lora-modules
-      - "${LLM_LORA_SERVED_NAME:-${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}}=/models/bidpilot-course-lora"

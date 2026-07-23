@@ -1,0 +1,61 @@
+# Course LoRA overlay for the optional `llm` profile.
+# Use with base compose (and optionally local weights):
+#
+#   From repository root:
+#     bash scripts/check_lora_adapter.sh
+#     docker compose --env-file .env \
+#       -f infra/docker-compose.yml \
+#       -f infra/docker-compose.llm.yml \
+#       -f infra/docker-compose.llm.lora.yml \
+#       --profile llm up -d
+#
+#   Local weights + LoRA:
+#     ... -f infra/docker-compose.llm.yml \
+#         -f infra/docker-compose.llm.local.yml \
+#         -f infra/docker-compose.llm.lora.yml ...
+#
+# Path semantics:
+#   LLM_LORA_HOST_PATH     — Compose volume *source* on the host only
+#                            default ../training/llamafactory/outputs/qwen3_8b_lora_course
+#                            (relative to this file under infra/)
+#   LLM_LORA_ADAPTER_PATH  — runtime Adapter path used by preflight + vLLM
+#                            always /models/bidpilot-course-lora in container
+#   Compose mounts HOST_PATH → ADAPTER_PATH. Preflight and --lora-modules both
+#   read LLM_LORA_ADAPTER_PATH so they cannot diverge.
+
+services:
+  vllm-qwen3:
+    environment:
+      # Overlay wins over base compose literal false.
+      LLM_ENABLE_LORA: "true"
+      # Always the in-container runtime path (do NOT inherit host LLM_LORA_ADAPTER_PATH).
+      LLM_LORA_ADAPTER_PATH: /models/bidpilot-course-lora
+      LLM_MAX_LORA_RANK: ${LLM_MAX_LORA_RANK:-16}
+    volumes:
+      - type: bind
+        source: ${LLM_LORA_HOST_PATH:-../training/llamafactory/outputs/qwen3_8b_lora_course}
+        target: /models/bidpilot-course-lora
+        read_only: true
+    command:
+      - serve
+      - ${LLM_MODEL_SOURCE:-Qwen/Qwen3-8B}
+      - --served-model-name
+      - ${LLM_BASE_SERVED_NAME:-${LLM_MODEL:-bidpilot-qwen3-8b}}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --tensor-parallel-size
+      - "1"
+      - --gpu-memory-utilization
+      - "0.90"
+      - --max-model-len
+      - "16384"
+      - --enable-prefix-caching
+      - --enable-lora
+      - --max-loras
+      - "2"
+      - --max-lora-rank
+      - "${LLM_MAX_LORA_RANK:-16}"
+      - --lora-modules
+      - "${LLM_LORA_SERVED_NAME:-${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}}=/models/bidpilot-course-lora"

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Container / host entrypoint wrapper for vLLM with mandatory LoRA preflight.
+# Container / host entrypoint wrapper for vLLM with optional LoRA preflight.
 # Usage (compose): entrypoint runs this script; remaining args are passed to vllm.
 # Env:
-#   LLM_ENABLE_LORA          true|false (default true)
+#   LLM_ENABLE_LORA          true|false (compose base defaults false; lora overlay true)
 #   LLM_LORA_ADAPTER_PATH    runtime adapter dir (container: /models/bidpilot-course-lora)
 #   LLM_MODEL_PATH / LLM_MODEL_SOURCE  configured base for match check
 #   LLM_MAX_LORA_RANK        default 16
@@ -12,11 +12,34 @@ set -euo pipefail
 ROOT_HINT="${BIDPILOT_ROOT:-/bidpilot}"
 BACKEND_HINT="${BIDPILOT_BACKEND:-${ROOT_HINT}/backend}"
 
-ENABLE_LORA="$(echo "${LLM_ENABLE_LORA:-true}" | tr '[:upper:]' '[:lower:]')"
+ENABLE_LORA="$(echo "${LLM_ENABLE_LORA:-false}" | tr '[:upper:]' '[:lower:]')"
 ADAPTER="${LLM_LORA_ADAPTER_PATH:-/models/bidpilot-course-lora}"
 MAX_RANK="${LLM_MAX_LORA_RANK:-16}"
 SERVED_LORA="${LLM_LORA_SERVED_NAME:-${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}}"
 CONFIGURED_BASE="${LLM_MODEL_PATH:-${LLM_MODEL_SOURCE:-Qwen/Qwen3-8B}}"
+
+# Normalize argv: strip LoRA flags when disabled; ensure they exist when enabled
+# (covers compose merge where local.yml replaces command without LoRA bits).
+ARGS=("$@")
+KEPT=()
+i=0
+while ((i < ${#ARGS[@]})); do
+  case "${ARGS[$i]}" in
+    --enable-lora)
+      ((i += 1))
+      ;;
+    --max-loras | --max-lora-rank | --lora-modules)
+      ((i += 1))
+      if ((i < ${#ARGS[@]})); then
+        ((i += 1))
+      fi
+      ;;
+    *)
+      KEPT+=("${ARGS[$i]}")
+      ((i += 1))
+      ;;
+  esac
+done
 
 if [[ "${ENABLE_LORA}" == "true" || "${ENABLE_LORA}" == "1" || "${ENABLE_LORA}" == "yes" ]]; then
   if [[ -z "${SERVED_LORA}" ]]; then
@@ -62,8 +85,16 @@ if not result["adapter_exists"]:
     sys.exit(1)
 print("OK: compose/container LoRA preflight passed", file=sys.stderr)
 PY
+  KEPT+=(
+    --enable-lora
+    --max-loras "2"
+    --max-lora-rank "${MAX_RANK}"
+    --lora-modules "${SERVED_LORA}=${ADAPTER}"
+  )
+  set -- "${KEPT[@]}"
 else
   echo "INFO: LLM_ENABLE_LORA=false — base-only mode, skipping adapter preflight" >&2
+  set -- "${KEPT[@]}"
 fi
 
 # Prefer image entrypoint binary when present.
