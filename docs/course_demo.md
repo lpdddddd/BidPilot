@@ -2,7 +2,7 @@
 
 固定演示路径：本地基础设施 → 导入/创建项目 → 上传样例招标文件 → 解析与索引 → RAG 带来源问答 → 合规 / Agent 时间线 → 评测中心小跑 → 对比与导出。
 
-不包含密钥或外网爬取。领域微调（course_pilot LoRA）见 [`step13_lora.md`](step13_lora.md)；本走查默认不启动训练。
+不包含密钥或外网爬取。领域微调（course_pilot LoRA）见 [`step13_lora.md`](step13_lora.md)；**在线 LoRA 服务**见 [`step14_lora.md`](step14_lora.md)。本走查默认不重新训练。
 
 ## 0. 环境准备
 
@@ -29,9 +29,16 @@ RAG / Agent 需要本地 LLM 时（可选，另开终端）：
 ```bash
 # .env: LLM_ENABLED=true，LLM_BASE_URL 指向 vLLM
 ./scripts/serve_qwen3_vllm.sh
+# 默认在 Course Adapter 存在时启用 --enable-lora（见 docs/step14_lora.md）
 # 或 make llm-up 查看 Compose / 本机启动说明
 ```
 
+探测：
+
+```bash
+curl -s http://127.0.0.1:8001/v1/models | jq .
+curl -s http://localhost:8000/api/v1/models | jq '.items[] | {model_id, served, status_label}'
+```
 ## 1. 创建或导入演示项目
 
 **推荐（演示包）：**
@@ -58,12 +65,23 @@ make import-demo
 ## 3. RAG 问答 + 引用
 
 1. 同一项目 → **知识检索** / 「带来源问答」。
-2. 示例问题：
+2. 模型下拉默认 **Base**；若 Course LoRA 已 served，可选 **BidPilot Course LoRA**（未在线则禁用并提示「模型尚未启动在线服务」）。
+3. 示例问题：
    - 「投标人需要提供哪些资格材料？」
    - 「系统视频接入路数要求是多少？」
    - 「本项目是否要求火星采矿许可证？」（证据不足时不应编造结论）
-3. 确认回答含 `[S1]` 等引用，并可点击跳到文档 / chunk；检索为空时不应凭空生成实质性结论。
+4. 确认回答含 `[S1]` 等引用，并可点击跳到文档 / chunk；检索为空时不应凭空生成实质性结论。
+5. 查看回答旁 `generation_trace` 中的 model id / served 名。
 
+## 3b. LoRA 在线（可选 · Step 14）
+
+仅当 `./scripts/serve_qwen3_vllm.sh` 已带 `--enable-lora` 且 `/api/v1/models` 中 Course LoRA `served=true` 时演示：
+
+1. 工作台确认 Base / LoRA 状态芯片（未 served 不得显示「在线」）。
+2. Ask 切换 Course LoRA 再问同一问题，对比 trace 中的 `resolved_model_id`。
+3. 评测中心对 RAG（或 Agent）分别用 Base / LoRA 各跑一小批，再 **对比**。
+
+细节见 [`step14_lora.md`](step14_lora.md)。
 ## 4. 合规审查与 Agent 时间线
 
 **规则合规（确定性，可不依赖 LLM）：**
@@ -84,12 +102,12 @@ make import-demo
 3. **新建评测**：
    - 选择内置 suite（如 `reference_dataset`）
    - Target：优先 **合规检查**（通常始终可用）；若 Embedding 就绪可选 **RAG**；若 `LLM_ENABLED` 可选 **Agent 全流程**
+   - RAG / Agent 可再选 **Base** 或 **Course LoRA**（写入 `target_config.model_id`）；未 served 不可提交
    - 不可用目标（需求抽取 / 匹配 / 草稿等）显示友好中文原因并保持禁用（如「当前版本暂未开放」），**不要**解读为系统崩溃
    - `Case 数量限制` 设为较小值（如 `5`～`10`）以缩短演示
 4. 等待 run 完成 → 打开 **Run 详情** 与 case 结果（指标、Hard Gate、引用校验）。
-5. **对比**：选两次 run 做 compare，注意 dataset hash / evaluator version 不一致时的提示。
+5. **对比**：选两次 run 做 compare（可对比 Base vs LoRA），注意 dataset hash / evaluator version 不一致时的提示。
 6. **导出**：JSON / CSV / Markdown（按钮在 Run 详情）。
-
 ## 6. 演示口径（诚实限制）
 
 | 能力 | 演示期望 |
@@ -100,11 +118,13 @@ make import-demo
 | Agent + 时间线 | LLM 配置后可用；证据不足则 warning / blocked |
 | 评测中心 | 可用；reference 为 **auto_reference**，**human Gold=0** |
 | extraction / matching / drafting 评测目标 | **未 case 级接线** → UI 显示暂未开放 |
-| LoRA / 领域微调 | **course_pilot 已交付**（QC→训练→评测→注册展示）；**非 human_gold**；在线推理默认仍为基座 vLLM，见 [`step13_lora.md`](step13_lora.md) |
+| LoRA / 领域微调 | **course_pilot 已交付**（Step 13 QC→训练→评测→注册）；**Step 14 可在线**（须 vLLM `--enable-lora` 且 `served=true`）；**非 human_gold**；见 [`step13_lora.md`](step13_lora.md)、[`step14_lora.md`](step14_lora.md) |
 
 ## 相关文档
 
 - [`evaluation_center.md`](evaluation_center.md)
+- [`step13_lora.md`](step13_lora.md)
+- [`step14_lora.md`](step14_lora.md)
 - [`agent_workflow.md`](agent_workflow.md)
 - [`rag_e2e_acceptance.md`](rag_e2e_acceptance.md)
 - 仓库根目录 [`README.md`](../README.md)

@@ -11,7 +11,7 @@ BidPilot 面向招投标场景：帮助团队管理招标/企业文档，基于 
 | 需求抽取 / 材料匹配 / 人工审核 / 响应草稿 | 业务路径可用；**评测 target 未 case 级接线** |
 | 合规规则引擎 + Agent（Step/ToolCall 状态、SSE 时间线） | 可用 |
 | 评测中心（suite / run / case、对比、导出 JSON·CSV·MD） | 可用；reference 为 auto_reference，**human Gold=0** |
-| 领域微调 / LoRA（Step 13） | **course_pilot 可用**：QC→审核队列→LoRA smoke/正式训练→评测→注册；**非 human_gold** → [`docs/step13_lora.md`](docs/step13_lora.md) |
+| 领域微调 / LoRA（Step 13–14） | **course_pilot 可用**：QC→训练→评测→注册；**在线服务**须 vLLM `--enable-lora` 且 `served=true`（注册≠在线）；**非 human_gold** → [`docs/step13_lora.md`](docs/step13_lora.md)、[`docs/step14_lora.md`](docs/step14_lora.md) |
 
 **课程演示走查**（创建项目 → 上传样例 → 解析索引 → RAG → 合规/Agent → 评测对比导出）：[`docs/course_demo.md`](docs/course_demo.md)。
 
@@ -210,10 +210,11 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
       -f infra/docker-compose.llm.local.yml \
       --profile llm up -d
     ```
-  - Qwen3-8B 仅用于基础 RAG 验证；**未完成微调**
+  - Qwen3-8B 用于 RAG；Course LoRA（course_pilot）可经 vLLM `--enable-lora` 在线挂载，见 [`docs/step14_lora.md`](docs/step14_lora.md)
 - API：
   - `POST /api/v1/projects/{pid}/ask`（`stream=false` JSON /
-    `stream=true` SSE：`retrieval` → `generation_started` → `final` / `error`）
+    `stream=true` SSE：`retrieval` → `generation_started` → `final` / `error`；可选 `model_id`）
+  - `GET /api/v1/models`、`GET /api/v1/models/active`（含 served 探测）
   - `GET /api/v1/health/llm`（真实连通性 + `load_target`）
 - 验收：
   - Mock（无 GPU）：`make rag-smoke`
@@ -221,14 +222,14 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
     ```bash
     make infra-up && make backend
     export LLM_MODEL_PATH=/absolute/path/to/Qwen3-8B   # 若用本地权重
-    ./scripts/serve_qwen3_vllm.sh                      # 另开终端
+    ./scripts/serve_qwen3_vllm.sh                      # 另开终端；可启用 LoRA
     # API .env: LLM_ENABLED=true
     RAG_SMOKE_LIVE=1 make rag-smoke-live
     ```
   - 脱敏摘要写入 `docs/acceptance/rag_smoke_*.json`（已 gitignore，不入库原文）
-- 前端：「检索证据」保留；「带来源问答」仅在 `final` 后展示确认答案
+- 前端：「检索证据」保留；「带来源问答」仅在 `final` 后展示确认答案，并可选 Base / Course LoRA
 - 真实联调记录：`docs/rag_e2e_acceptance.md`
-- 后续能力（匹配 / Agent / 评测）见下文各节；LoRA 见 [`docs/step13_lora.md`](docs/step13_lora.md)
+- 后续能力（匹配 / Agent / 评测）见下文各节；LoRA 训练见 [`docs/step13_lora.md`](docs/step13_lora.md)，在线服务见 [`docs/step14_lora.md`](docs/step14_lora.md)
 
 ## 招标要求结构化抽取（第 7 步）
 
@@ -280,7 +281,7 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
   产出含 `coverage_matrix`（含 `focus_sample_count`）；当前正式规则 **29 条已执行**，其中通常 **3 条**有直接 reference 可对照（如 A001 / C003 / E003）。**自动 reference 不是人工 Gold**；无 focus 样本的规则不得宣称 100% 一致率。
 - **Step 9 修复**：双边证据严格定义、C005/E003/E005 语义、失败 run 持久化、离线一致性评估
 - **限制**：非法律意见 / 非人工 gold；不足则 unknown，不编造
-- LoRA 审查 / 自动投标结论：未交付（见 [`docs/step13_lora.md`](docs/step13_lora.md)）
+- LoRA 审查 / 自动投标结论：审查类产品能力未交付；course_pilot LoRA 训练与在线服务见 [`docs/step13_lora.md`](docs/step13_lora.md)、[`docs/step14_lora.md`](docs/step14_lora.md)
 
 ## LangGraph Agent 业务闭环（第 10 步）
 
@@ -323,7 +324,7 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 - RAG scope=`EvaluationRun.project_id`；每 case 独立 Session；有界 cancel；幂等唯一约束兜底
 - `deterministic_fake` 不进生产；extraction / matching / drafting 评测 target **未 case 级接线**（前端显示「当前版本暂未开放」等友好文案，不暴露 reason_code）
 - Citation 深链由后端校验 `valid` / `invalid_reason` / `detail_url`
-- 领域微调（Step 13）见 [`docs/step13_lora.md`](docs/step13_lora.md)（占位；尚未接入业务路径）
+- RAG / Agent 评测可经 `target_config.model_id` 选择 Base 或 Course LoRA（须 served）；领域微调见 [`docs/step13_lora.md`](docs/step13_lora.md)、在线服务见 [`docs/step14_lora.md`](docs/step14_lora.md)
 
 ## 可追溯响应准备草稿
 
@@ -332,7 +333,7 @@ SSE 采用证据优先语义（Scheme A）：服务端可从 vLLM 流式读 toke
 
 - 正向正文仅用 `confirmed` + `active` + `supported|partially_supported`
 - 不可变版本 / 来源快照 / 人工修订与审核；Markdown·DOCX 仅 reviewed 可导出
-- 未交付：自动投标结论 / 价格与法律承诺生成 / 投标提交；LoRA 见 [`docs/step13_lora.md`](docs/step13_lora.md)
+- 未交付：自动投标结论 / 价格与法律承诺生成 / 投标提交；LoRA 训练与在线见 [`docs/step13_lora.md`](docs/step13_lora.md)、[`docs/step14_lora.md`](docs/step14_lora.md)
 
 ## 测试 / 静态检查
 
@@ -436,9 +437,15 @@ make validate-sft-sample       # sample_sharegpt.json only
 make dataset-validate
 ```
 
-3. 在外部 LLaMAFactory 中手动启动（本仓库不自动训练）：
+3. 课程演示 LoRA（Step 13，course_pilot；**非** human_gold）可用仓库脚本启动；通用 ShareGPT 导出仍可在外部 LLaMAFactory 手动训练：
 
 ```bash
+# Course pilot（推荐演示）
+python training/llamafactory/scripts/prepare_course_pilot.py
+CUDA_VISIBLE_DEVICES=0 bash training/llamafactory/scripts/run_course_train.sh smoke
+# 详见 docs/step13_lora.md
+
+# 或外部 LLaMAFactory + 通用配置模板
 export LLAMAFACTORY_HOME=/path/to/LLaMA-Factory
 cd "$LLAMAFACTORY_HOME"
 llamafactory-cli train /absolute/path/to/bidpilot/training/llamafactory/configs/qwen3_8b_qlora_sft.yaml
@@ -446,8 +453,9 @@ llamafactory-cli train /absolute/path/to/bidpilot/training/llamafactory/configs/
 
 在 YAML 中将 `dataset` 设为 `bidpilot_sft_train_qwen3`（或 `bidpilot_sft_train`），`dataset_dir` 指向 `training/llamafactory/data`。
 
-详细说明见 [training/llamafactory/README.md](training/llamafactory/README.md)。
+在线挂载 Course LoRA：[`docs/step14_lora.md`](docs/step14_lora.md)（`./scripts/serve_qwen3_vllm.sh` + `--enable-lora`）。
 
+详细说明见 [training/llamafactory/README.md](training/llamafactory/README.md)。
 ## 当前已完成功能
 
 1. 工程目录与模块隔离；Alembic 迁移；Docker Compose（Postgres / Redis / MinIO / Qdrant / OpenSearch）
@@ -457,23 +465,25 @@ llamafactory-cli train /absolute/path/to/bidpilot/training/llamafactory/configs/
 5. 确定性合规规则引擎；LangGraph Agent 闭环与实时时间线（Step / ToolCall）
 6. 评测中心（capability、小跑、case 结果、compare、导出）
 7. 演示数据导入（`make import-demo`）与课程走查 [`docs/course_demo.md`](docs/course_demo.md)
-8. data_pipeline + LLaMAFactory ShareGPT 导出 / 校验与 QLoRA **配置模板**（训练本身未作为产品能力交付）
+8. data_pipeline + course_pilot LoRA（Step 13）与在线服务（Step 14）；另保留通用 ShareGPT 导出 / QLoRA 配置模板
+9. Ask / 评测中心可选 Base vs Course LoRA（须 `served=true` 才显示在线）
 
 ## 已知限制
 
 - 评测 reference：**auto_reference**，**human Gold=0**；不得称为人工 Gold
+- course_pilot ≠ human_gold；正式量产 LoRA 仍依赖人工审核 Gold
+- LoRA「在线」仅当 vLLM 实际 served 该模块；注册或 Adapter 就绪 ≠ 在线
 - extraction / matching / drafting：**业务功能存在**，但评测中心 target **未 case 级接线**
 - Agent：无 WebSocket / 无 CoT 流式展示；非法律意见；证据不足则 warning / blocked
-- OCR、完整认证授权、大规模采集、**LoRA 领域微调**尚未交付（Step 13 占位见 [`docs/step13_lora.md`](docs/step13_lora.md)）
+- OCR、完整认证授权、大规模采集尚未交付；自动投标结论 / 投标提交未交付
 
 ## 后续开发顺序建议
 
 1. 人工审核沉淀 human gold（需求 / Match / RAG / SFT）
-2. Step 13：训练数据构建与 LoRA（见 [`docs/step13_lora.md`](docs/step13_lora.md)）
-3. 合规公开源采集规模化 + OCR
-4. 认证授权与组织权限
-5. 多 GPU QLoRA 正式训练；LoRA 审查 / 自动投标结论 / 投标提交（远期）
-
+2. 合规公开源采集规模化 + OCR
+3. 认证授权与组织权限
+4. 多 GPU / 更大 rank 正式训练；LoRA 审查 / 自动投标结论 / 投标提交（远期）
+5. 评测中心补齐 extraction / matching / drafting case 级接线
 ## Makefile 命令
 
 | Command | 说明 |

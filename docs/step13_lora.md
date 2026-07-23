@@ -53,14 +53,14 @@ curl -s http://localhost:8000/api/v1/models/active | jq .
 ## BidPilot 接入
 
 - 注册表：`training/llamafactory/model_registry.json`
-- API：`GET /api/v1/models/active`、`GET /api/v1/health/llm`（detail 含 finetune 版本）
-- 在线推理仍走 vLLM OpenAI 兼容口（基座 `bidpilot-qwen3-8b`）。Adapter 默认用于离线评测与注册展示；合并权重后可将 `LLM_MODEL_PATH` 指向合并目录以在线切换。
-
+- API：`GET /api/v1/models`、`GET /api/v1/models/active`、`GET /api/v1/health/llm`
+- **在线推理**：基座 + 可选 Course LoRA（vLLM `--enable-lora`）。须 `served=true` 才可在 Ask / 评测中选择；详见 [`step14_lora.md`](step14_lora.md)。
 ## 演示建议
 
 1. 展示 `course_pilot_sft_report.json` 与 `review_queue.csv`
 2. 展示 smoke / formal `train_results.json` 与 `adapter_model.safetensors`
 3. 展示 `eval` 报告中 base vs LoRA 的 `json_ok_rate`
-4. 前端工作台展示当前模型版本（`/api/v1/models/active`）
+4. 前端工作台展示 Base / LoRA 状态（`/api/v1/models`；仅 served 显示在线）
+5. 在线 Ask / 评测选择见 [`step14_lora.md`](step14_lora.md)
 
 课程演示总流程见 [`course_demo.md`](course_demo.md)。
