@@ -2,20 +2,25 @@
 # Not started by `make infra-up`. Requires NVIDIA GPU + nvidia-container-toolkit.
 #
 # IMPORTANT — run Compose from the **repository root** (not from infra/):
+#   bash scripts/check_lora_adapter.sh   # host-side check (uses LLM_LORA_ADAPTER_PATH or HOST)
 #   docker compose --env-file .env \
 #     -f infra/docker-compose.yml -f infra/docker-compose.llm.yml \
-#     --profile llm config
+#     --profile llm up -d
 #
-# Default LoRA bind uses a path **relative to this compose file** (`infra/`):
-#   ../training/llamafactory/outputs/qwen3_8b_lora_course
-# Override with LLM_LORA_HOST_PATH (absolute or repo-root-relative resolved by you).
-# Container mount is always: /models/bidpilot-course-lora
+# Path semantics:
+#   LLM_LORA_HOST_PATH     — Compose volume *source* on the host only
+#                            default ../training/llamafactory/outputs/qwen3_8b_lora_course
+#                            (relative to this file under infra/)
+#   LLM_LORA_ADAPTER_PATH  — runtime Adapter path used by preflight + vLLM
+#                            default in container: /models/bidpilot-course-lora
+#   Compose mounts HOST_PATH → ADAPTER_PATH. Preflight and --lora-modules both
+#   read LLM_LORA_ADAPTER_PATH so they cannot diverge.
 #
 # Local weights mode:
 #   -f infra/docker-compose.llm.local.yml  (requires LLM_MODEL_PATH)
 #
-# Preflight (host Adapter must exist before `up`):
-#   bash scripts/check_lora_adapter.sh
+# Entrypoint ALWAYS runs scripts/vllm_compose_entrypoint.sh before vLLM.
+# Set LLM_ENABLE_LORA=false for explicit base-only (skips adapter preflight).
 
 services:
   vllm-qwen3:
@@ -27,20 +32,37 @@ services:
     environment:
       HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}
       CUDA_VISIBLE_DEVICES: ${LLM_CUDA_VISIBLE_DEVICES:-0}
+      BIDPILOT_ROOT: /bidpilot
+      BIDPILOT_BACKEND: /bidpilot/backend
+      LLM_ENABLE_LORA: ${LLM_ENABLE_LORA:-true}
       LLM_MODEL: ${LLM_MODEL:-bidpilot-qwen3-8b}
       LLM_MODEL_SOURCE: ${LLM_MODEL_SOURCE:-Qwen/Qwen3-8B}
       LLM_BASE_SERVED_NAME: ${LLM_BASE_SERVED_NAME:-${LLM_MODEL:-bidpilot-qwen3-8b}}
       LLM_LORA_SERVED_NAME: ${LLM_LORA_SERVED_NAME:-${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}}
+      # Always the in-container runtime path (do NOT inherit host LLM_LORA_ADAPTER_PATH).
+      LLM_LORA_ADAPTER_PATH: /models/bidpilot-course-lora
+      LLM_MAX_LORA_RANK: ${LLM_MAX_LORA_RANK:-16}
     ports:
       - "${LLM_PORT:-8001}:8000"
     volumes:
       - ${HF_HOME:-${HOME}/.cache/huggingface}:/root/.cache/huggingface
       - type: bind
-        # Relative default is vs THIS file's directory (infra/), hence ../training/...
         source: ${LLM_LORA_HOST_PATH:-../training/llamafactory/outputs/qwen3_8b_lora_course}
-        target: ${LLM_LORA_CONTAINER_PATH:-/models/bidpilot-course-lora}
+        target: /models/bidpilot-course-lora
         read_only: true
+      - type: bind
+        source: ../scripts
+        target: /bidpilot/scripts
+        read_only: true
+      - type: bind
+        source: ../backend
+        target: /bidpilot/backend
+        read_only: true
+    entrypoint:
+      - /bin/bash
+      - /bidpilot/scripts/vllm_compose_entrypoint.sh
     command:
+      - serve
       - ${LLM_MODEL_SOURCE:-Qwen/Qwen3-8B}
       - --served-model-name
       - ${LLM_BASE_SERVED_NAME:-${LLM_MODEL:-bidpilot-qwen3-8b}}
@@ -61,7 +83,7 @@ services:
       - --max-lora-rank
       - "${LLM_MAX_LORA_RANK:-16}"
       - --lora-modules
-      - "${LLM_LORA_SERVED_NAME:-${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}}=${LLM_LORA_CONTAINER_PATH:-/models/bidpilot-course-lora}"
+      - "${LLM_LORA_SERVED_NAME:-${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}}=/models/bidpilot-course-lora"
     deploy:
       resources:
         reservations:

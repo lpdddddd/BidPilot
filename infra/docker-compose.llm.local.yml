@@ -3,6 +3,7 @@
 #
 # From repository root:
 #   export LLM_MODEL_PATH=/absolute/path/to/Qwen3-8B
+#   bash scripts/check_lora_adapter.sh
 #   docker compose --env-file .env \
 #     -f infra/docker-compose.yml \
 #     -f infra/docker-compose.llm.yml \
@@ -10,9 +11,15 @@
 #     --profile llm up -d
 #
 # Do not use this file with an empty LLM_MODEL_PATH (Docker rejects empty binds).
+# Entrypoint preflight is inherited from docker-compose.llm.yml.
+# Container Adapter path is always /models/bidpilot-course-lora.
 
 services:
   vllm-qwen3:
+    environment:
+      LLM_MODEL_PATH: /models/llm
+      LLM_LORA_ADAPTER_PATH: /models/bidpilot-course-lora
+      LLM_ENABLE_LORA: ${LLM_ENABLE_LORA:-true}
     volumes:
       - type: bind
         source: ${LLM_MODEL_PATH:?LLM_MODEL_PATH must be set to a host weights directory}
@@ -20,9 +27,10 @@ services:
         read_only: true
       - type: bind
         source: ${LLM_LORA_HOST_PATH:-../training/llamafactory/outputs/qwen3_8b_lora_course}
-        target: ${LLM_LORA_CONTAINER_PATH:-/models/bidpilot-course-lora}
+        target: /models/bidpilot-course-lora
         read_only: true
     command:
+      - serve
       - /models/llm
       - --served-model-name
       - ${LLM_BASE_SERVED_NAME:-${LLM_MODEL:-bidpilot-qwen3-8b}}
@@ -43,4 +51,4 @@ services:
       - --max-lora-rank
       - "${LLM_MAX_LORA_RANK:-16}"
       - --lora-modules
-      - "${LLM_LORA_SERVED_NAME:-${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}}=${LLM_LORA_CONTAINER_PATH:-/models/bidpilot-course-lora}"
+      - "${LLM_LORA_SERVED_NAME:-${LLM_LORA_MODULE_NAME:-bidpilot-qwen3-8b-course-lora}}=/models/bidpilot-course-lora"

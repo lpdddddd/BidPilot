@@ -2,7 +2,14 @@
 # Host-side LoRA Adapter preflight (Compose / serve). Exit non-zero on failure.
 # Usage (from repo root):
 #   bash scripts/check_lora_adapter.sh
-#   LLM_LORA_HOST_PATH=... bash scripts/check_lora_adapter.sh
+#
+# Path rules:
+#   LLM_LORA_ADAPTER_PATH — runtime path checked here and by vLLM / compose entrypoint.
+#                           Host default: training/llamafactory/outputs/qwen3_8b_lora_course
+#                           Container default: /models/bidpilot-course-lora
+#   LLM_LORA_HOST_PATH    — Compose volume source only. When set AND ADAPTER_PATH is the
+#                           container mount default, host preflight checks HOST_PATH instead
+#                           so `compose up` can validate files before the container starts.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -15,19 +22,25 @@ if [[ -f "${ROOT_DIR}/.env" ]]; then
   set +a
 fi
 
-# Prefer explicit host path; else repo-relative adapter path; else compose-default relative to infra/.
-if [[ -n "${LLM_LORA_HOST_PATH:-}" ]]; then
+CONTAINER_DEFAULT="/models/bidpilot-course-lora"
+ADAPTER="${LLM_LORA_ADAPTER_PATH:-}"
+if [[ -z "${ADAPTER}" ]]; then
+  ADAPTER="${ROOT_DIR}/training/llamafactory/outputs/qwen3_8b_lora_course"
+elif [[ "${ADAPTER}" != /* ]]; then
+  ADAPTER="${ROOT_DIR}/${ADAPTER}"
+fi
+
+# Host compose preflight: if ADAPTER points at the in-container mount, check HOST_PATH.
+if [[ "${ADAPTER}" == "${CONTAINER_DEFAULT}" && -n "${LLM_LORA_HOST_PATH:-}" ]]; then
   ADAPTER="${LLM_LORA_HOST_PATH}"
   if [[ "${ADAPTER}" != /* ]]; then
-    ADAPTER="${ROOT_DIR}/${ADAPTER}"
+    # Relative host paths in compose are vs infra/; resolve from repo root equivalent.
+    if [[ "${ADAPTER}" == ../* ]]; then
+      ADAPTER="${ROOT_DIR}/${ADAPTER#../}"
+    else
+      ADAPTER="${ROOT_DIR}/${ADAPTER}"
+    fi
   fi
-elif [[ -n "${LLM_LORA_ADAPTER_PATH:-}" ]]; then
-  ADAPTER="${LLM_LORA_ADAPTER_PATH}"
-  if [[ "${ADAPTER}" != /* ]]; then
-    ADAPTER="${ROOT_DIR}/${ADAPTER}"
-  fi
-else
-  ADAPTER="${ROOT_DIR}/training/llamafactory/outputs/qwen3_8b_lora_course"
 fi
 
 CONFIGURED_BASE="${LLM_MODEL_PATH:-${LLM_MODEL_SOURCE:-Qwen/Qwen3-8B}}"
@@ -38,7 +51,6 @@ import json
 import sys
 from pathlib import Path
 
-# Import without requiring backend install path tricks
 sys.path.insert(0, str(Path("${ROOT_DIR}") / "backend"))
 from app.services.model_serving import validate_adapter_for_serving
 
@@ -49,7 +61,7 @@ result = validate_adapter_for_serving(
     max_lora_rank=int("${MAX_RANK}"),
 )
 print(json.dumps({
-    "adapter_rel_hint": "training/llamafactory/outputs/qwen3_8b_lora_course",
+    "checked_path_basename": adapter.name,
     "files_ok": result["files_ok"],
     "adapter_exists": result["adapter_exists"],
     "base_model_match": result["base_model_match"],
