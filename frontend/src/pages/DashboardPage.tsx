@@ -46,16 +46,16 @@ function riskLevel(p: Project, now: number): "high" | "medium" | "low" {
   return "low";
 }
 
-function stageOf(p: Project): { label: string; weight: number } {
-  const map: Record<string, { label: string; weight: number }> = {
-    draft: { label: "起草", weight: 1 },
-    parsing: { label: "解析", weight: 2 },
-    analyzing: { label: "分析", weight: 3 },
-    reviewing: { label: "审查", weight: 4 },
-    completed: { label: "完成", weight: 5 },
-    archived: { label: "归档", weight: 5 },
+function progressOf(p: Project): number {
+  const map: Record<string, number> = {
+    draft: 18,
+    parsing: 32,
+    analyzing: 48,
+    reviewing: 72,
+    completed: 100,
+    archived: 100,
   };
-  return map[p.status] ?? { label: STATUS_LABELS[p.status] ?? p.status, weight: 1 };
+  return map[p.status] ?? 20;
 }
 
 function formatDeadline(p: Project): string {
@@ -165,10 +165,6 @@ export default function DashboardPage() {
       }));
   }, [items]);
 
-  const uploadHref = items[0]
-    ? `/projects/${items[0].id}?tab=documents`
-    : "/projects?create=1";
-
   return (
     <div className="bp-space-home">
       <header className="bp-space-hero">
@@ -178,21 +174,23 @@ export default function DashboardPage() {
             {greeting()}
             {projects.isSuccess
               ? attentionCount > 0
-                ? `，今天有 ${attentionCount} 项值得关注`
-                : "，一切就绪"
+                ? `，今天有 ${attentionCount} 项内容值得关注`
+                : "，项目空间运行平稳"
               : ""}
           </h1>
-          <p className="bp-space-summary">从当前焦点开始，再进入项目继续文件、要求与审查。</p>
+          <p className="bp-space-summary">
+            先处理当前焦点，再进入项目空间继续文档、条款、证据与审查。
+          </p>
         </div>
         <div className="bp-space-hero-actions">
           <Link to="/projects?create=1">
             <Button type="primary" size="large" icon={<PlusOutlined />}>
-              新建项目
+              新建投标项目
             </Button>
           </Link>
-          <Link to={uploadHref}>
+          <Link to="/projects">
             <Button size="large" icon={<UploadOutlined />}>
-              {items.length ? "上传招标文件" : "先创建项目再上传"}
+              导入招标文件
             </Button>
           </Link>
         </div>
@@ -245,6 +243,9 @@ export default function DashboardPage() {
                 </Button>
               </Link>
             </div>
+            <div className="bp-focus-visual" aria-hidden="true">
+              <div className="bp-focus-orb" />
+            </div>
           </div>
         ) : (
           <div className="bp-focus-empty">
@@ -274,7 +275,7 @@ export default function DashboardPage() {
           <div className="bp-project-rail">
             {items.slice(0, 8).map((p, idx) => {
               const risk = riskLevel(p, now);
-              const stage = stageOf(p);
+              const prog = progressOf(p);
               return (
                 <Link
                   key={p.id}
@@ -287,11 +288,11 @@ export default function DashboardPage() {
                   </div>
                   <h3>{p.project_name}</h3>
                   <p className="bp-project-buyer">{p.purchaser || "招标单位未填写"}</p>
-                  <div className="bp-project-stage" title="按项目状态估算的阶段，非真实完成度统计">
-                    <span className="bp-project-stage-label">阶段 · {stage.label}</span>
-                    <div className="bp-project-progress-track" aria-hidden="true">
-                      <span style={{ width: `${(stage.weight / 5) * 100}%` }} />
+                  <div className="bp-project-progress">
+                    <div className="bp-project-progress-track">
+                      <span style={{ width: `${prog}%` }} />
                     </div>
+                    <span>{prog}%</span>
                   </div>
                   <div className="bp-project-card-foot">
                     <span>{formatDeadline(p)}</span>
