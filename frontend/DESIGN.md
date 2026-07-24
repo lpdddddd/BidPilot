@@ -1,50 +1,36 @@
 # BidPilot DESIGN.md
 
-> BidPilot AI Project Space — Open Design `frontend-design` brand contract (v2).
+> BidPilot Liquid Intelligence — Open Design brand contract (v2.1 glass polish).
+> Layout frozen from AI Project Space (`f9b6e3f` / `2f0a533` revert base).
 
 ## Direction
 
-现代、轻盈、安静的 AI 投标协作空间。取消常驻侧栏；悬浮顶栏 + 内容空间 + 命令面板。
+在既有顶部导航 + 项目空间信息架构上，仅升级材质为液态玻璃：通透、精密、环境光响应。
 
 | Dial | Value |
 | --- | --- |
-| VARIANCE | 4 |
-| MOTION | 5 |
+| VARIANCE | 3 |
+| MOTION | 4 |
 | DENSITY | 5 |
 
-**Memorable quality：** 打开后像进入项目空间，而不是后台管理系统。
+**Memorable quality：** 玻璃边沿折射与指针高光，而不是霓虹或卡片堆砌。
 
-## Color
+## Color / Glass
 
 | Role | Token | Value |
 | --- | --- | --- |
-| Canvas | `--bp-bg` | `#F7F8FA` |
-| Surface glass | `--bp-surface` | `rgba(255,255,255,0.84)` |
-| Surface solid | `--bp-surface-1` | `#FFFFFF` |
-| Text | `--bp-text` | `#15171A` |
-| Secondary | `--bp-text-muted` | `#626871` |
-| Tertiary | `--bp-text-faint` | `#9298A1` |
-| Border | `--bp-border` | `rgba(20,24,31,0.09)` |
-| Border strong | `--bp-border-strong` | `rgba(20,24,31,0.16)` |
-| Accent | `--bp-primary` | `#4F64E8` |
-| Accent hover | `--bp-primary-hover` | `#4054D3` |
-| Soft | `--bp-primary-soft` | `#EEF0FF` |
-| Success / warn / danger | | `#258765` / `#C47A20` / `#C94B53` |
-| Focus | `--bp-focus` | `rgba(79,100,232,0.28)` |
+| Canvas | `--bp-canvas` | `#EEF2F7` |
+| Nav glass | `--bp-glass-nav` | `rgba(248,251,255,0.68)` |
+| Primary glass | `--bp-glass-primary` | `rgba(255,255,255,0.62)` |
+| Text | `--bp-text` | `#172033` |
+| Accent | `--bp-primary` | `#3977F6` |
+| Cyan soft | `--bp-cyan-soft` | `rgba(73,204,232,0.12)` |
+| Blur | `--bp-glass-blur` | `24px` |
 
-## Typography
+## Frozen layout
 
-- UI: `"Manrope", "Noto Sans SC", system-ui, sans-serif`
-- Brand mark: Manrope 600
-- Mono (rare): IBM Plex Mono
-
-## Layout
-
-- No persistent sidebar
-- Floating top nav 64–72px, inset 16–24px, blur glass
-- Content max-width ~1180px centered on home; project workspace can go full-bleed
-- Command palette ⌘K; AI float entry bottom-right
+不得改动 DOM 层级、栅格、max-width、卡片轨道宽度、模块顺序与业务逻辑。材质改动仅限颜色、透明、阴影、blur、伪元素与 transition。
 
 ## Anti-slop
 
-No cyber neon, no dark mesh, no permanent dark rail, no card-in-card walls, no step/dev copy on product surfaces.
+无赛博霓虹、无大面积紫蓝发光、无点阵网格、无呼吸灯循环、无影响可读性的过低透明度。

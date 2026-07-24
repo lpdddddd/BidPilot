@@ -136,6 +136,16 @@ export default function WorkbenchLayout({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const root = document.documentElement;
+      root.style.setProperty("--bp-pointer-x", `${e.clientX}px`);
+      root.style.setProperty("--bp-pointer-y", `${e.clientY}px`);
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onMove);
+  }, []);
+
+  useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
 
