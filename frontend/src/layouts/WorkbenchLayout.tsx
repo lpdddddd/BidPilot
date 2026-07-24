@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button, Dropdown, Drawer, Input, Modal } from "antd";
 import {
-  BellOutlined,
   MenuOutlined,
   PlusOutlined,
   SearchOutlined,
+  ThunderboltOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -65,7 +65,7 @@ function CommandPalette({
       onCancel={onClose}
       footer={null}
       closable={false}
-      width={520}
+      width={480}
       className="bp-cmdk-modal"
       styles={{ body: { padding: 0 } }}
       destroyOnHidden
@@ -141,24 +141,27 @@ export default function WorkbenchLayout({ children }: { children: ReactNode }) {
 
   const moreMenu = {
     items: [
-      {
-        key: "eval",
-        label: <Link to="/evaluation">评估中心</Link>,
-      },
-      {
-        key: "sys",
-        label: "系统验证",
-        onClick: () => setSysOpen(true),
-      },
+      { key: "eval", label: <Link to="/evaluation">评估中心</Link> },
+      { key: "sys", label: "系统验证", onClick: () => setSysOpen(true) },
+    ],
+  };
+
+  const quickMenu = {
+    items: [
+      { key: "cmd", label: "命令面板", onClick: () => setCmdOpen(true) },
+      { key: "review", label: <Link to="/review">智能审查</Link> },
+      { key: "knowledge", label: <Link to="/knowledge">知识与文件</Link> },
+      { key: "eval", label: <Link to="/evaluation">评估中心</Link> },
     ],
   };
 
   return (
     <div className={`bp-app${scrolled ? " is-scrolled" : ""}`}>
-      <div className="bp-canvas-glow" aria-hidden="true" />
       <header className="bp-float-nav">
         <Link to="/" className="bp-brand">
-          <span className="bp-brand-mark">B</span>
+          <span className="bp-brand-mark" aria-hidden="true">
+            B
+          </span>
           <span className="bp-brand-text">BidPilot</span>
         </Link>
 
@@ -175,16 +178,11 @@ export default function WorkbenchLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="bp-float-actions">
-          <Button
-            type="text"
-            className="bp-nav-icon-btn bp-nav-search"
-            icon={<SearchOutlined />}
-            onClick={() => setCmdOpen(true)}
-            aria-label="全局搜索"
-          >
+          <button type="button" className="bp-nav-search" onClick={() => setCmdOpen(true)}>
+            <SearchOutlined />
             <span className="bp-nav-search-label">搜索</span>
             <kbd>⌘K</kbd>
-          </Button>
+          </button>
           <Button
             type="primary"
             className="bp-nav-create"
@@ -193,7 +191,6 @@ export default function WorkbenchLayout({ children }: { children: ReactNode }) {
           >
             新建项目
           </Button>
-          <Button type="text" className="bp-nav-icon-btn" icon={<BellOutlined />} aria-label="通知" />
           <Dropdown menu={moreMenu} placement="bottomRight" trigger={["click"]}>
             <Button type="text" className="bp-nav-icon-btn" icon={<UserOutlined />} aria-label="更多" />
           </Dropdown>
@@ -211,15 +208,12 @@ export default function WorkbenchLayout({ children }: { children: ReactNode }) {
         <div className="bp-main-inner">{children}</div>
       </main>
 
-      <button
-        type="button"
-        className="bp-ai-float"
-        onClick={() => navigate("/review")}
-        aria-label="AI 助手入口"
-      >
-        <span className="bp-ai-float-dot" />
-        AI
-      </button>
+      <Dropdown menu={quickMenu} placement="topRight" trigger={["click"]}>
+        <button type="button" className="bp-ai-float" aria-label="快捷能力">
+          <ThunderboltOutlined />
+          <span>快捷</span>
+        </button>
+      </Dropdown>
 
       <nav className="bp-mobile-tabbar" aria-label="移动导航">
         {PRIMARY_NAV.map((item) => (
@@ -233,13 +227,7 @@ export default function WorkbenchLayout({ children }: { children: ReactNode }) {
         ))}
       </nav>
 
-      <Drawer
-        title="菜单"
-        placement="right"
-        open={mobileOpen}
-        onClose={() => setMobileOpen(false)}
-        width={300}
-      >
+      <Drawer title="菜单" placement="right" open={mobileOpen} onClose={() => setMobileOpen(false)} width={300}>
         <div className="bp-mobile-menu">
           {PRIMARY_NAV.map((item) => (
             <Link key={item.key} to={item.to} onClick={() => setMobileOpen(false)}>
@@ -249,7 +237,13 @@ export default function WorkbenchLayout({ children }: { children: ReactNode }) {
           <Link to="/evaluation" onClick={() => setMobileOpen(false)}>
             评估中心
           </Link>
-          <button type="button" onClick={() => { setMobileOpen(false); setSysOpen(true); }}>
+          <button
+            type="button"
+            onClick={() => {
+              setMobileOpen(false);
+              setSysOpen(true);
+            }}
+          >
             系统验证
           </button>
         </div>
@@ -257,7 +251,6 @@ export default function WorkbenchLayout({ children }: { children: ReactNode }) {
 
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
 
-      {/* Hidden mount keeps BackendStatus hooks; drawer opened via 系统验证 */}
       <div className={sysOpen ? undefined : "bp-sys-host"} aria-hidden={!sysOpen}>
         <BackendStatus forceOpen={sysOpen} onOpenChange={setSysOpen} hideTrigger />
       </div>

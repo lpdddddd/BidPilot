@@ -28,16 +28,16 @@ const PROJECT_STATUS_LABELS: Record<string, string> = {
   archived: "已归档",
 };
 
-function progressOf(status: string): number {
-  const map: Record<string, number> = {
-    draft: 18,
-    parsing: 32,
-    analyzing: 48,
-    reviewing: 72,
-    completed: 100,
-    archived: 100,
+function stageOf(status: string): { label: string; weight: number } {
+  const map: Record<string, { label: string; weight: number }> = {
+    draft: { label: "起草", weight: 1 },
+    parsing: { label: "解析", weight: 2 },
+    analyzing: { label: "分析", weight: 3 },
+    reviewing: { label: "审查", weight: 4 },
+    completed: { label: "完成", weight: 5 },
+    archived: { label: "归档", weight: 5 },
   };
-  return map[status] ?? 20;
+  return map[status] ?? { label: PROJECT_STATUS_LABELS[status] ?? status, weight: 1 };
 }
 
 function formatDeadline(value: string | null | undefined): string {
@@ -245,11 +245,11 @@ export default function ProjectListPage() {
               </div>
               <h2>{p.project_name}</h2>
               <p>{p.purchaser || "招标单位未填写"}</p>
-              <div className="bp-project-progress">
-                <div className="bp-project-progress-track">
-                  <span style={{ width: `${progressOf(p.status)}%` }} />
+              <div className="bp-project-stage" title="按项目状态估算的阶段，非真实完成度统计">
+                <span className="bp-project-stage-label">阶段 · {stageOf(p.status).label}</span>
+                <div className="bp-project-progress-track" aria-hidden="true">
+                  <span style={{ width: `${(stageOf(p.status).weight / 5) * 100}%` }} />
                 </div>
-                <span>{progressOf(p.status)}%</span>
               </div>
               <div className="bp-gallery-card-foot">
                 <span>{formatDeadline(p.bid_deadline)}</span>

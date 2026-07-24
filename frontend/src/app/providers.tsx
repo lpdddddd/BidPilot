@@ -14,8 +14,9 @@ const queryClient = new QueryClient({
   },
 });
 
+/** System / Chinese UI stack — see frontend/DESIGN.md (no webfont dependency). */
 const FONT_STACK =
-  "'Manrope', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif";
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
@@ -25,35 +26,35 @@ export function AppProviders({ children }: { children: ReactNode }) {
         theme={{
           algorithm: theme.defaultAlgorithm,
           token: {
-            colorPrimary: "#4F64E8",
-            colorInfo: "#4F64E8",
-            colorLink: "#4054D3",
-            colorSuccess: "#258765",
-            colorWarning: "#C47A20",
-            colorError: "#C94B53",
+            colorPrimary: "#0071E3",
+            colorInfo: "#0071E3",
+            colorLink: "#0077ED",
+            colorSuccess: "#248A3D",
+            colorWarning: "#B86600",
+            colorError: "#D70015",
             fontFamily: FONT_STACK,
-            borderRadius: 12,
-            colorBgBase: "#F7F8FA",
-            colorBgLayout: "#F7F8FA",
+            borderRadius: 10,
+            colorBgBase: "#F5F5F7",
+            colorBgLayout: "#F5F5F7",
             colorBgContainer: "#FFFFFF",
             colorBgElevated: "#FFFFFF",
-            colorBorder: "rgba(20, 24, 31, 0.09)",
-            colorBorderSecondary: "rgba(20, 24, 31, 0.06)",
-            colorText: "#15171A",
-            colorTextSecondary: "#626871",
-            colorTextTertiary: "#9298A1",
-            colorTextQuaternary: "#B0B5BD",
-            colorFillSecondary: "rgba(20, 24, 31, 0.04)",
-            colorFillTertiary: "rgba(20, 24, 31, 0.03)",
-            colorInfoBg: "#EEF0FF",
-            colorInfoBorder: "rgba(79, 100, 232, 0.28)",
+            colorBorder: "rgba(0, 0, 0, 0.08)",
+            colorBorderSecondary: "rgba(0, 0, 0, 0.06)",
+            colorText: "#1D1D1F",
+            colorTextSecondary: "#6E6E73",
+            colorTextTertiary: "#86868B",
+            colorTextQuaternary: "#AEAEB2",
+            colorFillSecondary: "rgba(0, 0, 0, 0.04)",
+            colorFillTertiary: "rgba(0, 0, 0, 0.03)",
+            colorInfoBg: "rgba(0, 113, 227, 0.09)",
+            colorInfoBorder: "rgba(0, 113, 227, 0.22)",
             controlHeight: 36,
-            controlOutline: "rgba(79, 100, 232, 0.28)",
+            controlOutline: "rgba(0, 113, 227, 0.28)",
           },
           components: {
             Layout: {
               headerBg: "transparent",
-              bodyBg: "#F7F8FA",
+              bodyBg: "#F5F5F7",
             },
             Menu: {
               itemBorderRadius: 8,
@@ -61,19 +62,19 @@ export function AppProviders({ children }: { children: ReactNode }) {
             },
             Table: {
               headerBg: "transparent",
-              headerColor: "#626871",
+              headerColor: "#6E6E73",
               headerSplitColor: "transparent",
-              rowHoverBg: "rgba(79, 100, 232, 0.04)",
-              borderColor: "rgba(20, 24, 31, 0.06)",
+              rowHoverBg: "rgba(0, 0, 0, 0.03)",
+              borderColor: "rgba(0, 0, 0, 0.06)",
               colorBgContainer: "transparent",
             },
             Tabs: {
               titleFontSize: 14,
-              horizontalItemGutter: 24,
-              inkBarColor: "#4F64E8",
-              itemSelectedColor: "#15171A",
-              itemHoverColor: "#4F64E8",
-              itemColor: "#626871",
+              horizontalItemGutter: 28,
+              inkBarColor: "#0071E3",
+              itemSelectedColor: "#1D1D1F",
+              itemHoverColor: "#0071E3",
+              itemColor: "#6E6E73",
             },
             Button: {
               primaryShadow: "none",
@@ -82,26 +83,26 @@ export function AppProviders({ children }: { children: ReactNode }) {
               controlHeightLG: 40,
               borderRadius: 10,
               defaultBg: "#FFFFFF",
-              defaultBorderColor: "rgba(20, 24, 31, 0.12)",
-              defaultColor: "#15171A",
+              defaultBorderColor: "rgba(0, 0, 0, 0.12)",
+              defaultColor: "#1D1D1F",
             },
             Input: {
-              controlHeightLG: 42,
-              borderRadiusLG: 12,
-              activeBorderColor: "#4F64E8",
-              hoverBorderColor: "#4F64E8",
+              controlHeightLG: 40,
+              borderRadiusLG: 10,
+              activeBorderColor: "#0071E3",
+              hoverBorderColor: "#0071E3",
               colorBgContainer: "#FFFFFF",
             },
             Select: {
               controlHeight: 36,
               colorBgContainer: "#FFFFFF",
-              optionSelectedBg: "#EEF0FF",
+              optionSelectedBg: "rgba(0, 113, 227, 0.09)",
               borderRadius: 10,
             },
             Tag: {
               borderRadiusSM: 6,
-              defaultBg: "rgba(20, 24, 31, 0.04)",
-              defaultColor: "#626871",
+              defaultBg: "rgba(0, 0, 0, 0.04)",
+              defaultColor: "#6E6E73",
             },
             Drawer: {
               colorBgElevated: "#FFFFFF",
@@ -109,22 +110,28 @@ export function AppProviders({ children }: { children: ReactNode }) {
             Modal: {
               contentBg: "#FFFFFF",
               headerBg: "#FFFFFF",
-              borderRadiusLG: 16,
+              borderRadiusLG: 18,
             },
             Alert: {
               borderRadiusLG: 12,
             },
             Card: {
               colorBgContainer: "#FFFFFF",
-              borderRadiusLG: 16,
+              borderRadiusLG: 18,
             },
             Skeleton: {
-              gradientFromColor: "rgba(20,24,31,0.04)",
-              gradientToColor: "rgba(20,24,31,0.09)",
+              gradientFromColor: "rgba(0,0,0,0.04)",
+              gradientToColor: "rgba(0,0,0,0.08)",
             },
             Dropdown: {
               borderRadiusLG: 12,
               paddingBlock: 6,
+            },
+            Segmented: {
+              trackBg: "rgba(0, 0, 0, 0.04)",
+              itemSelectedBg: "#FFFFFF",
+              borderRadius: 10,
+              borderRadiusSM: 8,
             },
           },
         }}
