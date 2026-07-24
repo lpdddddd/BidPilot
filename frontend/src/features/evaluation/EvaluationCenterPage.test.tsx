@@ -299,10 +299,12 @@ describe("EvaluationCenterPage", () => {
   });
 
   it("1. shows route and nav label 评估中心", async () => {
+    const user = userEvent.setup();
     renderAt("/evaluation", true);
     expect(await screen.findByTestId("evaluation-center")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "评估中心" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "评测中心" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "更多" }));
+    expect(await screen.findByRole("link", { name: "评估中心" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "评估中心" })).toBeTruthy();
   });
 
   it("2. overview empty state", async () => {

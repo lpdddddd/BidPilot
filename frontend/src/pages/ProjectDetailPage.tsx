@@ -44,25 +44,33 @@ function MetaItem({ label, children }: { label: string; children: React.ReactNod
 }
 
 function ProjectOverview({ project }: { project: Project }) {
+  const statusLabel = PROJECT_STATUS_LABELS[project.status] ?? project.status;
   return (
-    <div>
-      <h2 className="bp-section-title">项目信息</h2>
-      <div className="bp-meta-grid">
-        <MetaItem label="状态">
-          <Tag bordered={false} color="processing">
-            {PROJECT_STATUS_LABELS[project.status] ?? project.status}
-          </Tag>
-        </MetaItem>
-        <MetaItem label="采购人">{project.purchaser || "-"}</MetaItem>
-        <MetaItem label="代理机构">{project.procurement_agency || "-"}</MetaItem>
-        <MetaItem label="采购方式">{project.procurement_method || "-"}</MetaItem>
-        <MetaItem label="行业">{project.industry || "-"}</MetaItem>
-        <MetaItem label="地区">{project.region || "-"}</MetaItem>
-        <MetaItem label="预算 (CNY)">{project.budget_cny || "-"}</MetaItem>
-        <MetaItem label="最高限价 (CNY)">{project.price_ceiling_cny || "-"}</MetaItem>
-        <MetaItem label="投标截止">{formatDateTime(project.bid_deadline)}</MetaItem>
-        <MetaItem label="创建时间">{formatDateTime(project.created_at)}</MetaItem>
+    <div className="bp-overview-asymmetric">
+      <div className="bp-overview-main">
+        <h2 className="bp-section-title">当前工作焦点</h2>
+        <p style={{ marginTop: 0, color: "var(--bp-text-muted)", lineHeight: 1.55 }}>
+          状态为「{statusLabel}」。优先完善文件与要求，再推进证据核对与审查。
+        </p>
+        <div className="bp-meta-grid" style={{ marginTop: 16 }}>
+          <MetaItem label="采购人">{project.purchaser || "-"}</MetaItem>
+          <MetaItem label="投标截止">{formatDateTime(project.bid_deadline)}</MetaItem>
+          <MetaItem label="行业">{project.industry || "-"}</MetaItem>
+          <MetaItem label="地区">{project.region || "-"}</MetaItem>
+          <MetaItem label="预算 (CNY)">{project.budget_cny || "-"}</MetaItem>
+          <MetaItem label="创建时间">{formatDateTime(project.created_at)}</MetaItem>
+        </div>
       </div>
+      <aside className="bp-overview-ai">
+        <h3>AI 建议</h3>
+        <p>
+          {project.status === "draft"
+            ? "建议先上传招标文件，再进入「要求」生成条款清单。"
+            : project.bid_deadline
+              ? "关注截止时间，优先处理高风险条款与证据缺口。"
+              : "补充投标截止时间，便于工作台排序与提醒。"}
+        </p>
+      </aside>
     </div>
   );
 }
@@ -166,32 +174,27 @@ export default function ProjectDetailPage() {
   const project = query.data;
 
   return (
-    <div data-testid="project-detail-page">
+    <div data-testid="project-detail-page" className="bp-project-immersive">
       <header className="bp-workspace-banner">
         <div className="bp-workspace-title-row">
           <div>
-            <p className="bp-eyebrow" style={{ marginBottom: 8 }}>
-              Project Workspace
-            </p>
             <h1 className="bp-page-title" style={{ marginBottom: 0 }}>
               {project.project_name}
             </h1>
             <div className="bp-workspace-meta">
               <span className="bp-workspace-code">{project.project_code}</span>
-              <Tag bordered={false} color="processing">
+              <Tag bordered={false}>
                 {PROJECT_STATUS_LABELS[project.status] ?? project.status}
               </Tag>
               {project.purchaser && <span>{project.purchaser}</span>}
-              {(project.industry || project.region) && (
-                <span>
-                  {[project.industry, project.region].filter(Boolean).join(" / ")}
-                </span>
+              {project.bid_deadline && (
+                <span>截止 {formatDateTime(project.bid_deadline)}</span>
               )}
             </div>
           </div>
           <Link to="/projects">
             <Button type="text" icon={<ArrowLeftOutlined />}>
-              返回项目列表
+              返回
             </Button>
           </Link>
         </div>

@@ -391,7 +391,7 @@ export default function GroundedAsk({
           }
           description={
             llmHealth.data.enabled
-              ? `无法连接 ${llmHealth.data.base_url}。请启动 vLLM：./scripts/serve_qwen3_vllm.sh`
+              ? `无法连接推理服务（${llmHealth.data.base_url}）。请在「系统状态」确认服务后重试。`
               : "在 .env 中设置 LLM_ENABLED=true，并启动 Qwen3-8B（见 scripts/serve_qwen3_vllm.sh）。"
           }
         />
@@ -471,16 +471,16 @@ export default function GroundedAsk({
           />
         </Space>
         <div className="bp-search-tags">
-          <span className="bp-pill">Evidence Bound</span>
-          <span className="bp-pill">Citations Required</span>
+          <span className="bp-pill">证据约束</span>
+          <span className="bp-pill">须带来源</span>
         </div>
       </div>
       <Typography.Text type="secondary" data-testid="ask-capability-hint" style={{ display: "block", marginBottom: 8 }}>
-        带来源问答仅支持具备 grounded_qa 能力的模型（当前为 Base）。Course LoRA 用于「要求」页的条款结构化分析，不在此可选。
+        带来源问答仅支持具备问答能力的基础模型。领域适配模型用于「要求」页的条款结构化分析，不在此可选。
       </Typography.Text>
       {selectedModel && !selectedModel.served && selectedModel.model_type === "base" && (
         <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
-          基座模型当前未在线；请先启动 ./scripts/serve_qwen3_vllm.sh。
+          基础模型当前不可用，请在「系统状态」确认推理服务后再提问。
         </Typography.Text>
       )}
 

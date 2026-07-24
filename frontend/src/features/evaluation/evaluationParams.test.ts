@@ -30,7 +30,7 @@ describe("evaluationParams", () => {
         reason_code: "model_not_served",
         reason: "LoRA module not in /v1/models",
       }),
-    ).toBe("模型尚未启动在线服务");
+    ).toBe("模型推理服务未启动");
     expect(
       friendlyCapabilityReason({
         available: false,
@@ -58,7 +58,7 @@ describe("evaluationParams", () => {
         reason_code: "model_not_served",
         reason: "model_not_served",
       }),
-    ).toBe("模型尚未启动在线服务");
+    ).toBe("模型推理服务未启动");
     expect(
       capabilityOptionLabel({
         target_type: "rag",
@@ -67,7 +67,7 @@ describe("evaluationParams", () => {
         reason_code: "model_not_served",
         reason: "model_not_served",
       }),
-    ).toMatch(/不可用：模型尚未启动在线服务/);
+    ).toMatch(/不可用：模型推理服务未启动/);
     expect(
       capabilityOptionLabel({
         target_type: "extraction",

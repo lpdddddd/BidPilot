@@ -14,8 +14,9 @@ export default function CapabilityPlaceholderPage({
   return (
     <div>
       <div className="bp-page-header">
+        <p className="bp-eyebrow">功能入口</p>
         <h1 className="bp-page-title">{title}</h1>
-        <p className="bp-page-subtitle">能力尚未开放</p>
+        <p className="bp-page-subtitle">此入口暂未开放</p>
       </div>
       <div className="bp-panel">
         <div className="bp-pending-capability">

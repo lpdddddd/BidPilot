@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   App as AntApp,
@@ -7,14 +7,14 @@ import {
   Form,
   Input,
   Modal,
+  Segmented,
+  Select,
   Skeleton,
   Space,
-  Table,
-  Tag,
 } from "antd";
-import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { AppstoreOutlined, PlusOutlined, ReloadOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { createProject, listProjects } from "../api/client";
 import type { Project, ProjectCreatePayload } from "../types/api";
 import { usePageTitle } from "../components/usePageTitle";
@@ -27,6 +27,32 @@ const PROJECT_STATUS_LABELS: Record<string, string> = {
   completed: "已完成",
   archived: "已归档",
 };
+
+function progressOf(status: string): number {
+  const map: Record<string, number> = {
+    draft: 18,
+    parsing: 32,
+    analyzing: 48,
+    reviewing: 72,
+    completed: 100,
+    archived: 100,
+  };
+  return map[status] ?? 20;
+}
+
+function formatDeadline(value: string | null | undefined): string {
+  if (!value) return "未设定截止";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
 
 function CreateProjectModal({
   open,
@@ -104,19 +130,44 @@ function CreateProjectModal({
 
 export default function ProjectListPage() {
   usePageTitle("项目");
+  const [searchParams, setSearchParams] = useSearchParams();
   const [createOpen, setCreateOpen] = useState(false);
+  const [view, setView] = useState<"space" | "list">("space");
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState<string | undefined>();
   const query = useQuery({ queryKey: ["projects"], queryFn: listProjects });
 
+  useEffect(() => {
+    if (searchParams.get("create") === "1") {
+      setCreateOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("create");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const filtered = useMemo(() => {
+    const items = query.data?.items ?? [];
+    return items.filter((p) => {
+      if (status && p.status !== status) return false;
+      if (!q.trim()) return true;
+      const needle = q.trim().toLowerCase();
+      return (
+        p.project_name.toLowerCase().includes(needle) ||
+        p.project_code.toLowerCase().includes(needle) ||
+        (p.purchaser || "").toLowerCase().includes(needle)
+      );
+    });
+  }, [query.data, q, status]);
+
   return (
-    <div>
-      <div className="bp-page-header bp-page-header-row">
+    <div className="bp-gallery-page">
+      <header className="bp-gallery-head">
         <div>
           <h1 className="bp-page-title">项目</h1>
-          <p className="bp-page-subtitle">
-            管理招投标分析项目。在项目工作区内上传文档、检索证据并准备审查。
-          </p>
+          <p className="bp-page-subtitle">以项目空间组织投标协作，快速筛选并继续处理。</p>
         </div>
-        <Space>
+        <Space wrap>
           <Button
             icon={<ReloadOutlined />}
             onClick={() => query.refetch()}
@@ -128,73 +179,102 @@ export default function ProjectListPage() {
             新建项目
           </Button>
         </Space>
+      </header>
+
+      <div className="bp-gallery-toolbar">
+        <Input
+          allowClear
+          placeholder="搜索项目名称、编号或采购人"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          style={{ maxWidth: 320 }}
+        />
+        <Select
+          allowClear
+          placeholder="状态"
+          style={{ width: 140 }}
+          value={status}
+          onChange={setStatus}
+          options={Object.entries(PROJECT_STATUS_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+        <Segmented
+          value={view}
+          onChange={(v) => setView(v as "space" | "list")}
+          options={[
+            { value: "space", icon: <AppstoreOutlined />, label: "空间" },
+            { value: "list", icon: <UnorderedListOutlined />, label: "列表" },
+          ]}
+        />
       </div>
 
-      <div className="bp-panel">
-        {query.isSuccess ? (
-          query.data.items.length === 0 ? (
-            <div className="bp-empty-block">
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={
-                  <div>
-                    <div className="bp-empty-title">还没有任何项目</div>
-                    <div className="bp-empty-desc">
-                      创建第一个招投标分析项目，随后可在项目内上传与检索文件。
-                    </div>
-                  </div>
-                }
-              >
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-                  创建第一个项目
-                </Button>
-              </Empty>
-            </div>
-          ) : (
-            <Table<Project>
-              rowKey="id"
-              dataSource={query.data.items}
-              pagination={query.data.items.length > 20 ? { pageSize: 20 } : false}
-              scroll={{ x: 800 }}
-              columns={[
-                {
-                  title: "项目编号",
-                  dataIndex: "project_code",
-                  render: (value: string, row) => <Link to={`/projects/${row.id}`}>{value}</Link>,
-                },
-                { title: "项目名称", dataIndex: "project_name", ellipsis: true },
-                { title: "采购人", dataIndex: "purchaser", render: (v: string | null) => v || "-" },
-                {
-                  title: "状态",
-                  dataIndex: "status",
-                  width: 100,
-                  render: (value: string) => (
-                    <Tag bordered={false} color="processing">
-                      {PROJECT_STATUS_LABELS[value] ?? value}
-                    </Tag>
-                  ),
-                },
-                { title: "行业", dataIndex: "industry", render: (v: string | null) => v || "-" },
-                { title: "地区", dataIndex: "region", render: (v: string | null) => v || "-" },
-              ]}
-            />
-          )
-        ) : query.isError ? (
-          <Alert
-            type="error"
-            showIcon
-            message="项目列表加载失败"
-            description={(query.error as Error).message}
-            action={
-              <Button size="small" onClick={() => query.refetch()}>
-                重试
-              </Button>
-            }
-          />
-        ) : (
-          <Skeleton active paragraph={{ rows: 6 }} />
-        )}
-      </div>
+      {query.isLoading ? (
+        <Skeleton active paragraph={{ rows: 6 }} />
+      ) : query.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          message="项目列表加载失败"
+          description={(query.error as Error).message}
+          action={
+            <Button size="small" onClick={() => query.refetch()}>
+              重试
+            </Button>
+          }
+        />
+      ) : filtered.length === 0 ? (
+        <div className="bp-soft-empty">
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={query.data?.items.length ? "没有匹配的项目" : "还没有任何项目"}
+          >
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+              创建项目
+            </Button>
+          </Empty>
+        </div>
+      ) : view === "space" ? (
+        <div className="bp-gallery-grid">
+          {filtered.map((p: Project) => (
+            <Link key={p.id} to={`/projects/${p.id}`} className="bp-gallery-card">
+              <div className="bp-gallery-card-meta">
+                <span>{PROJECT_STATUS_LABELS[p.status] ?? p.status}</span>
+                <span>{p.project_code}</span>
+              </div>
+              <h2>{p.project_name}</h2>
+              <p>{p.purchaser || "招标单位未填写"}</p>
+              <div className="bp-project-progress">
+                <div className="bp-project-progress-track">
+                  <span style={{ width: `${progressOf(p.status)}%` }} />
+                </div>
+                <span>{progressOf(p.status)}%</span>
+              </div>
+              <div className="bp-gallery-card-foot">
+                <span>{formatDeadline(p.bid_deadline)}</span>
+                <span>进入空间</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="bp-compact-list">
+          {filtered.map((p) => (
+            <Link key={p.id} to={`/projects/${p.id}`} className="bp-compact-row">
+              <div>
+                <strong>{p.project_name}</strong>
+                <span>
+                  {p.project_code}
+                  {p.purchaser ? ` · ${p.purchaser}` : ""}
+                </span>
+              </div>
+              <span className="bp-compact-status">{PROJECT_STATUS_LABELS[p.status] ?? p.status}</span>
+              <span className="bp-compact-deadline">{formatDeadline(p.bid_deadline)}</span>
+            </Link>
+          ))}
+        </div>
+      )}
 
       <CreateProjectModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </div>

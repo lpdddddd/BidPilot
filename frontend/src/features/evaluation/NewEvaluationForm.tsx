@@ -184,9 +184,7 @@ export default function NewEvaluationForm({
   return (
     <div data-testid="eval-new-form" style={{ maxWidth: 640 }}>
       <Typography.Paragraph type="secondary">
-        选择套件与目标后启动评测。暂未开放的目标会保持禁用并给出简要说明；不会在此展示 test
-        reference。RAG / Agent 仅可选具备对应能力的 Base（须已在线）；Course LoRA
-        仅用于结构化抽取（extraction）。
+        选择套件与目标后启动评测。暂未开放的目标会保持禁用并给出说明。检索问答与流程类目标仅可选已启动的基础模型；领域适配模型仅用于结构化抽取。
       </Typography.Paragraph>
 
       {error && (
@@ -279,13 +277,12 @@ export default function NewEvaluationForm({
                 data-testid="eval-lora-unserved-hint"
                 style={{ display: "block", marginTop: 8 }}
               >
-                Course LoRA 尚未启动在线服务。请先用 Base，或启动带 llm.lora.yml 的 vLLM
-                后再选 Course LoRA（仅 extraction）。
+                领域适配模型尚未启动。请先选用基础模型，或在「系统状态」确认推理服务后再选领域适配（仅结构化抽取）。
               </Typography.Text>
             )}
             {showModelSelect && selectedModel && !selectedModel.served && (
               <Typography.Text type="danger" style={{ display: "block", marginTop: 8 }}>
-                所选模型未在线，无法启动评测。
+                所选模型不可用，无法启动评测。
               </Typography.Text>
             )}
           </Form.Item>

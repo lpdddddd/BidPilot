@@ -100,7 +100,7 @@ export default function OverviewPanel({
         <span>hash {shortHash(hash)}</span>
         <span>评估器 {capabilities?.evaluator_version || suite?.evaluator_profile_version || "—"}</span>
         <span data-testid="eval-human-gold-count">
-          human Gold {dataset?.human_gold_count ?? 0}（当前均为 auto_reference）
+          人工金标准 {dataset?.human_gold_count ?? 0}（当前均为自动参考）
         </span>
       </div>
 

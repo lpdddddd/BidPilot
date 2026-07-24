@@ -486,7 +486,7 @@ export default function ProposalDraftsWorkspace({ projectId, onOpenSource }: Pro
                   <div
                     key={bidx}
                     style={{
-                      borderLeft: "3px solid #1677ff",
+                      borderLeft: "3px solid var(--bp-primary, #0D6E6E)",
                       paddingLeft: 12,
                       marginBottom: 12,
                     }}

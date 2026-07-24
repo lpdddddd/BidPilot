@@ -251,9 +251,10 @@ export default function EvaluationCenterPage() {
       <div className="bp-page-header">
         <div className="bp-page-header-row">
           <div>
-            <h1 className="bp-page-title">评测中心</h1>
+            <p className="bp-eyebrow">实验与设置</p>
+            <h1 className="bp-page-title">评估中心</h1>
             <p className="bp-page-subtitle">
-              对 RAG、抽取、匹配、合规、草稿与 Agent 流程进行可复现自动评测；不展示 CoT、完整 prompt 或密钥。
+              对检索问答、抽取、匹配、合规、草稿与流程进行可复现评测。不展示推理过程、完整提示词或密钥。
             </p>
           </div>
           <Select

@@ -37,15 +37,6 @@ const SEVERITY_COLOR: Record<string, string> = {
   critical: "red",
 };
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="bp-panel" style={{ padding: 16, minWidth: 140 }}>
-      <Typography.Text type="secondary">{label}</Typography.Text>
-      <div style={{ fontSize: 24, fontWeight: 600, marginTop: 4 }}>{value}</div>
-    </div>
-  );
-}
-
 export default function ComplianceReviewPage() {
   usePageTitle("智能审查");
   const [searchParams, setSearchParams] = useSearchParams();
@@ -151,15 +142,15 @@ export default function ComplianceReviewPage() {
   ];
 
   return (
-    <div className="bp-panel" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div>
-        <Typography.Title level={3} style={{ marginBottom: 4 }}>
-          规则合规审查
-        </Typography.Title>
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          确定性规则引擎，基于项目真实要求、匹配与草稿数据检查；不足时标记 unknown，不编造结论。
-        </Typography.Paragraph>
-      </div>
+    <div className="bp-review-queue">
+      <header className="bp-gallery-head">
+        <div>
+          <h1 className="bp-page-title">审查</h1>
+          <p className="bp-page-subtitle">
+            风险处理队列：基于项目真实要求、匹配与草稿数据检查；不足时标记未知，不编造结论。
+          </p>
+        </div>
+      </header>
 
       <Space wrap>
         <Select
@@ -221,25 +212,28 @@ export default function ComplianceReviewPage() {
 
       {report && (
         <>
-          <Space wrap size="middle">
-            <StatCard label="检查项" value={report.total_checks} />
-            <StatCard label="通过规则" value={report.passed_checks} />
-            <StatCard label="发现项" value={report.finding_count} />
-            <StatCard
-              label="critical"
-              value={report.severity_counts.critical ?? 0}
-            />
-            <StatCard label="error" value={report.severity_counts.error ?? 0} />
-            <StatCard label="warning" value={report.severity_counts.warning ?? 0} />
-            <StatCard label="info" value={report.severity_counts.info ?? 0} />
-          </Space>
+          <div className="bp-review-summary">
+            <div className="bp-review-stat">
+              <span>检查项</span>
+              <strong>{report.total_checks}</strong>
+            </div>
+            <div className="bp-review-stat">
+              <span>通过</span>
+              <strong>{report.passed_checks}</strong>
+            </div>
+            <div className="bp-review-stat">
+              <span>发现项</span>
+              <strong>{report.finding_count}</strong>
+            </div>
+            <div className="bp-review-stat">
+              <span>高风险</span>
+              <strong>{(report.severity_counts.critical ?? 0) + (report.severity_counts.error ?? 0)}</strong>
+            </div>
+          </div>
 
           <Space wrap>
             <Typography.Text type="secondary">
               状态：{report.run.status}
-            </Typography.Text>
-            <Typography.Text type="secondary">
-              引擎：{report.engine_version}
             </Typography.Text>
             <Typography.Text type="secondary">
               开始：{report.run.started_at || "—"}

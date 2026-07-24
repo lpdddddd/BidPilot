@@ -126,7 +126,8 @@ describe("NewEvaluationForm model select", () => {
     expect(await screen.findByTestId("eval-model-select")).toBeTruthy();
     expect(screen.queryByTestId("eval-lora-unserved-hint")).toBeNull();
     const modelSelect = screen.getByTestId("eval-model-select");
-    expect(within(modelSelect).queryByText(/Course LoRA/)).toBeNull();
+    expect(within(modelSelect).queryByText(/Course LoRA/i)).toBeNull();
+    expect(within(modelSelect).queryByText(/领域适配/)).toBeNull();
 
     await user.click(await screen.findByTestId("eval-start-btn"));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());

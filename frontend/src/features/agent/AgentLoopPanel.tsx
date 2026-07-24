@@ -717,7 +717,7 @@ function TimelineEventRow({
         marginLeft: nested ? 20 : 0,
         marginBottom: 4,
         borderLeft: nested
-          ? "2px solid var(--ant-color-primary, #1677ff)"
+          ? "2px solid var(--bp-primary, #0D6E6E)"
           : "2px solid var(--ant-color-border, #d9d9d9)",
         background: nested
           ? "var(--ant-color-primary-bg, #e6f4ff)"

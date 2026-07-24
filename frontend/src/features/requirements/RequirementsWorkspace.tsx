@@ -398,11 +398,10 @@ export function StructuredClausePanel({
       style={{ padding: 16, marginBottom: 16 }}
     >
       <Typography.Title level={5} style={{ marginTop: 0 }}>
-        条款结构化分析（Course LoRA 协议）
+        条款结构化分析
       </Typography.Title>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-        复用训练时的 system/user prompt 与 JSON schema（非带来源问答、无 [S1]）。可选 Base 或
-        Course LoRA；未 served 的模型不可选。空项目也可先跑结构化分析。
+        按固定协议提取条款结构（非带来源问答）。可选基础模型或领域适配模型；未启动的推理服务不可选。空项目也可先分析粘贴条款。
       </Typography.Paragraph>
       <Space wrap style={{ marginBottom: 8 }}>
         <Select
@@ -442,8 +441,7 @@ export function StructuredClausePanel({
           data-testid="struct-lora-unserved"
           style={{ display: "block", marginBottom: 8 }}
         >
-          Course LoRA 当前未在线（{modelOnlineStatusLabel(structLora)}）。请先启动带 llm.lora.yml
-          的 vLLM。
+          领域适配模型当前不可用（{modelOnlineStatusLabel(structLora)}）。请在「系统状态」确认推理服务后重试，或改选基础模型。
         </Typography.Text>
       )}
       {structLora?.reason_codes?.includes("base_model_mismatch") && (
@@ -472,13 +470,12 @@ export function StructuredClausePanel({
       )}
       {structResult && (
         <div data-testid="struct-result" style={{ marginTop: 12 }}>
-          <Typography.Text data-testid="struct-model-meta">
-            requested={structResult.requested_model_id} · resolved=
-            {structResult.resolved_model_id} · served={structResult.served_model_name} · type=
-            {structResult.model_type} · adapter={structResult.adapter_version} · fallback=
-            {String(structResult.fallback_used)} · latency=
-            {structResult.latency_ms.toFixed(0)}ms · schema_valid=
-            {String(structResult.schema_valid)}
+          <Typography.Text data-testid="struct-model-meta" type="secondary">
+            请求 {structResult.requested_model_id} · 实际{" "}
+            {structResult.resolved_model_id}
+            {structResult.fallback_used ? " · 已回退基础模型" : ""} ·{" "}
+            {structResult.latency_ms.toFixed(0)} ms
+            {structResult.schema_valid ? " · 结构有效" : " · 结构校验未通过"}
           </Typography.Text>
           <pre
             className="bp-code-block"

@@ -36,11 +36,11 @@ export type ModelStatusFields = Pick<
 >;
 
 /**
- * Truthful Chinese status for Base / LoRA chips.
- * Never claim 「在线」 unless served === true.
+ * Truthful Chinese status for model chips (系统状态 / 实验区).
+ * Never claim 「可用」 unless served === true.
  */
 export function modelOnlineStatusLabel(item: ModelStatusFields): string {
-  if (item.served) return "在线";
+  if (item.served) return "可用";
   const codes = item.reason_codes || [];
   if (codes.includes("base_model_mismatch")) {
     return "微调权重与基座模型不匹配";
@@ -50,11 +50,11 @@ export function modelOnlineStatusLabel(item: ModelStatusFields): string {
   }
   if (item.model_type === "lora") {
     if (item.adapter_exists) {
-      return "已注册 · Adapter 已就绪 · 当前未启动在线服务";
+      return "已注册 · 权重已就绪 · 推理服务未启动";
     }
-    return "Adapter 尚未就绪（文件缺失或不完整）";
+    return "权重尚未就绪（文件缺失或不完整）";
   }
-  return "当前未启动在线服务";
+  return "推理服务未启动";
 }
 
 export function modelHasCapability(item: ModelCatalogItem, capability: string): boolean {
@@ -82,11 +82,15 @@ export function modelsForCapability(
 }
 
 export function modelSelectLabel(item: ModelCatalogItem): string {
-  const kind = item.model_type === "lora" ? "Course LoRA" : "Base";
-  const name = item.display_name || item.model_id;
-  if (item.served) return `${name}（${kind} · 在线）`;
+  const kind = item.model_type === "lora" ? "领域适配" : "基础模型";
+  const raw = item.display_name || item.model_id;
+  const name =
+    item.model_type === "lora"
+      ? raw.replace(/Course\s*LoRA/gi, "领域适配").replace(/\s{2,}/g, " ").trim() || "领域适配模型"
+      : raw;
+  if (item.served) return `${name}（${kind} · 可用）`;
   if (item.model_type === "lora" && !item.served) {
-    return `${name}（${kind} · 模型尚未启动在线服务）`;
+    return `${name}（${kind} · 推理服务未启动）`;
   }
   return `${name}（${kind}）`;
 }

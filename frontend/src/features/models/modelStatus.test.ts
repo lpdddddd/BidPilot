@@ -47,15 +47,15 @@ describe("modelOnlineStatusLabel", () => {
     ).toBe("微调权重与基座模型不匹配");
   });
 
-  it("shows 在线 only when served=true", () => {
+  it("shows 可用 only when served=true", () => {
     expect(
       modelOnlineStatusLabel(
         item({ model_id: "qwen3-8b-base", model_type: "base", served: true }),
       ),
-    ).toBe("在线");
+    ).toBe("可用");
   });
 
-  it("never claims LoRA online when only adapter is ready", () => {
+  it("never claims LoRA available when only adapter is ready", () => {
     const label = modelOnlineStatusLabel(
       item({
         model_id: "qwen3-8b-lora-course",
@@ -65,7 +65,7 @@ describe("modelOnlineStatusLabel", () => {
         registered: true,
       }),
     );
-    expect(label).toBe("已注册 · Adapter 已就绪 · 当前未启动在线服务");
+    expect(label).toBe("已注册 · 权重已就绪 · 推理服务未启动");
   });
 });
 
@@ -124,7 +124,7 @@ describe("capabilities", () => {
           display_name: "BidPilot Course LoRA",
         }),
       ),
-    ).toMatch(/模型尚未启动在线服务/);
+    ).toMatch(/推理服务未启动/);
   });
 });
 
